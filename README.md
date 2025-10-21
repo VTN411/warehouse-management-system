@@ -30,11 +30,3 @@ docs/API_SPEC.md: Mô tả API
 
 docs/DEPLOY.md: Hướng dẫn triển khai
 
-
-
-
-## 💾 Bước 7. Commit và đẩy lên GitHub
-
-git add .
-git commit -m "Khởi tạo cấu trúc dự án quản lý kho hàng"
-git push
