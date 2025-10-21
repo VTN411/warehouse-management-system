@@ -18,10 +18,10 @@ Dành cho: **Trường học / Trung tâm đào tạo**
 ## ⚙️ Cấu trúc thư mục
 
 warehouse-management-system/
-│
-├── backend/ # API viết bằng Java Spring Boot
-├── frontend/ # Giao diện web (ReactJS)
-└── docs/ # Tài liệu kỹ thuật (SRS, ERD, API)
+
+backend/ # API viết bằng Java Spring Boot
+frontend/ # Giao diện web (ReactJS)
+docs/ # Tài liệu kỹ thuật (SRS, ERD, API)
 ## 🐳 Chạy thử bằng Docker
 
 ### 1️⃣ Build và chạy toàn bộ hệ thống
