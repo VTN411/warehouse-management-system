@@ -1,33 +1,39 @@
-version: "3.9"
+version: '3.9'
+
 services:
+  mysql:
+    image: mysql:8.0
+    container_name: warehouse-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASS}
+      MYSQL_DATABASE: ${DB_NAME}
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
   backend:
     build: ./backend
-    container_name: warehouse_backend
+    container_name: warehouse-backend
+    restart: always
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASS}
     ports:
       - "8080:8080"
-    env_file:
-      - ./backend/.env
     depends_on:
-      - db
+      - mysql
 
   frontend:
     build: ./frontend
-    container_name: warehouse_frontend
+    container_name: warehouse-frontend
+    restart: always
     ports:
-      - "3000:3000"
+      - "5173:5173"
     depends_on:
       - backend
 
-  db:
-    image: mysql:8.0
-    container_name: warehouse_db
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: warehouse
-    ports:
-      - "3306:3306"
-    volumes:
-      - db_data:/var/lib/mysql
-
 volumes:
-  db_data:
+  mysql_data:
