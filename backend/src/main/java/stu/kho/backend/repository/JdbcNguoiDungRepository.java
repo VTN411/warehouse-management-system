@@ -1,0 +1,81 @@
+package stu.kho.backend.repository;
+
+import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+import stu.kho.backend.entity.NguoiDung;
+import stu.kho.backend.entity.VaiTro;
+
+import java.util.Optional;
+
+@Repository
+public class JdbcNguoiDungRepository implements NguoiDungRepository {
+
+    private final JdbcTemplate jdbcTemplate;
+    private final VaiTroRepository vaiTroRepository;
+
+    // Khai báo RowMapper là final, nhưng KHÔNG khởi tạo nó ở đây
+    private final RowMapper<NguoiDung> nguoiDungRowMapper;
+
+    // Constructor: Nơi khởi tạo tất cả các trường final
+    public JdbcNguoiDungRepository(JdbcTemplate jdbcTemplate, VaiTroRepository vaiTroRepository) {
+        // 1. GÁN GIÁ TRỊ CÁC BIẾN CẦN THIẾT
+        this.jdbcTemplate = jdbcTemplate;
+        this.vaiTroRepository = vaiTroRepository;
+
+        // 2. KHỞI TẠO RowMapper SAU KHI vaiTroRepository ĐÃ ĐƯỢC GÁN
+        this.nguoiDungRowMapper = (rs, rowNum) -> {
+            NguoiDung user = new NguoiDung();
+            user.setMaNguoiDung(rs.getInt("MaNguoiDung"));
+            user.setTenDangNhap(rs.getString("TenDangNhap"));
+            user.setMatKhau(rs.getString("MatKhau"));
+            user.setHoTen(rs.getString("HoTen"));
+            user.setEmail(rs.getString("Email"));
+            user.setSdt(rs.getString("SDT"));
+
+            // Lỗi biến mất vì vaiTroRepository đã được gán giá trị trước khi code này chạy
+            int maVaiTro = rs.getInt("MaVaiTro");
+            VaiTro vaiTro = this.vaiTroRepository.findById(maVaiTro)
+                    .orElse(null);
+            user.setVaiTro(vaiTro);
+
+            return user;
+        };
+    }
+
+    // --- Các phương thức @Override sử dụng RowMapper ---
+
+    @Override
+    public Optional<NguoiDung> findByTenDangNhap(String tenDangNhap) {
+        String sql = "SELECT * FROM nguoidung WHERE TenDangNhap = ?";
+        try {
+            // Sử dụng this.nguoiDungRowMapper đã được khởi tạo
+            NguoiDung user = jdbcTemplate.queryForObject(sql, this.nguoiDungRowMapper, tenDangNhap);
+            return Optional.ofNullable(user);
+        } catch (EmptyResultDataAccessException e) {
+            return Optional.empty();
+        }
+    }
+
+    @Override
+    public int save(NguoiDung nguoiDung) {
+        // ... (Logic save không đổi)
+        String sql = "INSERT INTO nguoidung (TenDangNhap, MatKhau, HoTen, Email, SDT, MaVaiTro) VALUES (?, ?, ?, ?, ?, ?)";
+        return jdbcTemplate.update(sql,
+                nguoiDung.getTenDangNhap(),
+                nguoiDung.getMatKhau(),
+                nguoiDung.getHoTen(),
+                nguoiDung.getEmail(),
+                nguoiDung.getSdt(),
+                nguoiDung.getVaiTro().getMaVaiTro()
+        );
+    }
+
+    @Override
+    public boolean existsByTenDangNhap(String tenDangNhap) {
+        String sql = "SELECT COUNT(*) FROM nguoidung WHERE TenDangNhap = ?";
+        Integer count = jdbcTemplate.queryForObject(sql, Integer.class, tenDangNhap);
+        return count != null && count > 0;
+    }
+}
