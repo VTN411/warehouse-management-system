@@ -1,6 +1,8 @@
 package stu.kho.backend.repository;
 
 import stu.kho.backend.entity.NguoiDung;
+
+import java.util.List;
 import java.util.Optional;
 
 public interface NguoiDungRepository {
@@ -12,4 +14,6 @@ public interface NguoiDungRepository {
 
     // Kiem tra ten dang nhap ton tai (dung cho dang ky)
     boolean existsByTenDangNhap(String tenDangNhap);
+    List<String> getUserRolesByUsername(String tenDangNhap);
+
 }

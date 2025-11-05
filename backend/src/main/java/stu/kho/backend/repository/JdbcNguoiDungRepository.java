@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 import stu.kho.backend.entity.NguoiDung;
 import stu.kho.backend.entity.VaiTro;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -34,7 +35,6 @@ public class JdbcNguoiDungRepository implements NguoiDungRepository {
             user.setEmail(rs.getString("Email"));
             user.setSdt(rs.getString("SDT"));
 
-            // Lỗi biến mất vì vaiTroRepository đã được gán giá trị trước khi code này chạy
             int maVaiTro = rs.getInt("MaVaiTro");
             VaiTro vaiTro = this.vaiTroRepository.findById(maVaiTro)
                     .orElse(null);
@@ -42,6 +42,16 @@ public class JdbcNguoiDungRepository implements NguoiDungRepository {
 
             return user;
         };
+    }
+    public List<String> getUserRolesByUsername(String tenDangNhap) {
+        String sql = "SELECT vt.TenVaiTro FROM nguoidung nd JOIN vaitro vt ON nd.MaVaiTro = vt.MaVaiTro WHERE nd.TenDangNhap = ?";
+
+        // queryForList se tra ve List<String> cac TenVaiTro
+        try {
+            return jdbcTemplate.queryForList(sql, new Object[]{tenDangNhap}, String.class);
+        } catch (Exception e) {
+            return List.of();
+        }
     }
 
     // --- Các phương thức @Override sử dụng RowMapper ---

@@ -27,6 +27,10 @@ warehouse-management-system/
 ## 🐳 Chạy thử bằng Docker
 
 ### 1️⃣ Build và chạy toàn bộ hệ thống
+<<<<<<< HEAD
 ```bash
 docker-compose up --build
 ```
+=======
+docker-compose up --build
+>>>>>>> 7d5db9533d83862019be4a33949b7bf05b71031b

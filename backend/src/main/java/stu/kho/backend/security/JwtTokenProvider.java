@@ -6,23 +6,30 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import stu.kho.backend.entity.NguoiDung;
+import stu.kho.backend.repository.NguoiDungRepository;
+import stu.kho.backend.repository.VaiTroRepository;
 
 import javax.crypto.SecretKey;
 import java.util.Base64;
 import java.util.Date;
+import java.util.List;
 
 @Component
 public class JwtTokenProvider {
 
     private final SecretKey key;
     private final int jwtExpirationMs;
+    private final NguoiDungRepository nguoiDungRepository; // Cần inject thêm Repository
+    private final VaiTroRepository vaiTroRepository; // Cần inject thêm Repository
 
     // Sửa lỗi: Inject giá trị và khởi tạo SecretKey ngay trong constructor
     public JwtTokenProvider(
             @Value("${jwt.secret}") String jwtSecret,
-            @Value("${jwt.expiration-ms}") int jwtExpirationMs) {
+            @Value("${jwt.expiration-ms}") int jwtExpirationMs, NguoiDungRepository nguoiDungRepository, VaiTroRepository vaiTroRepository) {
 
         this.jwtExpirationMs = jwtExpirationMs;
+        this.nguoiDungRepository = nguoiDungRepository;
+        this.vaiTroRepository = vaiTroRepository;
 
         // FIX: Giải mã chuỗi Base64 thành byte array an toàn
         try {
@@ -34,17 +41,19 @@ public class JwtTokenProvider {
         }
     }
 
-    // 1. Tạo token từ thông tin user
     public String generateToken(Authentication authentication) {
         NguoiDung userPrincipal = (NguoiDung) authentication.getPrincipal();
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + jwtExpirationMs);
 
+        List<String> roles = nguoiDungRepository.getUserRolesByUsername(userPrincipal.getUsername());
+
         return Jwts.builder()
                 .setSubject(userPrincipal.getUsername())
+                .claim("roles", roles) // <-- THÊM ROLE VÀO TOKEN
                 .setIssuedAt(now)
                 .setExpiration(expiryDate)
-                .signWith(this.key, SignatureAlgorithm.HS512) // Sử dụng khóa đã khởi tạo
+                .signWith(this.key, SignatureAlgorithm.HS512)
                 .compact();
     }
 
