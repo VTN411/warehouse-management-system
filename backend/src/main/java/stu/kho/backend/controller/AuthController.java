@@ -1,5 +1,4 @@
 package stu.kho.backend.controller;
-
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -15,6 +14,7 @@ import stu.kho.backend.security.JwtTokenProvider;
 
 @RestController
 @RequestMapping("/api/auth")
+@CrossOrigin(origins = "*") 
 public class AuthController {
 
     private final AuthenticationManager authenticationManager;
