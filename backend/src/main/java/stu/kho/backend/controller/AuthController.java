@@ -8,15 +8,20 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import stu.kho.backend.dto.JwtAuthenticationResponse;
 import stu.kho.backend.dto.LoginRequest;
+import stu.kho.backend.dto.RegisterRequest;
+import stu.kho.backend.entity.NguoiDung;
+import stu.kho.backend.entity.VaiTro;
 import stu.kho.backend.repository.NguoiDungRepository;
 import stu.kho.backend.repository.VaiTroRepository;
 import stu.kho.backend.security.JwtTokenProvider;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "*") 
+@CrossOrigin(origins = "*")
 public class AuthController {
-
+    private final NguoiDungRepository nguoiDungRepository;
+    private final VaiTroRepository vaiTroRepository;
+    private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
 
@@ -24,9 +29,12 @@ public class AuthController {
             AuthenticationManager authenticationManager,
             NguoiDungRepository nguoiDungRepository,
             VaiTroRepository vaiTroRepository,
-            PasswordEncoder passwordEncoder,
+            PasswordEncoder passwordEncoder, NguoiDungRepository nguoiDungRepository1, VaiTroRepository vaiTroRepository1, PasswordEncoder passwordEncoder1,
             JwtTokenProvider tokenProvider) {
         this.authenticationManager = authenticationManager;
+        this.nguoiDungRepository = nguoiDungRepository1;
+        this.vaiTroRepository = vaiTroRepository1;
+        this.passwordEncoder = passwordEncoder1;
         this.tokenProvider = tokenProvider;
     }
 
@@ -47,5 +55,32 @@ public class AuthController {
         return ResponseEntity.ok(new JwtAuthenticationResponse(jwt));
     }
 
+    @PostMapping("/register")
+    public ResponseEntity<?> registerUser(@RequestBody RegisterRequest registerRequest) {
+
+        // 1. Kiểm tra Tên đăng nhập
+        if (nguoiDungRepository.existsByTenDangNhap(registerRequest.getTenDangNhap())) {
+            return ResponseEntity.badRequest().body("Tên đăng nhập đã được sử dụng!");
+        }
+
+        // 2. Tìm Vai Trò
+        VaiTro vaiTro = vaiTroRepository.findById(registerRequest.getMaVaiTro())
+                .orElseThrow(() -> new RuntimeException("Lỗi: Không tìm thấy vai trò."));
+
+        // 3. Tạo User mới
+        NguoiDung nguoiDung = new NguoiDung();
+        nguoiDung.setTenDangNhap(registerRequest.getTenDangNhap());
+        // Mã hóa mật khẩu (FIX LỖI 401)
+        nguoiDung.setMatKhau(passwordEncoder.encode(registerRequest.getMatKhau()));
+        nguoiDung.setHoTen(registerRequest.getHoTen());
+        nguoiDung.setEmail(registerRequest.getEmail());
+        nguoiDung.setSdt(registerRequest.getSdt());
+        nguoiDung.setVaiTro(vaiTro);
+
+        // 4. Lưu vào DB
+        nguoiDungRepository.save(nguoiDung);
+
+        return ResponseEntity.ok("Đăng ký người dùng thành công!");
+    }
 
 }

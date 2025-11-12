@@ -17,7 +17,6 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String tenDangNhap) throws UsernameNotFoundException {
-        // Gọi phương thức JDBC để tìm user
         return nguoiDungRepository.findByTenDangNhap(tenDangNhap)
                 .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng: " + tenDangNhap));
     }

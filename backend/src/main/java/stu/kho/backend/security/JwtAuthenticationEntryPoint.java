@@ -19,10 +19,12 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
         // Thiết lập phản hồi JSON cho lỗi 401
         response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED); // Mã 401
 
         String message = "{\"status\": 401, \"error\": \"Unauthorized\", \"message\": \"Yêu cầu xác thực. Vui lòng đăng nhập.\"";
 
         response.getWriter().write(message);
     }
+
 }

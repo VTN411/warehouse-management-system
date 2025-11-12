@@ -55,16 +55,9 @@ public class SecurityConfig {
                         .accessDeniedHandler(accessDeniedHandler) // Xử lý lỗi 403
                 )
                 .authorizeHttpRequests(authz -> authz
-                                .requestMatchers("/api/auth/**").permitAll()
-                                .requestMatchers("/static/**").permitAll()
-                                // 2. CẤP QUYỀN ADMIN (Dành cho các tài nguyên quản trị hệ thống)
-                                .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                                // 3. CẤP QUYỀN THỦ KHO & ADMIN (Dành cho các thao tác kho)
-                                .requestMatchers("/api/kho/**").hasAnyRole("ADMIN", "THUKHO")
-                                // 4. CẤP QUYỀN CHUNG (Chỉ cần đăng nhập là được truy cập, ví dụ: tra cứu danh mục)
-                                .requestMatchers("/api/common/**").authenticated()
-                                // Quy tắc cuối cùng: Chặn mọi request khác (nếu không khớp với các quy tắc trên)
-                                .anyRequest().denyAll()
+                        .requestMatchers("/api/auth/**").permitAll()
+
+                        .anyRequest().authenticated()
                 );
         // Thêm bộ lọc JWT của chúng ta vào trước bộ lọc xác thực mặc định của Spring
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

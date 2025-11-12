@@ -36,10 +36,15 @@ public class JdbcNguoiDungRepository implements NguoiDungRepository {
             user.setSdt(rs.getString("SDT"));
 
             int maVaiTro = rs.getInt("MaVaiTro");
-            VaiTro vaiTro = this.vaiTroRepository.findById(maVaiTro)
-                    .orElse(null);
+            VaiTro vaiTro = this.vaiTroRepository.findById(maVaiTro).orElse(null);
             user.setVaiTro(vaiTro);
 
+            // QUAN TRỌNG: Lấy danh sách quyền (Authorities)
+            if (vaiTro != null) {
+                // Lấy danh sách quyền chi tiết từ bảng PhanQuyen
+                List<String> authorities = getAuthoritiesByRoleId(vaiTro.getMaVaiTro());
+                user.setAuthorities(authorities); // Cần thêm trường List<String> authorities trong NguoiDung.java
+            }
             return user;
         };
     }
@@ -55,7 +60,14 @@ public class JdbcNguoiDungRepository implements NguoiDungRepository {
     }
 
     // --- Các phương thức @Override sử dụng RowMapper ---
+    public List<String> getAuthoritiesByRoleId(Integer maVaiTro) {
+        String sql = "SELECT cn.TenChucNang FROM phanquyen pq " +
+                "JOIN chucnang cn ON pq.MaChucNang = cn.MaChucNang " +
+                "WHERE pq.MaVaiTro = ?";
 
+        // queryForList trả về một danh sách các String (tên quyền)
+        return jdbcTemplate.queryForList(sql, new Object[]{maVaiTro}, String.class);
+    }
     @Override
     public Optional<NguoiDung> findByTenDangNhap(String tenDangNhap) {
         String sql = "SELECT * FROM nguoidung WHERE TenDangNhap = ?";
@@ -88,4 +100,5 @@ public class JdbcNguoiDungRepository implements NguoiDungRepository {
         Integer count = jdbcTemplate.queryForObject(sql, Integer.class, tenDangNhap);
         return count != null && count > 0;
     }
+
 }

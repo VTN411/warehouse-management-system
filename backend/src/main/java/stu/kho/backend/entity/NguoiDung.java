@@ -5,6 +5,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import java.util.Collection;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Data
 public class NguoiDung implements UserDetails {
@@ -18,15 +19,17 @@ public class NguoiDung implements UserDetails {
 
     // NguoiDung sẽ chứa một đối tượng VaiTro
     private VaiTro vaiTro;
-
-    // --- Các phương thức bắt buộc của UserDetails ---
+    private List<String> authorities;
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        // Thêm tiền tố ROLE_ vào VaiTro từ CSDL
-        return List.of(new SimpleGrantedAuthority("ROLE_" + vaiTro.getTenVaiTro()));
+        if (authorities == null) {
+            return List.of();
+        }
+        return authorities.stream()
+                .map(SimpleGrantedAuthority::new)
+                .collect(Collectors.toList());
     }
-
     @Override
     public String getPassword() {
         return this.matKhau;

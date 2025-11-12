@@ -19,6 +19,7 @@ public class CustomAccessDeniedHandler implements AccessDeniedHandler {
 
         // Thiết lập phản hồi JSON cho lỗi 403
         response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
         response.setStatus(HttpServletResponse.SC_FORBIDDEN); // Mã 403
 
         String message = "{\"status\": 403, \"error\": \"Forbidden\", \"message\": \"Truy cập bị từ chối. Bạn không có quyền Admin.\"}";
