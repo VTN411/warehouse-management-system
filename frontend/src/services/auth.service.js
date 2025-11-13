@@ -1,13 +1,28 @@
 // src/services/auth.service.js
-import axios from 'axios';
+import axios from "axios";
 
-// Cập nhật URL chính xác theo Postman của bạn
-const API_URL = 'http://localhost:8080/api/auth';
+const API_AUTH_URL = "http://localhost:8080/api/auth";
+// [!] Sửa lại URL theo yêu cầu của bạn
+const API_COMMON_URL = "http://localhost:8080/api/common";
 
+/**
+ * API Đăng nhập (Lấy token)
+ */
 export const loginAPI = (username, password) => {
-  return axios.post(`${API_URL}/login`, {
-    // Ánh xạ dữ liệu từ Form (username/password) sang Backend (tenDangNhap/matKhau)
+  return axios.post(`${API_AUTH_URL}/login`, {
     tenDangNhap: username,
-    matKhau: password
+    matKhau: password,
+  });
+};
+
+/**
+ * [MỚI & SỬA LẠI] API Lấy thông tin User (bằng token)
+ */
+export const getUserInfoAPI = (token) => {
+  // [!] Sử dụng API mới mà bạn cung cấp
+  return axios.get(`${API_COMMON_URL}/user-info`, {
+    headers: {
+      Authorization: "Bearer " + token,
+    },
   });
 };

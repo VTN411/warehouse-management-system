@@ -1,122 +1,178 @@
 // src/layouts/AdminLayout.jsx
 
-import React, { useState } from 'react';
+// 1. Thêm import { useEffect } và { useLocation }
+import React, { useState, useEffect } from "react";
 import {
   DesktopOutlined,
   FileOutlined,
   PieChartOutlined,
   TeamOutlined,
-  UserOutlined,
-  LogoutOutlined, // Icon đăng xuất
-} from '@ant-design/icons';
-import { Breadcrumb, Layout, Menu, theme, Avatar, Space, Button, App } from 'antd';
-import { Outlet, useNavigate } from 'react-router-dom';
-import { removeToken } from '../utils/token'; // Import hàm xóa token
+  UserOutlined, // 2. Thêm icon UserOutlined
+  LogoutOutlined,
+} from "@ant-design/icons";
+// 3. Thêm import { App } và { Dropdown } (nếu bạn chưa có)
+import { Layout, Menu, theme, Avatar, Dropdown, Space, App } from "antd";
+import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import { removeToken } from "../utils/token";
 
 const { Header, Content, Footer, Sider } = Layout;
 
-// Hàm tạo item cho menu
 function getItem(label, key, icon, children) {
-  return {
-    key,
-    icon,
-    children,
-    label,
-  };
+  return { key, icon, children, label };
 }
 
-// Các mục menu (Dựa trên SRS của bạn)
-const items = [
-  getItem('Dashboard', '/dashboard', <PieChartOutlined />),
-  getItem('Danh mục', 'sub1', <DesktopOutlined />, [
-    getItem('Sản phẩm', '/products'),
-    getItem('Kho hàng', '/warehouses'),
-    getItem('Nhà cung cấp', '/suppliers'),
+// 4. Tách các menu ra
+// Menu mà ai cũng thấy
+const baseMenuItems = [
+  getItem("Dashboard", "/dashboard", <PieChartOutlined />),
+  getItem("Danh mục", "sub1", <DesktopOutlined />, [
+    getItem("Sản phẩm", "/products"),
+    getItem("Kho hàng", "/warehouses"),
+    getItem("Nhà cung cấp", "/suppliers"),
   ]),
-  getItem('Nghiệp vụ', 'sub2', <TeamOutlined />, [
-    getItem('Nhập kho', '/stock-in'), 
-    getItem('Xuất kho', '/stock-out')
+  getItem("Nhập xuất", "sub2", <TeamOutlined />, [
+    getItem("Nhập kho", "/stock-in"),
+    getItem("Xuất kho", "/stock-out"),
   ]),
-  getItem('Báo cáo', '/reports', <FileOutlined />),
+  getItem("Báo cáo", "/reports", <FileOutlined />),
+];
+
+// Menu CHỈ Admin thấy
+const adminMenuItems = [
+  getItem("Quản lý Người dùng", "/admin/users", <UserOutlined />),
 ];
 
 const AdminLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
-  const navigate = useNavigate();
-  const { message } = App.useApp(); // Dùng hook message
-
   const {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken();
+  const navigate = useNavigate();
+  const location = useLocation(); // 5. Thêm useLocation
+  const { message } = App.useApp(); // 6. Thêm App.useApp()
 
-  // Xử lý khi nhấn vào menu
-  const handleMenuClick = ({ key }) => {
-    // key chính là đường dẫn (path) chúng ta đã định nghĩa ở 'items'
-    navigate(key);
+  // 7. State để lưu thông tin user và menu
+  const [currentUser, setCurrentUser] = useState(null);
+  const [menuItems, setMenuItems] = useState(baseMenuItems); // Menu động
+
+  // 8. Lấy thông tin user và xây dựng menu KHI component tải
+  useEffect(() => {
+    let user = null;
+    const storedUser = localStorage.getItem("user_info");
+    if (storedUser) {
+      user = JSON.parse(storedUser);
+      setCurrentUser(user);
+    }
+
+    // [!] LOGIC PHÂN QUYỀN ĐÃ SỬA LẠI
+    // Thay vì kiểm tra "vai trò", chúng ta kiểm tra "quyền"
+    if (user && user.quyen && user.quyen.includes("PERM_ADMIN_CREATE_USER")) {
+      // Nếu user có quyền 'PERM_ADMIN_CREATE_USER'
+      setMenuItems([...baseMenuItems, ...adminMenuItems]);
+    } else {
+      // Nếu không, chỉ dùng menu cơ bản
+      setMenuItems(baseMenuItems);
+    }
+  }, []); // [] nghĩa là chỉ chạy 1 lần khi layout được tải
+
+  // 9. Sửa lại hàm click menu (đã có trong file bạn)
+  const onClickMenu = (e) => {
+    navigate(e.key);
   };
 
-  // Xử lý đăng xuất
+  // 10. Cập nhật hàm Logout
   const handleLogout = () => {
     removeToken();
-    message.success('Đã đăng xuất');
-    navigate('/login');
+    localStorage.removeItem("user_info"); // Xóa user khi logout
+    message.success("Đăng xuất thành công!");
+    navigate("/login");
   };
 
+  // 11. Menu dropdown (hiển thị tên)
+  const userMenu = [
+    { key: "1", label: "Thông tin tài khoản", icon: <UserOutlined /> },
+    { type: "divider" },
+    {
+      key: "logout",
+      label: "Đăng xuất",
+      icon: <LogoutOutlined />,
+      danger: true,
+      onClick: handleLogout,
+    },
+  ];
+
   return (
-    <Layout
-      style={{
-        minHeight: '100vh',
-      }}
-    >
-      {/* 1. Menu bên trái (Sider) */}
-      <Sider collapsible collapsed={collapsed} onCollapse={(value) => setCollapsed(value)}>
-        <div style={{ height: 32, margin: 16, background: 'rgba(255, 255, 255, 0.2)', textAlign: 'center', lineHeight: '32px', color: 'white', borderRadius: '6px' }}>
-          {collapsed ? 'KHO' : 'QUẢN LÝ KHO'}
+    <Layout style={{ minHeight: "100vh" }}>
+      <Sider
+        collapsible
+        collapsed={collapsed}
+        onCollapse={(value) => setCollapsed(value)}
+      >
+        {/* Logo/Tiêu đề Sider */}
+        <div
+          style={{
+            height: 32,
+            margin: 16,
+            background: "rgba(255, 255, 255, 0.2)",
+            color: "white",
+            textAlign: "center",
+            lineHeight: "32px",
+            fontWeight: "bold",
+            borderRadius: "6px",
+          }}
+        >
+          {collapsed ? "KHO" : "QUẢN LÝ KHO"}
         </div>
+
+        {/* 12. Sử dụng menuItems từ state và location */}
         <Menu
           theme="dark"
-          defaultSelectedKeys={['/dashboard']}
+          defaultSelectedKeys={[location.pathname]}
           mode="inline"
-          items={items}
-          onClick={handleMenuClick} // Thêm sự kiện click
+          items={menuItems}
+          onClick={onClickMenu}
         />
       </Sider>
 
-      {/* 2. Phần bên phải (Header + Content + Footer) */}
       <Layout>
-        {/* 2.1. Header */}
+        {/* 13. Header (Hiển thị tên và vai trò động) */}
         <Header
           style={{
-            padding: '0 16px',
+            padding: "0 24px",
             background: colorBgContainer,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
+            display: "flex",
+            justifyContent: "flex-end",
+            alignItems: "center",
           }}
         >
-          <div>
-            {/* Có thể thêm Breadcrumb ở đây sau */}
-          </div>
-          <Space>
-            <Avatar style={{ backgroundColor: '#87d068' }} icon={<UserOutlined />} />
-            <span>Admin</span>
-            <Button
-              type="primary"
-              danger
-              icon={<LogoutOutlined />}
-              onClick={handleLogout}
-            >
-              Đăng xuất
-            </Button>
-          </Space>
+          <Dropdown menu={{ items: userMenu }} placement="bottomRight">
+            <Space style={{ cursor: "pointer" }}>
+              <Avatar
+                icon={<UserOutlined />}
+                style={{ backgroundColor: "#87d068" }}
+              />
+              {currentUser ? (
+                <Space
+                  direction="vertical"
+                  size={0}
+                  style={{ lineHeight: 1.2 }}
+                >
+                  <strong style={{ fontSize: "14px" }}>
+                    {currentUser.hoTen}
+                  </strong>
+                  <span style={{ fontSize: "12px", color: "#8c8c8c" }}>
+                    {currentUser.vaiTro}
+                  </span>
+                </Space>
+              ) : (
+                <strong>Loading...</strong>
+              )}
+            </Space>
+          </Dropdown>
         </Header>
 
-        {/* 2.2. Nội dung chính (Content) */}
-        <Content
-          style={{
-            margin: '16px',
-          }}
-        >
+        {/* Content và Footer giữ nguyên */}
+        <Content style={{ margin: "16px" }}>
           <div
             style={{
               padding: 24,
@@ -125,18 +181,24 @@ const AdminLayout = () => {
               borderRadius: borderRadiusLG,
             }}
           >
-            {/* Đây là nơi các trang con (Dashboard, Products...) sẽ được render */}
             <Outlet />
           </div>
         </Content>
-
-        {/* 2.3. Footer */}
         <Footer
           style={{
-            textAlign: 'center',
+            textAlign: "center",
           }}
         >
-          Đồ án tốt nghiệp ©{new Date().getFullYear()} - Quản lý kho hàng
+          <Space direction="vertical" align="center" size="small">
+            <img
+              src="/images/Logo_STU.png"
+              alt="STU Logo"
+              style={{ height: 50 }}
+            />
+            <span>
+              Đồ án tốt nghiệp ©{new Date().getFullYear()} - Quản lý kho hàng
+            </span>
+          </Space>
         </Footer>
       </Layout>
     </Layout>
