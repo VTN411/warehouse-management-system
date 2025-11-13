@@ -22,4 +22,10 @@ public interface NguoiDungRepository {
     // --- PHƯƠNG THỨC MỚI (BẮT BUỘC CHO TỐI ƯU) ---
     // Phương thức này sẽ được JwtTokenProvider gọi khi tạo token
     List<String> getUserRolesByUsername(String tenDangNhap);
+
+    // --- PHƯƠNG THỨC MỚI ---
+    List<NguoiDung> findAll(); // Lấy tất cả user
+    Optional<NguoiDung> findById(Integer id); // Tìm theo ID
+    int update(NguoiDung nguoiDung); // Cập nhật user
+    int deleteById(Integer id); // Xóa user
 }

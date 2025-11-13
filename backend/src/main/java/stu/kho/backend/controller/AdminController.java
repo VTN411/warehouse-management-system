@@ -5,15 +5,19 @@ import org.springframework.security.access.prepost.PreAuthorize; // Đảm bảo
 import org.springframework.security.core.Authentication; // Cần thiết để lấy user hiện tại
 import org.springframework.web.bind.annotation.*;
 import stu.kho.backend.dto.UserCreateRequest;
+import stu.kho.backend.dto.UserResponse;
+import stu.kho.backend.dto.UserUpdateRequest;
 import stu.kho.backend.entity.HoatDong; // Import HoatDong Entity
 import stu.kho.backend.entity.NguoiDung; // Import NguoiDung Entity
 import stu.kho.backend.repository.HoatDongRepository; // Import HoatDong Repository
 import stu.kho.backend.repository.NguoiDungRepository; // 1. Import NguoiDung Repository
 import stu.kho.backend.service.UserService;
+
+import java.util.List;
 // import stu.kho.backend.service.ConfigService;
 
 @RestController
-@RequestMapping("/api/admin")
+@RequestMapping("/api/admin/users")
 public class AdminController {
 
     private final UserService userService;
@@ -30,8 +34,8 @@ public class AdminController {
     }
 
     // 1. Tạo User mới (Đã sửa phân quyền)
+    @PostMapping
     @PreAuthorize("hasAuthority('PERM_ADMIN_CREATE_USER')")
-    @PostMapping("/users")
     public ResponseEntity<String> createUser(@RequestBody UserCreateRequest request, Authentication authentication) {
         try {
             userService.createNewUser(request);
@@ -84,6 +88,37 @@ public class AdminController {
             log.setHanhDong(hanhDong);
             // Phương thức save() này đến từ JdbcHoatDongRepository
             hoatDongRepository.save(log);
+        }
+    }
+    @GetMapping
+    @PreAuthorize("hasAuthority('PERM_ADMIN_VIEW_USERS')")
+    public ResponseEntity<List<UserResponse>> getAllUsers() {
+        return ResponseEntity.ok(userService.getAllUsers());
+    }
+
+    // 3. SỬA (UPDATE)
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('PERM_ADMIN_EDIT_USER')")
+    public ResponseEntity<String> updateUser(@PathVariable Integer id, @RequestBody UserUpdateRequest request, Authentication authentication) {
+        try {
+            userService.updateUser(id, request);
+            logActivity(authentication.getName(), "Cập nhật người dùng ID: " + id);
+            return ResponseEntity.ok("Cập nhật người dùng thành công.");
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    // 4. XÓA (DELETE)
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('PERM_ADMIN_DELETE_USER')")
+    public ResponseEntity<String> deleteUser(@PathVariable Integer id, Authentication authentication) {
+        try {
+            userService.deleteUser(id);
+            logActivity(authentication.getName(), "Xóa người dùng ID: " + id);
+            return ResponseEntity.ok("Xóa người dùng thành công.");
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 }

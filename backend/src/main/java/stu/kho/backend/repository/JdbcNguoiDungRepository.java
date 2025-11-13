@@ -100,5 +100,41 @@ public class JdbcNguoiDungRepository implements NguoiDungRepository {
         Integer count = jdbcTemplate.queryForObject(sql, Integer.class, tenDangNhap);
         return count != null && count > 0;
     }
+    @Override
+    public List<NguoiDung> findAll() {
+        String sql = "SELECT * FROM nguoidung";
+        // Dùng RowMapper đã định nghĩa trong constructor
+        return jdbcTemplate.query(sql, this.nguoiDungRowMapper);
+    }
 
+    @Override
+    public Optional<NguoiDung> findById(Integer id) {
+        String sql = "SELECT * FROM nguoidung WHERE MaNguoiDung = ?";
+        try {
+            NguoiDung user = jdbcTemplate.queryForObject(sql, this.nguoiDungRowMapper, id);
+            return Optional.ofNullable(user);
+        } catch (EmptyResultDataAccessException e) {
+            return Optional.empty();
+        }
+    }
+
+    @Override
+    public int update(NguoiDung nguoiDung) {
+        // Chỉ cập nhật thông tin, không cập nhật mật khẩu
+        String sql = "UPDATE nguoidung SET HoTen = ?, Email = ?, SDT = ?, MaVaiTro = ? WHERE MaNguoiDung = ?";
+        return jdbcTemplate.update(sql,
+                nguoiDung.getHoTen(),
+                nguoiDung.getEmail(),
+                nguoiDung.getSdt(),
+                nguoiDung.getVaiTro().getMaVaiTro(),
+                nguoiDung.getMaNguoiDung()
+        );
+    }
+
+    @Override
+    public int deleteById(Integer id) {
+        // Cần xóa các tham chiếu khóa ngoại trước (nếu có) hoặc set ON DELETE CASCADE
+        String sql = "DELETE FROM nguoidung WHERE MaNguoiDung = ?";
+        return jdbcTemplate.update(sql, id);
+    }
 }
