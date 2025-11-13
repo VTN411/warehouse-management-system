@@ -1,0 +1,67 @@
+package stu.kho.backend.repository;
+
+import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+import stu.kho.backend.entity.ChiTietKho;
+
+import java.util.Optional;
+
+@Repository
+public class JdbcChiTietKhoRepository implements ChiTietKhoRepository {
+
+    private final JdbcTemplate jdbcTemplate;
+    // Inject các repo khác nếu cần JOIN (ví dụ: SanPhamRepository)
+    // ...
+
+    private final RowMapper<ChiTietKho> chiTietKhoRowMapper;
+
+    public JdbcChiTietKhoRepository(JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+
+        this.chiTietKhoRowMapper = (rs, rowNum) -> {
+            ChiTietKho ctk = new ChiTietKho();
+            ctk.setMaSP(rs.getInt("MaSP"));
+            ctk.setMaKho(rs.getInt("MaKho"));
+            ctk.setSoLuongTon(rs.getInt("SoLuongTon"));
+
+            if (rs.getDate("NgayHetHan") != null) {
+                ctk.setNgayHetHan(rs.getDate("NgayHetHan").toLocalDate());
+            }
+            ctk.setSoLo(rs.getString("SoLo"));
+
+            // (Thêm logic JOIN để lấy SanPham và KhoHang nếu cần)
+            return ctk;
+        };
+    }
+
+    @Override
+    public Optional<ChiTietKho> findById(Integer maSP, Integer maKho) {
+        String sql = "SELECT * FROM chitietkho WHERE MaSP = ? AND MaKho = ?";
+        try {
+            ChiTietKho ctk = jdbcTemplate.queryForObject(sql, chiTietKhoRowMapper, maSP, maKho);
+            return Optional.ofNullable(ctk);
+        } catch (EmptyResultDataAccessException e) {
+            return Optional.empty();
+        }
+    }
+
+    @Override
+    public int updateSoLuongTon(Integer maSP, Integer maKho, int soLuongMoi) {
+        String sql = "UPDATE chitietkho SET SoLuongTon = ? WHERE MaSP = ? AND MaKho = ?";
+        return jdbcTemplate.update(sql, soLuongMoi, maSP, maKho);
+    }
+
+    @Override
+    public int save(ChiTietKho chiTietKho) {
+        String sql = "INSERT INTO chitietkho (MaSP, MaKho, SoLuongTon, NgayHetHan, SoLo) VALUES (?, ?, ?, ?, ?)";
+        return jdbcTemplate.update(sql,
+                chiTietKho.getMaSP(),
+                chiTietKho.getMaKho(),
+                chiTietKho.getSoLuongTon(),
+                chiTietKho.getNgayHetHan(),
+                chiTietKho.getSoLo()
+        );
+    }
+}

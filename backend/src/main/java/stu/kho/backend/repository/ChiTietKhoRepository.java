@@ -1,0 +1,16 @@
+package stu.kho.backend.repository;
+
+import stu.kho.backend.entity.ChiTietKho;
+import java.util.Optional;
+
+public interface ChiTietKhoRepository {
+
+    // Tìm một sản phẩm cụ thể trong một kho cụ thể
+    Optional<ChiTietKho> findById(Integer maSP, Integer maKho);
+
+    // Cập nhật số lượng tồn kho (dùng cho Nhập/Xuất)
+    int updateSoLuongTon(Integer maSP, Integer maKho, int soLuongMoi);
+
+    // Thêm sản phẩm mới vào kho (nếu chưa có)
+    int save(ChiTietKho chiTietKho);
+}
