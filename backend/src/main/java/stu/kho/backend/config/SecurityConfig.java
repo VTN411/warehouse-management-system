@@ -1,5 +1,7 @@
 package stu.kho.backend.config;
 
+import org.springframework.http.HttpMethod;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -55,6 +57,7 @@ public class SecurityConfig {
                         .accessDeniedHandler(accessDeniedHandler) // Xử lý lỗi 403
                 )
                 .authorizeHttpRequests(authz -> authz
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
 
                         .anyRequest().authenticated()
