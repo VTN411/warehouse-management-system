@@ -12,6 +12,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/phieunhap")
+@CrossOrigin(origins = "*")
 public class PhieuNhapController {
 
     private final PhieuNhapService phieuNhapService;

@@ -9,7 +9,8 @@ import Dashboard from './pages/Dashboard';
 import PrivateRoute from './components/PrivateRoute';
 import AdminLayout from './layouts/AdminLayout';
 import UserManagementPage from './pages/UserManagement';
-import ProfilePage from './pages/ProfilePage'; 
+import ProfilePage from './pages/ProfilePage';
+import PhieuNhapPage from './pages/PhieuNhapPage'; 
 
 import 'antd/dist/reset.css';
 import './App.css';
@@ -29,6 +30,7 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/admin/users" element={<UserManagementPage />} />
               <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/stock-in" element={<PhieuNhapPage />} />
             </Route>
           </Route>
 
