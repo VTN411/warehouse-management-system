@@ -1,28 +1,46 @@
 // src/services/auth.service.js
-import axios from "axios";
 
-const API_AUTH_URL = "http://localhost:8080/api/auth";
-// [!] Sửa lại URL theo yêu cầu của bạn
-const API_COMMON_URL = "http://localhost:8080/api/common";
+import api from "./api"; // Import client API đã cấu hình
+import { setToken, removeToken, getToken } from "../utils/token";
 
 /**
- * API Đăng nhập (Lấy token)
+ * API Đăng nhập
+ * Lưu ý: API này không dùng token, nên nó đặc biệt
  */
 export const loginAPI = (username, password) => {
-  return axios.post(`${API_AUTH_URL}/login`, {
-    tenDangNhap: username,
-    matKhau: password,
-  });
+  // Chúng ta không dùng 'api' (vì 'api' tự gắn token)
+  // Chúng ta dùng axios.create() tạm thời hoặc gọi thẳng
+  // Ở đây tôi sẽ dùng lại cách cũ của bạn cho đơn giản
+  return api.post(
+    "/auth/login", // Giả sử baseURL là '.../api'
+    {
+      tenDangNhap: username,
+      matKhau: password,
+    },
+    {
+      // [!] Yêu cầu 'api' KHÔNG gửi token
+      headers: { Authorization: "" },
+    }
+  );
 };
 
 /**
- * [MỚI & SỬA LẠI] API Lấy thông tin User (bằng token)
+ * API Lấy thông tin User (dùng token tự động)
  */
-export const getUserInfoAPI = (token) => {
-  // [!] Sử dụng API mới mà bạn cung cấp
-  return axios.get(`${API_COMMON_URL}/user-info`, {
-    headers: {
-      Authorization: "Bearer " + token,
-    },
-  });
+export const getUserInfoAPI = () => {
+  // api.js sẽ tự động lấy token và gắn vào header
+  return api.get("/common/user-info");
+};
+
+// --- Các hàm tiện ích ---
+export const saveAuthData = (token) => {
+  setToken(token);
+};
+
+export const clearAuthData = () => {
+  removeToken();
+};
+
+export const isLoggedIn = () => {
+  return !!getToken();
 };
