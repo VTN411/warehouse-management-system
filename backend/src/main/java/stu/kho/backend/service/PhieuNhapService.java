@@ -1,7 +1,7 @@
 package stu.kho.backend.service;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional; // Đảm bảo đã import
+import org.springframework.transaction.annotation.Transactional;
 import stu.kho.backend.dto.ChiTietPhieuNhapRequest;
 import stu.kho.backend.dto.PhieuNhapRequest;
 import stu.kho.backend.entity.ChiTietKho;
@@ -19,12 +19,17 @@ import java.util.Optional;
 @Service
 public class PhieuNhapService {
 
+    // Khai báo hằng số cho Trạng Thái
+    private static final int STATUS_CHO_DUYET = 1;
+    private static final int STATUS_DA_DUYET = 2;
+    private static final int STATUS_DA_HUY = 3;
+
     private final PhieuNhapRepository phieuNhapRepository;
     private final ChiTietPhieuNhapRepository chiTietPhieuNhapRepository;
     private final ChiTietKhoRepository chiTietKhoRepository;
     private final HoatDongRepository hoatDongRepository;
     private final NguoiDungRepository nguoiDungRepository;
-    private final SanPhamRepository sanPhamRepository; // Cần để kiểm tra
+    private final SanPhamRepository sanPhamRepository;
 
     public PhieuNhapService(PhieuNhapRepository phieuNhapRepository,
                             ChiTietPhieuNhapRepository chiTietPhieuNhapRepository,
@@ -41,7 +46,7 @@ public class PhieuNhapService {
     }
 
     // =================================================================
-    // 1. CREATE (Tạo mới Phiếu Nhập)
+    // 1. CREATE (Tạo phiếu - Chờ duyệt)
     // =================================================================
     @Transactional
     public PhieuNhapHang createPhieuNhap(PhieuNhapRequest request, String tenNguoiLap) {
@@ -49,33 +54,31 @@ public class PhieuNhapService {
         NguoiDung nguoiLap = nguoiDungRepository.findByTenDangNhap(tenNguoiLap)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng lập phiếu."));
 
-        // 1. Tính toán tổng tiền từ chi tiết
+        // 1. Tính toán tổng tiền
         BigDecimal tongTien = request.getChiTiet().stream()
                 .map(ct -> ct.getDonGia().multiply(new BigDecimal(ct.getSoLuong())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // 2. Tạo và Lưu Phiếu Nhập chính
+        // 2. Tạo Phiếu Nhập chính - Luôn set trạng thái là "Chờ duyệt"
         PhieuNhapHang phieuNhap = new PhieuNhapHang();
-        phieuNhap.setTrangThai(request.getTrangThai());
+        phieuNhap.setTrangThai(STATUS_CHO_DUYET); // <-- CẬP NHẬT: Luôn là 1
         phieuNhap.setMaNCC(request.getMaNCC());
         phieuNhap.setMaKho(request.getMaKho());
         phieuNhap.setNguoiLap(nguoiLap.getMaNguoiDung());
-        phieuNhap.setNguoiDuyet(request.getNguoiDuyet());
         phieuNhap.setChungTu(request.getChungTu());
         phieuNhap.setTongTien(tongTien);
         phieuNhap.setNgayLapPhieu(LocalDateTime.now());
+        // (Không set NguoiDuyet khi mới tạo)
 
         Integer maPhieuNhapMoi = phieuNhapRepository.save(phieuNhap);
         phieuNhap.setMaPhieuNhap(maPhieuNhapMoi);
 
-        // 3. Lặp qua danh sách chi tiết và xử lý
+        // 3. Lưu chi tiết
         for (ChiTietPhieuNhapRequest ctRequest : request.getChiTiet()) {
-            // Kiểm tra sản phẩm tồn tại
             if (!sanPhamRepository.findById(ctRequest.getMaSP()).isPresent()) {
                 throw new RuntimeException("Sản phẩm với Mã SP: " + ctRequest.getMaSP() + " không tồn tại.");
             }
 
-            // 3a. Lưu Chi Tiết Phiếu Nhập
             ChiTietPhieuNhap chiTiet = new ChiTietPhieuNhap();
             chiTiet.setMaPhieuNhap(maPhieuNhapMoi);
             chiTiet.setMaSP(ctRequest.getMaSP());
@@ -85,81 +88,122 @@ public class PhieuNhapService {
 
             chiTietPhieuNhapRepository.save(chiTiet);
 
-            // 3b. Cập nhật Tồn Kho (ChiTietKho) - TĂNG SỐ LƯỢNG
-            capNhatTonKho(request.getMaKho(), ctRequest.getMaSP(), ctRequest.getSoLuong());
+            // CẬP NHẬT: KHÔNG cập nhật tồn kho khi tạo mới
         }
 
-        // 4. Ghi Log Hoạt Động
-        logActivity(nguoiLap.getMaNguoiDung(), "Tạo Phiếu Nhập Hàng mới #" + maPhieuNhapMoi);
-
+        // 4. Ghi Log
+        logActivity(nguoiLap.getMaNguoiDung(), "Tạo Phiếu Nhập Hàng #" + maPhieuNhapMoi + " (Chờ duyệt)");
         return phieuNhap;
     }
 
     // =================================================================
-    // 2. READ (Lấy danh sách)
+    // 2. APPROVE (Duyệt phiếu - Phương thức MỚI)
     // =================================================================
-    public List<PhieuNhapHang> getAllPhieuNhap() {
-        return phieuNhapRepository.findAll();
+    @Transactional
+    public PhieuNhapHang approvePhieuNhap(Integer maPhieuNhap, String tenNguoiDuyet) {
+        NguoiDung nguoiDuyet = nguoiDungRepository.findByTenDangNhap(tenNguoiDuyet)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng (người duyệt)."));
+
+        PhieuNhapHang phieuNhap = getPhieuNhapById(maPhieuNhap); // Lấy phiếu và chi tiết
+
+        // 1. Chỉ duyệt phiếu đang "Chờ duyệt"
+        if (phieuNhap.getTrangThai() != STATUS_CHO_DUYET) {
+            throw new RuntimeException("Chỉ có thể duyệt phiếu đang ở trạng thái 'Chờ duyệt'.");
+        }
+
+        // 2. CẬP NHẬT TỒN KHO (TĂNG)
+        for (ChiTietPhieuNhap ct : phieuNhap.getChiTiet()) {
+            capNhatTonKho(phieuNhap.getMaKho(), ct.getMaSP(), ct.getSoLuong()); // Cộng số lượng
+        }
+
+        // 3. Cập nhật trạng thái phiếu
+        phieuNhap.setTrangThai(STATUS_DA_DUYET);
+        phieuNhap.setNguoiDuyet(nguoiDuyet.getMaNguoiDung());
+        phieuNhapRepository.update(phieuNhap); // Cập nhật trạng thái và người duyệt
+
+        // 4. Ghi Log
+        logActivity(nguoiDuyet.getMaNguoiDung(), "Đã duyệt Phiếu Nhập Hàng #" + maPhieuNhap);
+        return phieuNhap;
     }
 
     // =================================================================
-    // 3. READ (Lấy chi tiết 1 phiếu)
+    // 3. CANCEL (Hủy phiếu - Phương thức MỚI)
     // =================================================================
-    public PhieuNhapHang getPhieuNhapById(Integer id) {
-        PhieuNhapHang pnh = phieuNhapRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy Phiếu Nhập #" + id));
+    @Transactional
+    public PhieuNhapHang cancelPhieuNhap(Integer maPhieuNhap, String tenNguoiHuy) {
+        NguoiDung nguoiHuy = nguoiDungRepository.findByTenDangNhap(tenNguoiHuy)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng (người hủy)."));
 
-        // Tải các chi tiết đính kèm
-        List<ChiTietPhieuNhap> chiTiet = chiTietPhieuNhapRepository.findByMaPhieuNhap(id);
-        pnh.setChiTiet(chiTiet); // (Đã thêm trường List<ChiTietPhieuNhap> chiTiet vào PhieuNhapHang.java)
+        PhieuNhapHang phieuNhap = getPhieuNhapById(maPhieuNhap);
 
-        return pnh;
+        if (phieuNhap.getTrangThai() == STATUS_DA_HUY) {
+            throw new RuntimeException("Phiếu này đã bị hủy trước đó.");
+        }
+
+        // 1. HOÀN TRẢ TỒN KHO (UNDO) - Chỉ khi phiếu đã được duyệt
+        if (phieuNhap.getTrangThai() == STATUS_DA_DUYET) {
+            for (ChiTietPhieuNhap ct : phieuNhap.getChiTiet()) {
+                capNhatTonKho(phieuNhap.getMaKho(), ct.getMaSP(), -ct.getSoLuong()); // TRỪ đi số lượng
+            }
+        }
+
+        // 2. Cập nhật trạng thái (Cả CHO_DUYET và DA_DUYET đều chuyển thành DA_HUY)
+        phieuNhap.setTrangThai(STATUS_DA_HUY);
+        phieuNhap.setNguoiDuyet(nguoiHuy.getMaNguoiDung()); // Ghi nhận người hủy
+        phieuNhapRepository.update(phieuNhap);
+
+        // 3. Ghi Log
+        logActivity(nguoiHuy.getMaNguoiDung(), "Hủy Phiếu Nhập Hàng #" + maPhieuNhap);
+        return phieuNhap;
     }
 
     // =================================================================
-    // 4. UPDATE (Sửa phiếu)
+    // 4. UPDATE (Sửa phiếu - Đã sửa đổi logic)
+    // =================================================================
+    // 4. UPDATE (Sửa phiếu - Đã sửa đổi logic)
     // =================================================================
     @Transactional
     public PhieuNhapHang updatePhieuNhap(Integer maPhieuNhap, PhieuNhapRequest request, String tenNguoiSua) {
         NguoiDung nguoiSua = nguoiDungRepository.findByTenDangNhap(tenNguoiSua)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng."));
 
-        // 1. Lấy phiếu nhập cũ và chi tiết cũ
         PhieuNhapHang phieuNhapCu = getPhieuNhapById(maPhieuNhap);
 
-        // 2. HOÀN TRẢ TỒN KHO (UNDO)
-        // Trừ đi số lượng của phiếu nhập CŨ khỏi tồn kho
-        for (ChiTietPhieuNhap ctCu : phieuNhapCu.getChiTiet()) {
-            capNhatTonKho(phieuNhapCu.getMaKho(), ctCu.getMaSP(), -ctCu.getSoLuong()); // Trừ đi số lượng
+        // CẬP NHẬT: Chỉ cho phép sửa khi phiếu đang "Chờ duyệt"
+        if (phieuNhapCu.getTrangThai() != STATUS_CHO_DUYET) {
+            throw new RuntimeException("Không thể sửa phiếu đã được duyệt hoặc đã hủy.");
         }
 
-        // 3. Xóa các chi tiết cũ
+        // --- BƯỚC 1: Xóa các chi tiết cũ ---
+        // (Bạn đã quên bước này trong code bị lỗi)
         chiTietPhieuNhapRepository.deleteByMaPhieuNhap(maPhieuNhap);
 
-        // 4. Tính toán và Cập nhật Phiếu Nhập chính
+        // --- BƯỚC 2: Tính toán Tổng tiền MỚI ---
+        // (Biến 'tongTienMoi' bị thiếu trong code bị lỗi)
         BigDecimal tongTienMoi = request.getChiTiet().stream()
                 .map(ct -> ct.getDonGia().multiply(new BigDecimal(ct.getSoLuong())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Cập nhật các trường trên phiếu cũ
-        phieuNhapCu.setTrangThai(request.getTrangThai());
+        // --- BƯỚC 3: Cập nhật Phiếu Nhập chính ---
         phieuNhapCu.setMaNCC(request.getMaNCC());
         phieuNhapCu.setMaKho(request.getMaKho());
-        phieuNhapCu.setNguoiDuyet(request.getNguoiDuyet());
         phieuNhapCu.setChungTu(request.getChungTu());
-        phieuNhapCu.setTongTien(tongTienMoi);
+        phieuNhapCu.setTongTien(tongTienMoi); // <-- Sử dụng tổng tiền mới
 
         phieuNhapRepository.update(phieuNhapCu);
 
-        // 5. Thêm chi tiết MỚI và Cập nhật Tồn kho MỚI
+        // --- BƯỚC 4: Thêm chi tiết MỚI ---
+        // (Code bị lỗi đã lặp 2 lần, đây là phiên bản đúng)
         for (ChiTietPhieuNhapRequest ctRequest : request.getChiTiet()) {
-            // Kiểm tra SP tồn tại
+            // (Kiểm tra SP tồn tại)
             if (!sanPhamRepository.findById(ctRequest.getMaSP()).isPresent()) {
                 throw new RuntimeException("Sản phẩm với Mã SP: " + ctRequest.getMaSP() + " không tồn tại.");
             }
 
             ChiTietPhieuNhap chiTietMoi = new ChiTietPhieuNhap();
             chiTietMoi.setMaPhieuNhap(maPhieuNhap);
+
+            // (Các dòng này bị thiếu trong code bị lỗi)
             chiTietMoi.setMaSP(ctRequest.getMaSP());
             chiTietMoi.setSoLuong(ctRequest.getSoLuong());
             chiTietMoi.setDonGia(ctRequest.getDonGia());
@@ -167,42 +211,57 @@ public class PhieuNhapService {
 
             chiTietPhieuNhapRepository.save(chiTietMoi);
 
-            // Cập nhật Tồn Kho (Cộng số lượng MỚI)
-            capNhatTonKho(request.getMaKho(), ctRequest.getMaSP(), ctRequest.getSoLuong());
+            // CẬP NHẬT: Không cập nhật tồn kho khi sửa (vì phiếu vẫn đang chờ duyệt)
         }
 
-        // 6. Ghi Log
-        logActivity(nguoiSua.getMaNguoiDung(), "Cập nhật Phiếu Nhập Hàng #" + maPhieuNhap);
+        // --- BƯỚC 5: Ghi Log ---
+        logActivity(nguoiSua.getMaNguoiDung(), "Cập nhật Phiếu Nhập Hàng #" + maPhieuNhap + " (Chờ duyệt)");
         return phieuNhapCu;
     }
-
     // =================================================================
-    // 5. DELETE (Xóa phiếu)
+    // 5. DELETE (Xóa phiếu - Đã sửa đổi logic)
     // =================================================================
     @Transactional
     public void deletePhieuNhap(Integer maPhieuNhap, String tenNguoiXoa) {
         NguoiDung nguoiXoa = nguoiDungRepository.findByTenDangNhap(tenNguoiXoa)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng."));
 
-        // 1. Lấy phiếu nhập và chi tiết
         PhieuNhapHang phieuNhap = getPhieuNhapById(maPhieuNhap);
 
-        // 2. HOÀN TRẢ TỒN KHO (UNDO)
-        // Trừ đi số lượng của phiếu nhập khỏi tồn kho
-        for (ChiTietPhieuNhap ct : phieuNhap.getChiTiet()) {
-            capNhatTonKho(phieuNhap.getMaKho(), ct.getMaSP(), -ct.getSoLuong());
+        // CẬP NHẬT: Chỉ hoàn trả tồn kho nếu phiếu đã được duyệt
+        if (phieuNhap.getTrangThai() == STATUS_DA_DUYET) {
+            // HOÀN TRẢ TỒN KHO (UNDO)
+            for (ChiTietPhieuNhap ct : phieuNhap.getChiTiet()) {
+                capNhatTonKho(phieuNhap.getMaKho(), ct.getMaSP(), -ct.getSoLuong());
+            }
         }
 
-        // 3. Xóa Chi Tiết (Phải làm trước do ràng buộc FK)
+        // 1. Xóa Chi Tiết
         chiTietPhieuNhapRepository.deleteByMaPhieuNhap(maPhieuNhap);
 
-        // 4. Xóa Phiếu Chính
+        // 2. Xóa Phiếu Chính
         phieuNhapRepository.deleteById(maPhieuNhap);
 
-        // 5. Ghi Log
+        // 3. Ghi Log
         logActivity(nguoiXoa.getMaNguoiDung(), "Xóa Phiếu Nhập Hàng #" + maPhieuNhap);
     }
 
+    // =================================================================
+    // 6. READ (Các hàm Get giữ nguyên)
+    // =================================================================
+    public List<PhieuNhapHang> getAllPhieuNhap() {
+        return phieuNhapRepository.findAll();
+    }
+
+    public PhieuNhapHang getPhieuNhapById(Integer id) {
+        PhieuNhapHang pnh = phieuNhapRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy Phiếu Nhập #" + id));
+
+        List<ChiTietPhieuNhap> chiTiet = chiTietPhieuNhapRepository.findByMaPhieuNhap(id);
+        pnh.setChiTiet(chiTiet);
+
+        return pnh;
+    }
 
     // =================================================================
     // HÀM TIỆN ÍCH (Private Helper Methods)

@@ -6,7 +6,7 @@ import java.util.List;
 @Data
 public class PhieuNhapRequest {
     // Thông tin phiếu chính
-    private String trangThai;
+    private Integer trangThai;
     private Integer maNCC;
     private Integer maKho;
     // NguoiLap sẽ được lấy từ JWT (Authentication)

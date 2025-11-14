@@ -41,8 +41,12 @@ public class JdbcPhieuNhapRepository implements PhieuNhapRepository {
             PhieuNhapHang pnh = new PhieuNhapHang();
             pnh.setMaPhieuNhap(rs.getInt("MaPhieuNhap"));
             pnh.setNgayLapPhieu(rs.getTimestamp("NgayLapPhieu").toLocalDateTime());
-            pnh.setTrangThai(rs.getString("TrangThai"));
-            pnh.setTongTien(rs.getBigDecimal("TongTien"));
+
+            // --- SỬA LỖI Ở ĐÂY ---
+            pnh.setTrangThai(rs.getInt("TrangThai"));
+            pnh.setTongTien(rs.getBigDecimal("TongTien")); // Tách dòng này ra
+            // --- KẾT THÚC SỬA LỖI ---
+
             pnh.setMaNCC(rs.getInt("MaNCC"));
             pnh.setMaKho(rs.getInt("MaKho"));
             pnh.setNguoiLap(rs.getInt("NguoiLap"));
@@ -73,7 +77,7 @@ public class JdbcPhieuNhapRepository implements PhieuNhapRepository {
 
         jdbcTemplate.update(connection -> {
             PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
-            ps.setString(1, phieuNhap.getTrangThai());
+            ps.setInt(1, phieuNhap.getTrangThai());
             ps.setBigDecimal(2, phieuNhap.getTongTien());
             ps.setInt(3, phieuNhap.getMaNCC());
             ps.setInt(4, phieuNhap.getMaKho());

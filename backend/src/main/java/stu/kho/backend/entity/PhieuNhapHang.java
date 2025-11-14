@@ -9,7 +9,7 @@ import java.util.List; // <-- 1. THÊM IMPORT NÀY
 public class PhieuNhapHang {
     private Integer maPhieuNhap;
     private LocalDateTime ngayLapPhieu;
-    private String trangThai;
+    private Integer trangThai;
     private BigDecimal tongTien;
     private Integer maNCC;
     private Integer maKho;

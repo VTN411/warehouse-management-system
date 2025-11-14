@@ -21,14 +21,15 @@ public class PhieuNhapController {
     }
 
     // =================================================================
-    // 1. CREATE (Đã có)
+    // 1. CREATE (Tạo phiếu - Chờ duyệt)
     // =================================================================
     @PostMapping
-    @PreAuthorize("hasAuthority('PERM_PHIEUNHAP_CREATE')")
+    @PreAuthorize("hasAuthority('PERM_PHIEUNHAP_CREATE')") // Quyền: Thủ kho, Admin
     public ResponseEntity<?> createPhieuNhap(@RequestBody PhieuNhapRequest request,
                                              Authentication authentication) {
         try {
             String tenNguoiLap = authentication.getName();
+            // Service sẽ tự động set trạng thái là 1 (Chờ duyệt)
             PhieuNhapHang phieuNhapMoi = phieuNhapService.createPhieuNhap(request, tenNguoiLap);
             return ResponseEntity.ok(phieuNhapMoi);
         } catch (RuntimeException e) {
@@ -37,7 +38,39 @@ public class PhieuNhapController {
     }
 
     // =================================================================
-    // 2. READ (Lấy danh sách)
+    // 2. APPROVE (Duyệt phiếu - API MỚI)
+    // =================================================================
+    @PostMapping("/{id}/approve")
+    @PreAuthorize("hasAuthority('PERM_PHIEUNHAP_APPROVE')") // Quyền: Quản lý, Admin
+    public ResponseEntity<?> approvePhieuNhap(@PathVariable Integer id,
+                                              Authentication authentication) {
+        try {
+            String tenNguoiDuyet = authentication.getName();
+            PhieuNhapHang phieuNhap = phieuNhapService.approvePhieuNhap(id, tenNguoiDuyet);
+            return ResponseEntity.ok(phieuNhap);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    // =================================================================
+    // 3. CANCEL (Hủy phiếu - API MỚI)
+    // =================================================================
+    @PostMapping("/{id}/cancel")
+    @PreAuthorize("hasAuthority('PERM_PHIEUNHAP_CANCEL')") // Quyền: Quản lý, Admin
+    public ResponseEntity<?> cancelPhieuNhap(@PathVariable Integer id,
+                                             Authentication authentication) {
+        try {
+            String tenNguoiHuy = authentication.getName();
+            PhieuNhapHang phieuNhap = phieuNhapService.cancelPhieuNhap(id, tenNguoiHuy);
+            return ResponseEntity.ok(phieuNhap);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    // =================================================================
+    // 4. READ (Lấy danh sách)
     // =================================================================
     @GetMapping
     @PreAuthorize("isAuthenticated()") // Ai cũng có thể xem danh sách (nếu đã đăng nhập)
@@ -46,7 +79,7 @@ public class PhieuNhapController {
     }
 
     // =================================================================
-    // 3. READ (Lấy chi tiết 1 phiếu)
+    // 5. READ (Lấy chi tiết 1 phiếu)
     // =================================================================
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
@@ -59,10 +92,10 @@ public class PhieuNhapController {
     }
 
     // =================================================================
-    // 4. UPDATE (Sửa phiếu)
+    // 6. UPDATE (Sửa phiếu)
     // =================================================================
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('PERM_PHIEUNHAP_EDIT')")
+    @PreAuthorize("hasAuthority('PERM_PHIEUNHAP_EDIT')") // Quyền: Thủ kho, Admin
     public ResponseEntity<?> updatePhieuNhap(@PathVariable Integer id,
                                              @RequestBody PhieuNhapRequest request,
                                              Authentication authentication) {
@@ -76,10 +109,10 @@ public class PhieuNhapController {
     }
 
     // =================================================================
-    // 5. DELETE (Xóa phiếu)
+    // 7. DELETE (Xóa phiếu)
     // =================================================================
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('PERM_PHIEUNHAP_DELETE')")
+    @PreAuthorize("hasAuthority('PERM_PHIEUNHAP_DELETE')") // Quyền: Admin
     public ResponseEntity<?> deletePhieuNhap(@PathVariable Integer id,
                                              Authentication authentication) {
         try {
