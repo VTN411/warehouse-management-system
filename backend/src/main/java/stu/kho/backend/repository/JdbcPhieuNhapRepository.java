@@ -41,16 +41,18 @@ public class JdbcPhieuNhapRepository implements PhieuNhapRepository {
             PhieuNhapHang pnh = new PhieuNhapHang();
             pnh.setMaPhieuNhap(rs.getInt("MaPhieuNhap"));
             pnh.setNgayLapPhieu(rs.getTimestamp("NgayLapPhieu").toLocalDateTime());
-
-            // --- SỬA LỖI Ở ĐÂY ---
             pnh.setTrangThai(rs.getInt("TrangThai"));
-            pnh.setTongTien(rs.getBigDecimal("TongTien")); // Tách dòng này ra
-            // --- KẾT THÚC SỬA LỖI ---
-
+            pnh.setTongTien(rs.getBigDecimal("TongTien"));
             pnh.setMaNCC(rs.getInt("MaNCC"));
             pnh.setMaKho(rs.getInt("MaKho"));
             pnh.setNguoiLap(rs.getInt("NguoiLap"));
-            pnh.setNguoiDuyet(rs.getInt("NguoiDuyet"));
+
+            // --- SỬA LỖI ĐỌC NULL CHO INTEGER ---
+            // Sử dụng rs.getObject() để lấy NULL thay vì 0
+            Integer nguoiDuyetId = rs.getObject("NguoiDuyet", Integer.class);
+            pnh.setNguoiDuyet(nguoiDuyetId);
+            // --- KẾT THÚC SỬA LỖI ---
+
             pnh.setChungTu(rs.getString("ChungTu"));
 
             // --- JOIN Dữ liệu (Tải đối tượng liên quan) ---
@@ -61,7 +63,8 @@ public class JdbcPhieuNhapRepository implements PhieuNhapRepository {
                 pnh.setKhoHang(khoHangRepository.findById(pnh.getMaKho()).orElse(null));
             }
             if (pnh.getNguoiLap() != null) {
-                pnh.setNguoiLapObj(nguoiDungRepository.findById(pnh.getNguoiLap()).orElse(null));
+                // (Lưu ý: Bạn cũng nên dùng getObject cho NguoiLap nếu nó có thể NULL)
+pnh.setNguoiLapObj(nguoiDungRepository.findById(pnh.getNguoiLap()).orElse(null));
             }
 
             return pnh;
