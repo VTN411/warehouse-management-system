@@ -9,9 +9,11 @@ import stu.kho.backend.entity.VaiTro;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Repository
-public class JdbcNguoiDungRepository implements NguoiDungRepository {
+    public class JdbcNguoiDungRepository implements NguoiDungRepository {
 
     private final JdbcTemplate jdbcTemplate;
     private final VaiTroRepository vaiTroRepository;
@@ -21,11 +23,9 @@ public class JdbcNguoiDungRepository implements NguoiDungRepository {
 
     // Constructor: Nơi khởi tạo tất cả các trường final
     public JdbcNguoiDungRepository(JdbcTemplate jdbcTemplate, VaiTroRepository vaiTroRepository) {
-        // 1. GÁN GIÁ TRỊ CÁC BIẾN CẦN THIẾT
         this.jdbcTemplate = jdbcTemplate;
         this.vaiTroRepository = vaiTroRepository;
 
-        // 2. KHỞI TẠO RowMapper SAU KHI vaiTroRepository ĐÃ ĐƯỢC GÁN
         this.nguoiDungRowMapper = (rs, rowNum) -> {
             NguoiDung user = new NguoiDung();
             user.setMaNguoiDung(rs.getInt("MaNguoiDung"));
@@ -34,17 +34,31 @@ public class JdbcNguoiDungRepository implements NguoiDungRepository {
             user.setHoTen(rs.getString("HoTen"));
             user.setEmail(rs.getString("Email"));
             user.setSdt(rs.getString("SDT"));
-
             int maVaiTro = rs.getInt("MaVaiTro");
             VaiTro vaiTro = this.vaiTroRepository.findById(maVaiTro).orElse(null);
             user.setVaiTro(vaiTro);
 
-            // QUAN TRỌNG: Lấy danh sách quyền (Authorities)
+            // --- CẬP NHẬT LOGIC LẤY QUYỀN (AUTHORITIES) ---
+
+            // 1. Lấy quyền theo Vai Trò (từ bảng PhanQuyen)
+            List<String> roleAuthorities = List.of(); // Danh sách rỗng mặc định
             if (vaiTro != null) {
-                // Lấy danh sách quyền chi tiết từ bảng PhanQuyen
-                List<String> authorities = getAuthoritiesByRoleId(vaiTro.getMaVaiTro());
-                user.setAuthorities(authorities); // Cần thêm trường List<String> authorities trong NguoiDung.java
+                roleAuthorities = getAuthoritiesByRoleId(vaiTro.getMaVaiTro());
             }
+
+            // 2. Lấy quyền gán trực tiếp (từ bảng NguoiDung_ChucNang)
+            List<String> directAuthorities = getDirectAuthoritiesByUserId(user.getMaNguoiDung());
+
+            // 3. Gộp hai danh sách quyền và loại bỏ trùng lặp
+            List<String> allAuthorities = Stream.concat(
+                            roleAuthorities.stream(),
+                            directAuthorities.stream()
+                    )
+                    .distinct() // Loại bỏ quyền trùng lặp
+                    .collect(Collectors.toList());
+
+            user.setAuthorities(allAuthorities); // Gán danh sách quyền đã gộp
+
             return user;
         };
     }
@@ -57,6 +71,15 @@ public class JdbcNguoiDungRepository implements NguoiDungRepository {
         } catch (Exception e) {
             return List.of();
         }
+    }
+    @Override
+    public List<String> getDirectAuthoritiesByUserId(Integer maNguoiDung) {
+        String sql = "SELECT cn.TenChucNang " +
+                "FROM NguoiDung_ChucNang ndcn " +
+                "JOIN chucnang cn ON ndcn.MaChucNang = cn.MaChucNang " +
+                "WHERE ndcn.MaNguoiDung = ?";
+
+        return jdbcTemplate.queryForList(sql, String.class, maNguoiDung);
     }
 
     // --- Các phương thức @Override sử dụng RowMapper ---

@@ -2,6 +2,8 @@ package stu.kho.backend.security;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -18,7 +20,7 @@ import java.util.stream.Collectors;
 
 @Component
 public class JwtTokenProvider {
-
+    private static final Logger logger = LoggerFactory.getLogger(JwtTokenProvider.class);
     private final SecretKey key;
     private final int jwtExpirationMs;
     public JwtTokenProvider(
@@ -77,9 +79,22 @@ public class JwtTokenProvider {
         try {
             Jwts.parserBuilder().setSigningKey(this.key).build().parseClaimsJws(authToken);
             return true;
-        } catch (Exception ex) {
-            // Log lỗi (ví dụ: token hết hạn, chữ ký sai)
-            return false;
+        } catch (SignatureException ex) {
+            // Lỗi 1: Sai chữ ký (Sai secret key)
+            logger.error("Invalid JWT signature: {}", ex.getMessage());
+        } catch (MalformedJwtException ex) {
+            // Lỗi 2: Token không đúng định dạng
+            logger.error("Invalid JWT token: {}", ex.getMessage());
+        } catch (ExpiredJwtException ex) {
+            // Lỗi 3: Token đã hết hạn (RẤT CÓ KHẢ NĂNG)
+            logger.error("Expired JWT token: {}", ex.getMessage());
+        } catch (UnsupportedJwtException ex) {
+            logger.error("Unsupported JWT token: {}", ex.getMessage());
+        } catch (IllegalArgumentException ex) {
+            logger.error("JWT claims string is empty: {}", ex.getMessage());
         }
+
+        return false; // Trả về false nếu có lỗi
     }
+
 }

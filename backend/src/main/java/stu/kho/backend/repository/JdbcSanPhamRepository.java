@@ -19,44 +19,27 @@ import java.util.Optional;
 public class JdbcSanPhamRepository implements SanPhamRepository {
 
     private final JdbcTemplate jdbcTemplate;
-    // Các repository khác để JOIN dữ liệu
     private final LoaiHangRepository loaiHangRepository;
-    private final NhaCungCapRepository nhaCungCapRepository;
+    // XÓA: private final NhaCungCapRepository nhaCungCapRepository;
 
     private final RowMapper<SanPham> sanPhamRowMapper;
 
-    // Constructor: Inject tất cả repo cần thiết
+    // --- SỬA CONSTRUCTOR ---
     public JdbcSanPhamRepository(JdbcTemplate jdbcTemplate,
-                                 LoaiHangRepository loaiHangRepository,
-                                 NhaCungCapRepository nhaCungCapRepository) {
+                                 LoaiHangRepository loaiHangRepository) { // Xóa NhaCungCapRepository
         this.jdbcTemplate = jdbcTemplate;
         this.loaiHangRepository = loaiHangRepository;
-        this.nhaCungCapRepository = nhaCungCapRepository;
 
-        // Khởi tạo RowMapper ở đây
+        // --- SỬA ROWMAPPER ---
         this.sanPhamRowMapper = (rs, rowNum) -> {
             SanPham sp = new SanPham();
             sp.setMaSP(rs.getInt("MaSP"));
             sp.setTenSP(rs.getString("TenSP"));
-            sp.setDonViTinh(rs.getString("DonViTinh"));
-            sp.setGiaNhap(rs.getBigDecimal("GiaNhap"));
-            sp.setSoLuongTon(rs.getInt("SoLuongTon"));
-            sp.setMucTonToiThieu(rs.getInt("MucTonToiThieu"));
-            sp.setMucTonToiDa(rs.getInt("MucTonToiDa"));
             sp.setMaLoai(rs.getInt("MaLoai"));
-            sp.setMaNCC(rs.getInt("MaNCC"));
 
-            // --- JOIN Dữ liệu ---
-            // Lấy LoaiHang từ MaLoai
             if (sp.getMaLoai() != null) {
                 LoaiHang lh = loaiHangRepository.findById(sp.getMaLoai()).orElse(null);
                 sp.setLoaiHang(lh);
-            }
-
-            // Lấy NhaCungCap từ MaNCC
-            if (sp.getMaNCC() != null) {
-                NhaCungCap ncc = nhaCungCapRepository.findById(sp.getMaNCC()).orElse(null);
-                sp.setNhaCungCap(ncc);
             }
 
             return sp;
@@ -79,15 +62,11 @@ public class JdbcSanPhamRepository implements SanPhamRepository {
         String sql = "SELECT * FROM sanpham";
         return jdbcTemplate.query(sql, sanPhamRowMapper);
     }
-
     @Override
     public int save(SanPham sanPham) {
-        String sql = "INSERT INTO sanpham (TenSP, DonViTinh, GiaNhap, SoLuongTon, MucTonToiThieu, MucTonToiDa, MaLoai, MaNCC) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-
-        // KeyHolder để lấy ID tự động tăng (MaSP)
+        String sql = "INSERT INTO sanpham (TenSP, DonViTinh, GiaNhap, SoLuongTon, MucTonToiThieu, MucTonToiDa, MaLoai) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?)";
         KeyHolder keyHolder = new GeneratedKeyHolder();
-
         jdbcTemplate.update(connection -> {
             PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
             ps.setString(1, sanPham.getTenSP());
@@ -97,7 +76,6 @@ public class JdbcSanPhamRepository implements SanPhamRepository {
             ps.setObject(5, sanPham.getMucTonToiThieu()); // Dùng setObject cho trường có thể NULL
             ps.setObject(6, sanPham.getMucTonToiDa());
             ps.setObject(7, sanPham.getMaLoai());
-            ps.setObject(8, sanPham.getMaNCC());
             return ps;
         }, keyHolder);
 
@@ -112,7 +90,7 @@ public class JdbcSanPhamRepository implements SanPhamRepository {
     @Override
     public int update(SanPham sanPham) {
         String sql = "UPDATE sanpham SET TenSP = ?, DonViTinh = ?, GiaNhap = ?, SoLuongTon = ?, " +
-                "MucTonToiThieu = ?, MucTonToiDa = ?, MaLoai = ?, MaNCC = ? WHERE MaSP = ?";
+                "MucTonToiThieu = ?, MucTonToiDa = ?, MaLoai = ? WHERE MaSP = ?";
         return jdbcTemplate.update(sql,
                 sanPham.getTenSP(),
                 sanPham.getDonViTinh(),
@@ -121,7 +99,6 @@ public class JdbcSanPhamRepository implements SanPhamRepository {
                 sanPham.getMucTonToiThieu(),
                 sanPham.getMucTonToiDa(),
                 sanPham.getMaLoai(),
-                sanPham.getMaNCC(),
                 sanPham.getMaSP()
         );
     }

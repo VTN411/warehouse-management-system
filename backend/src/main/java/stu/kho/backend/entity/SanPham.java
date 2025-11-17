@@ -1,9 +1,12 @@
+// Trong file: entity/SanPham.java
+
 package stu.kho.backend.entity;
 
 import lombok.Data;
 import java.math.BigDecimal;
+import java.util.List; // Import List
 
-@Data // Chỉ cần Lombok
+@Data
 public class SanPham {
 
     private Integer maSP;
@@ -14,12 +17,13 @@ public class SanPham {
     private Integer mucTonToiThieu;
     private Integer mucTonToiDa;
 
-    // --- Khóa Ngoại ---
+    // --- Khóa Ngoại  ---
     private Integer maLoai;
-    private Integer maNCC;
 
-    // --- Các đối tượng liên quan (Optional, dùng khi JOIN) ---
-    // (Bạn sẽ điền các đối tượng này trong RowMapper)
+
+    // --- Các đối tượng liên quan (Optional) ---
     private LoaiHang loaiHang;
-    private NhaCungCap nhaCungCap;
+
+    // THÊM TRƯỜNG MỚI (Optional): Danh sách các NCC
+    private List<NhaCungCap> danhSachNCC;
 }

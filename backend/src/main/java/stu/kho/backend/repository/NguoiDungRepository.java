@@ -27,5 +27,7 @@ public interface NguoiDungRepository {
     List<NguoiDung> findAll(); // Lấy tất cả user
     Optional<NguoiDung> findById(Integer id); // Tìm theo ID
     int update(NguoiDung nguoiDung); // Cập nhật user
-    int deleteById(Integer id); // Xóa user
+    int deleteById(Integer id);
+    // Lấy quyền (chức năng) được gán trực tiếp cho user
+    List<String> getDirectAuthoritiesByUserId(Integer maNguoiDung);
 }
