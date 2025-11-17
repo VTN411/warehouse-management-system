@@ -18,7 +18,9 @@ import {
   DeleteOutlined,
   MinusCircleOutlined,
   EditOutlined,
-  ReloadOutlined, // [!] 1. IMPORT ICON REFRESH
+  ReloadOutlined,
+  CheckCircleOutlined, // [!] 1. THÊM ICON
+  CloseCircleOutlined, // [!] 1. THÊM ICON
 } from "@ant-design/icons";
 import * as phieuNhapService from "../../services/phieunhap.service";
 
@@ -33,6 +35,9 @@ const PhieuNhapPage = () => {
   const [deletingPhieuNhapId, setDeletingPhieuNhapId] = useState(null);
   const [editingPhieuNhap, setEditingPhieuNhap] = useState(null);
 
+  // [!] 2. THÊM STATE ĐỂ LƯU QUYỀN
+  const [userPermissions, setUserPermissions] = useState([]);
+
   // Hàm lấy danh sách phiếu nhập
   const fetchPhieuNhap = useCallback(async () => {
     setLoading(true);
@@ -45,12 +50,25 @@ const PhieuNhapPage = () => {
     setLoading(false);
   }, [messageApi]);
 
+  // [!] 3. CẬP NHẬT useEffect ĐỂ LẤY QUYỀN
   useEffect(() => {
-    fetchPhieuNhap();
-  }, [fetchPhieuNhap]);
+    fetchPhieuNhap(); // Tải danh sách phiếu
 
-  // --- CÁC HÀM XỬ LÝ MODAL ---
+    // Lấy thông tin user từ localStorage
+    const storedUser = localStorage.getItem("user_info");
+    if (storedUser) {
+      const user = JSON.parse(storedUser);
+      setUserPermissions(user.quyen || []);
+    }
+  }, [fetchPhieuNhap]); // Chỉ chạy khi fetchPhieuNhap thay đổi
 
+  // [!] 4. THÊM BIẾN KIỂM TRA CHO TẤT CẢ QUYỀN
+  const canApprove = userPermissions.includes("PERM_PHIEUNHAP_APPROVE");
+  const canCancel = userPermissions.includes("PERM_PHIEUNHAP_CANCEL");
+  const canEdit = userPermissions.includes("PERM_PHIEUNHAP_EDIT");
+  const canDelete = userPermissions.includes("PERM_PHIEUNHAP_DELETE");
+
+  // --- (Các hàm Sửa/Thêm giữ nguyên) ---
   const handleOpenModal = () => {
     setEditingPhieuNhap(null);
     form.resetFields();
@@ -59,12 +77,10 @@ const PhieuNhapPage = () => {
   };
 
   const handleEdit = (record) => {
-    // Kiểm tra trạng thái trước khi sửa
     if (record.trangThai === 2 || record.trangThai === 3) {
       messageApi.warning("Không thể sửa phiếu đã được duyệt hoặc đã hủy.");
       return;
     }
-
     setEditingPhieuNhap(record);
     form.setFieldsValue(record);
     setIsModalVisible(true);
@@ -82,14 +98,9 @@ const PhieuNhapPage = () => {
       .then(async (values) => {
         try {
           if (editingPhieuNhap) {
-            // Sửa
-            await phieuNhapService.updatePhieuNhap(
-              editingPhieuNhap.maPhieuNhap,
-              values
-            );
+            await phieuNhapService.updatePhieuNhap(editingPhieuNhap.maPhieuNhap, values);
             messageApi.success("Cập nhật phiếu nhập thành công!");
           } else {
-            // Tạo mới
             await phieuNhapService.createPhieuNhap(values);
             messageApi.success("Tạo phiếu nhập thành công!");
           }
@@ -109,8 +120,7 @@ const PhieuNhapPage = () => {
       });
   };
 
-  // --- CÁC HÀM XỬ LÝ XÓA ---
-
+  // --- (Các hàm Xóa giữ nguyên) ---
   const handleDelete = (phieuNhapId) => {
     setDeletingPhieuNhapId(phieuNhapId);
     setIsDeleteModalOpen(true);
@@ -138,6 +148,27 @@ const PhieuNhapPage = () => {
     setDeletingPhieuNhapId(null);
   };
 
+  // [!] 5. THÊM HÀM XỬ LÝ DUYỆT VÀ HỦY
+  const handleApprove = async (phieuNhapId) => {
+    try {
+      await phieuNhapService.approvePhieuNhap(phieuNhapId);
+      messageApi.success("Duyệt phiếu nhập thành công!");
+      fetchPhieuNhap(); // Tải lại bảng
+    } catch (error) {
+      messageApi.error("Lỗi khi duyệt phiếu!");
+    }
+  };
+
+  const handleReject = async (phieuNhapId) => {
+    try {
+      await phieuNhapService.rejectPhieuNhap(phieuNhapId);
+      messageApi.success("Đã hủy phiếu nhập!");
+      fetchPhieuNhap(); // Tải lại bảng
+    } catch (error) {
+      messageApi.error("Lỗi khi hủy phiếu!");
+    }
+  };
+
   // Cột Bảng
   const columns = [
     { title: "Mã Phiếu", dataIndex: "maPhieuNhap", key: "maPhieuNhap" },
@@ -147,13 +178,9 @@ const PhieuNhapPage = () => {
       dataIndex: "trangThai", 
       key: "trangThai",
       render: (status) => {
-        if (status === 1) {
-          return <Tag color="orange">Chờ duyệt</Tag>;
-        } else if (status === 2) {
-          return <Tag color="green">Đã duyệt</Tag>;
-        } else if (status === 3) {
-          return <Tag color="red">Không duyệt</Tag>;
-        }
+        if (status === 1) return <Tag color="orange">Chờ duyệt</Tag>;
+        if (status === 2) return <Tag color="green">Đã duyệt</Tag>;
+        if (status === 3) return <Tag color="red">Không duyệt</Tag>;
         return status;
       }
     },
@@ -168,24 +195,57 @@ const PhieuNhapPage = () => {
     {
       title: 'Hành động',
       key: 'action',
-      render: (_, record) => (
-        <Space size="middle">
-          <Button 
-            icon={<EditOutlined />} 
-            onClick={() => handleEdit(record)}
-          >
-            Sửa
-          </Button>
+      // [!] 6. CẬP NHẬT LOGIC RENDER NÚT BẤM
+      render: (_, record) => {
+        const isChoDuyet = record.trangThai === 1;
 
-          <Button
-            icon={<DeleteOutlined />}
-            danger
-            onClick={() => handleDelete(record.maPhieuNhap)}
-          >
-            Xóa
-          </Button>
-        </Space>
-      ),
+        return (
+          <Space size="small" wrap> 
+            {/* Nút Sửa: Hiển thị nếu Chờ duyệt VÀ có quyền Edit */}
+            {isChoDuyet && canEdit && (
+              <Button 
+                icon={<EditOutlined />} 
+                onClick={() => handleEdit(record)}
+              >
+                Sửa
+              </Button>
+            )}
+
+            {/* Nút Xóa: Hiển thị nếu Chờ duyệt VÀ có quyền Delete */}
+            {isChoDuyet && canDelete && (
+              <Button
+                icon={<DeleteOutlined />}
+                danger
+                onClick={() => handleDelete(record.maPhieuNhap)}
+              >
+                Xóa
+              </Button>
+            )}
+
+            {/* Nút Duyệt: Hiển thị nếu Chờ duyệt VÀ có quyền Approve */}
+            {isChoDuyet && canApprove && (
+              <Button 
+                icon={<CheckCircleOutlined />} 
+                onClick={() => handleApprove(record.maPhieuNhap)}
+                style={{ color: 'green', borderColor: 'green' }}
+              >
+                Duyệt
+              </Button>
+            )}
+            
+            {/* Nút Hủy: Hiển thị nếu Chờ duyệt VÀ có quyền Cancel */}
+            {isChoDuyet && canCancel && (
+              <Button 
+                icon={<CloseCircleOutlined />} 
+                onClick={() => handleReject(record.maPhieuNhap)}
+                danger
+              >
+                Hủy
+              </Button>
+            )}
+          </Space>
+        )
+      },
     },
   ];
 
@@ -193,7 +253,6 @@ const PhieuNhapPage = () => {
     <div>
       {contextHolder}
       
-      {/* [!] 2. THÊM NÚT REFRESH VÀ GOM NHÓM BẰNG SPACE */}
       <Space style={{ marginBottom: 16 }}>
         <Button
           type="primary"
@@ -205,8 +264,8 @@ const PhieuNhapPage = () => {
 
         <Button 
           icon={<ReloadOutlined />} 
-          onClick={fetchPhieuNhap} // Gọi hàm fetchPhieuNhap khi bấm
-          loading={loading} // Hiệu ứng xoay khi đang tải
+          onClick={fetchPhieuNhap}
+          loading={loading}
         >
           Tải lại
         </Button>
@@ -219,7 +278,7 @@ const PhieuNhapPage = () => {
         rowKey="maPhieuNhap"
       />
 
-      {/* MODAL TẠO/SỬA PHIẾU NHẬP */}
+      {/* MODAL TẠO/SỬA PHIẾU NHẬP (Giữ nguyên) */}
       <Modal
         title={editingPhieuNhap ? "Sửa Phiếu Nhập Hàng" : "Tạo Phiếu Nhập Hàng"}
         open={isModalVisible}
@@ -232,11 +291,9 @@ const PhieuNhapPage = () => {
             <Form.Item name="maNCC" label="Mã NCC" rules={[{ required: true, message: "Vui lòng nhập!" }]}>
               <InputNumber style={{ width: 150 }} placeholder="Nhập ID NCC"/>
             </Form.Item>
-            
             <Form.Item name="maKho" label="Mã Kho" rules={[{ required: true, message: "Vui lòng nhập!" }]}>
               <InputNumber style={{ width: 150 }} placeholder="Nhập ID Kho"/>
             </Form.Item>
-
             <Form.Item name="chungTu" label="Chứng từ" rules={[{ required: true, message: "Vui lòng nhập!" }]}>
               <Input placeholder="Ví dụ: HD-001" />
             </Form.Item>
@@ -248,25 +305,13 @@ const PhieuNhapPage = () => {
               <>
                 {fields.map(({ key, name, ...restField }) => (
                   <Space key={key} style={{ display: "flex", marginBottom: 8 }} align="baseline">
-                    <Form.Item
-                      {...restField}
-                      name={[name, "maSP"]}
-                      rules={[{ required: true, message: "Nhập Mã SP" }]}
-                    >
+                    <Form.Item {...restField} name={[name, "maSP"]} rules={[{ required: true, message: "Nhập Mã SP" }]}>
                       <InputNumber placeholder="Mã SP" />
                     </Form.Item>
-                    <Form.Item
-                      {...restField}
-                      name={[name, "soLuong"]}
-                      rules={[{ required: true, message: "Nhập SL" }]}
-                    >
+                    <Form.Item {...restField} name={[name, "soLuong"]} rules={[{ required: true, message: "Nhập SL" }]}>
                       <InputNumber placeholder="Số lượng" />
                     </Form.Item>
-                    <Form.Item
-                      {...restField}
-                      name={[name, "donGia"]}
-                      rules={[{ required: true, message: "Nhập Giá" }]}
-                    >
+                    <Form.Item {...restField} name={[name, "donGia"]} rules={[{ required: true, message: "Nhập Giá" }]}>
                       <InputNumber 
                         placeholder="Đơn giá" 
                         formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
@@ -288,6 +333,7 @@ const PhieuNhapPage = () => {
         </Form>
       </Modal>
 
+      {/* MODAL XÁC NHẬN XÓA (Giữ nguyên) */}
       <Modal
         title="Xác nhận xóa"
         open={isDeleteModalOpen}
