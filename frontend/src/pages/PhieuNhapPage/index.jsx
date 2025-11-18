@@ -1,6 +1,5 @@
 // src/pages/PhieuNhapPage/index.jsx
 
-// [!] 1. IMPORT THÊM Dropdown VÀ DownOutlined
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Table,
@@ -10,9 +9,10 @@ import {
   Input,
   Space,
   message,
+  Select,
   InputNumber,
   Tag,
-  Dropdown, // Thêm Dropdown
+  Dropdown,
 } from "antd";
 import {
   PlusOutlined,
@@ -22,22 +22,22 @@ import {
   ReloadOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
-  DownOutlined, // Thêm icon DownOutlined
+  DownOutlined,
 } from "@ant-design/icons";
 import * as phieuNhapService from "../../services/phieunhap.service";
+import * as userService from "../../services/user.service"; // [!] 1. IMPORT USER SERVICE
 
+const { Option } = Select;
 
 const PhieuNhapPage = () => {
   // Master list
   const [phieuNhapList, setPhieuNhapList] = useState([]);
-  
-  // [!] 2. THÊM 3 STATE MỚI
-  // List sẽ hiển thị trên bảng
   const [displayedPhieuNhapList, setDisplayedPhieuNhapList] = useState([]); 
-  // State lưu trữ cài đặt Sắp xếp
   const [sortConfig, setSortConfig] = useState(null); 
-  // State lưu trữ cài đặt Lọc
   const [filterConfig, setFilterConfig] = useState(null); 
+
+  // [!] 2. THÊM STATE ĐỂ LƯU DANH SÁCH USER (ĐỂ TRA CỨU TÊN)
+  const [userList, setUserList] = useState([]);
 
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -48,64 +48,68 @@ const PhieuNhapPage = () => {
   const [editingPhieuNhap, setEditingPhieuNhap] = useState(null);
   const [userPermissions, setUserPermissions] = useState([]);
 
-  // [!] 3. CẬP NHẬT fetchPhieuNhap
+  // Hàm lấy danh sách phiếu nhập
   const fetchPhieuNhap = useCallback(async () => {
     setLoading(true);
     try {
       const response = await phieuNhapService.getAllPhieuNhap();
-      setPhieuNhapList(response.data || []); // Chỉ cập nhật master list
+      setPhieuNhapList(response.data || []); 
     } catch (error) {
       messageApi.error("Không thể tải danh sách phiếu nhập!");
     }
     setLoading(false);
   }, [messageApi]);
 
+  // [!] 3. HÀM LẤY DANH SÁCH USER
+  const fetchUsers = useCallback(async () => {
+    try {
+      const response = await userService.getAllUsers();
+      setUserList(response.data || []);
+    } catch (error) {
+      console.error("Lỗi tải danh sách user:", error);
+    }
+  }, []);
+
+  // [!] 4. GỌI CẢ 2 API KHI TRANG TẢI
   useEffect(() => {
     fetchPhieuNhap();
+    fetchUsers(); // Gọi thêm hàm này
+    
     const storedUser = localStorage.getItem("user_info");
     if (storedUser) {
       const user = JSON.parse(storedUser);
       setUserPermissions(user.quyen || []);
     }
-  }, [fetchPhieuNhap]);
+  }, [fetchPhieuNhap, fetchUsers]);
 
-  // [!] 4. THÊM useEffect ĐỂ XỬ LÝ LỌC/SẮP XẾP
+  // Xử lý lọc/sắp xếp (Giữ nguyên)
   useEffect(() => {
-    let data = [...phieuNhapList]; // Bắt đầu từ master list
-
-    // Bước 1: Lọc (theo trạng thái)
+    let data = [...phieuNhapList]; 
     if (filterConfig && filterConfig.key === 'status') {
       data = data.filter(item => item.trangThai === filterConfig.value);
     }
-
-    // Bước 2: Sắp xếp
     if (sortConfig) {
       data.sort((a, b) => {
         if (sortConfig.key === 'date') {
-          // Sắp xếp ngày tháng
           const dateA = new Date(a.ngayLapPhieu);
           const dateB = new Date(b.ngayLapPhieu);
           return sortConfig.direction === 'asc' ? dateA - dateB : dateB - dateA;
         }
         if (sortConfig.key === 'price') {
-          // Sắp xếp giá tiền
           return sortConfig.direction === 'asc' ? a.tongTien - b.tongTien : b.tongTien - a.tongTien;
         }
         return 0;
       });
     }
-
-    // Bước 3: Cập nhật bảng
     setDisplayedPhieuNhapList(data);
-  }, [phieuNhapList, sortConfig, filterConfig]); // Chạy lại khi 1 trong 3 thay đổi
+  }, [phieuNhapList, sortConfig, filterConfig]);
 
   const canApprove = userPermissions.includes("PERM_PHIEUNHAP_APPROVE");
   const canCancel = userPermissions.includes("PERM_PHIEUNHAP_CANCEL");
   const canEdit = userPermissions.includes("PERM_PHIEUNHAP_EDIT");
   const canDelete = userPermissions.includes("PERM_PHIEUNHAP_DELETE");
 
-  // --- (Tất cả các hàm logic (handle...) giữ nguyên) ---
-  
+  // --- (Các hàm logic handle... giữ nguyên) ---
   const handleOpenModal = () => {
     setEditingPhieuNhap(null);
     form.resetFields();
@@ -204,14 +208,16 @@ const PhieuNhapPage = () => {
     }
   };
 
-  // [!] 5. XÓA BỎ 'sorter' KHỎI CÁC CỘT
+  // [!] 5. HÀM HELPER ĐỂ TÌM TÊN NGƯỜI DÙNG
+  const getUserName = (userId) => {
+    if (!userId) return "---";
+    const user = userList.find(u => u.maNguoiDung === userId);
+    return user ? user.hoTen : `ID: ${userId}`;
+  };
+
+  // [!] 6. CẬP NHẬT CỘT 'Người Duyệt'
   const columns = [
-    { title: "Mã Phiếu", dataIndex: "maPhieuNhap", key: "maPhieuNhap" },
-    { 
-      title: "Ngày Lập", 
-      dataIndex: "ngayLapPhieu", 
-      key: "ngayLapPhieu",
-    },
+    { title: "Ngày Lập", dataIndex: "ngayLapPhieu", key: "ngayLapPhieu" },
     { 
       title: "Trạng Thái", 
       dataIndex: "trangThai", 
@@ -231,6 +237,15 @@ const PhieuNhapPage = () => {
     },
     { title: "Mã NCC", dataIndex: "maNCC", key: "maNCC" },
     { title: "Mã Kho", dataIndex: "maKho", key: "maKho" },
+    
+    // [!] HIỂN THỊ TÊN NGƯỜI DUYỆT
+    { 
+      title: "Người Duyệt", 
+      dataIndex: "nguoiDuyet", 
+      key: "nguoiDuyet",
+      render: (id) => getUserName(id) // Gọi hàm helper
+    },
+    
     {
       title: 'Hành động',
       key: 'action',
@@ -256,7 +271,7 @@ const PhieuNhapPage = () => {
     },
   ];
 
-  // [!] 6. ĐỊNH NGHĨA MENU CHO DROPDOWN
+  // Menu dropdown (Giữ nguyên)
   const sortMenu = {
     items: [
       {
@@ -301,7 +316,6 @@ const PhieuNhapPage = () => {
     <div>
       {contextHolder}
       
-      {/* [!] 7. THÊM NÚT DROPDOWN VÀO SPACE */}
       <Space style={{ marginBottom: 16 }}>
         <Button
           type="primary"
@@ -326,13 +340,13 @@ const PhieuNhapPage = () => {
 
       <Table
         columns={columns}
-        dataSource={displayedPhieuNhapList} // [!] 8. SỬ DỤNG STATE MỚI
+        dataSource={displayedPhieuNhapList}
         loading={loading}
         rowKey="maPhieuNhap"
         pagination={{ pageSize: 5 }}
       />
 
-      {/* MODAL TẠO/SỬA PHIẾU NHẬP (Giữ nguyên) */}
+      {/* MODAL TẠO/SỬA */}
       <Modal
         title={editingPhieuNhap ? "Sửa Phiếu Nhập Hàng" : "Tạo Phiếu Nhập Hàng"}
         open={isModalVisible}
@@ -345,9 +359,11 @@ const PhieuNhapPage = () => {
             <Form.Item name="maNCC" label="Mã NCC" rules={[{ required: true, message: "Vui lòng nhập!" }]}>
               <InputNumber style={{ width: 150 }} placeholder="Nhập ID NCC"/>
             </Form.Item>
+            
             <Form.Item name="maKho" label="Mã Kho" rules={[{ required: true, message: "Vui lòng nhập!" }]}>
-              <InputNumber style={{ width: 150 }} placeholder="Nhập ID Kho"/>
+               <InputNumber style={{ width: 150 }} placeholder="Nhập ID Kho"/>
             </Form.Item>
+
             <Form.Item name="chungTu" label="Chứng từ" rules={[{ required: true, message: "Vui lòng nhập!" }]}>
               <Input placeholder="Ví dụ: HD-001" />
             </Form.Item>
@@ -359,15 +375,28 @@ const PhieuNhapPage = () => {
               <>
                 {fields.map(({ key, name, ...restField }) => (
                   <Space key={key} style={{ display: "flex", marginBottom: 8 }} align="baseline">
-                    <Form.Item {...restField} name={[name, "maSP"]} rules={[{ required: true, message: "Nhập Mã SP" }]}>
-                      <InputNumber placeholder="Mã SP" />
+                    <Form.Item
+                      {...restField}
+                      name={[name, "maSP"]}
+                      rules={[{ required: true, message: "Nhập ID SP" }]}
+                    >
+                       <InputNumber placeholder="Mã SP" />
                     </Form.Item>
-                    <Form.Item {...restField} name={[name, "soLuong"]} rules={[{ required: true, message: "Nhập SL" }]}>
-                      <InputNumber placeholder="Số lượng" />
+                    <Form.Item
+                      {...restField}
+                      name={[name, "soLuong"]}
+                      rules={[{ required: true, message: "Nhập SL" }]}
+                    >
+                      <InputNumber placeholder="Số lượng" min={1} />
                     </Form.Item>
-                    <Form.Item {...restField} name={[name, "donGia"]} rules={[{ required: true, message: "Nhập Giá" }]}>
+                    <Form.Item
+                      {...restField}
+                      name={[name, "donGia"]}
+                      rules={[{ required: true, message: "Nhập Giá" }]}
+                    >
                       <InputNumber 
                         placeholder="Đơn giá" 
+                        min={0}
                         formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                         parser={value => value.replace(/\$\s?|(,*)/g, '')}
                         style={{ width: 150 }}
@@ -387,7 +416,7 @@ const PhieuNhapPage = () => {
         </Form>
       </Modal>
 
-      {/* MODAL XÁC NHẬN XÓA (Giữ nguyên) */}
+      {/* MODAL XÁC NHẬN XÓA */}
       <Modal
         title="Xác nhận xóa"
         open={isDeleteModalOpen}

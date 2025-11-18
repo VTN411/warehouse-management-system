@@ -25,16 +25,6 @@ const { Option } = Select;
 // Định nghĩa tất cả các quyền
 const permissionGroups = [
   {
-    label: "Quản trị User",
-    perms: [
-      { id: 10, name: "Tạo User" },
-      { id: 11, name: "Sửa User" },
-      { id: 12, name: "Xóa User" },
-      { id: 13, name: "Cập nhật Cấu hình" },
-      { id: 14, name: "Xem User" },
-    ],
-  },
-  {
     label: "Phiếu Nhập",
     perms: [
       { id: 20, name: "Tạo Phiếu Nhập" },
@@ -80,7 +70,6 @@ const UserManagementPage = () => {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      // Giả định API này trả về mảng 'quyen' cho mỗi user
       const response = await userService.getAllUsers();
       setUsers(response.data);
     } catch (error) {
@@ -179,7 +168,7 @@ const UserManagementPage = () => {
       });
   };
 
-  // --- CÁC HÀM PHÂN QUYỀN (SỬ DỤNG state) ---
+  // --- CÁC HÀM PHÂN QUYỀN ---
   
   const handleGrantPermission = async (userId, permId, permName) => {
     try {
@@ -201,27 +190,24 @@ const UserManagementPage = () => {
     }
   };
 
+  // [!] SỬA LẠI HÀM NÀY ĐỂ HIỂN THỊ CẢ 2 NÚT
   const createPermissionMenu = (userRecord) => {
-    const userPerms = userRecord.quyen || [];
     
     const items = permissionGroups.map((group, index) => {
-      const subItems = group.perms.map(perm => {
-        const hasPermission = userPerms.includes(perm.id);
-
-        if (hasPermission) {
-          return {
-            key: `revoke-${perm.id}`,
-            label: `Thu hồi quyền: ${perm.name}`,
-            onClick: () => handleRevokePermission(userRecord.maNguoiDung, perm.id, perm.name)
-          };
-        } else {
-          return {
-            key: `grant-${perm.id}`,
-            label: `Cấp quyền: ${perm.name}`,
-            onClick: () => handleGrantPermission(userRecord.maNguoiDung, perm.id, perm.name)
-          };
+      // Dùng flatMap để tạo ra 2 mục menu (Cấp & Thu hồi) cho MỖI quyền
+      const subItems = group.perms.flatMap(perm => [
+        {
+          key: `grant-${perm.id}`,
+          label: `Cấp quyền: ${perm.name}`,
+          onClick: () => handleGrantPermission(userRecord.maNguoiDung, perm.id, perm.name)
+        },
+        {
+          key: `revoke-${perm.id}`,
+          label: `Thu hồi quyền: ${perm.name}`,
+          danger: true, // Màu đỏ cho nút thu hồi
+          onClick: () => handleRevokePermission(userRecord.maNguoiDung, perm.id, perm.name)
         }
-      });
+      ]);
       
       return {
         key: `group-${index}`,

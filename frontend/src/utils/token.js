@@ -1,12 +1,14 @@
 // src/utils/token.js
-export const setToken = (token) => {
-  localStorage.setItem("access_token", token);
-};
 
 export const getToken = () => {
-  return localStorage.getItem("access_token");
+  // [!] LUÔN ĐỌC TRỰC TIẾP TỪ LOCAL STORAGE
+  return localStorage.getItem('access_token');
+};
+
+export const setToken = (token) => {
+  localStorage.setItem('access_token', token);
 };
 
 export const removeToken = () => {
-  localStorage.removeItem("access_token");
+  localStorage.removeItem('access_token');
 };
