@@ -10,11 +10,55 @@ import {
   Space,
   message,
   Select,
+  Dropdown,
 } from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  SettingOutlined,
+} from "@ant-design/icons";
 import * as userService from "../../services/user.service";
 
 const { Option } = Select;
+
+// Định nghĩa tất cả các quyền
+const permissionGroups = [
+  {
+    label: "Quản trị User",
+    perms: [
+      { id: 10, name: "Tạo User" },
+      { id: 11, name: "Sửa User" },
+      { id: 12, name: "Xóa User" },
+      { id: 13, name: "Cập nhật Cấu hình" },
+      { id: 14, name: "Xem User" },
+    ],
+  },
+  {
+    label: "Phiếu Nhập",
+    perms: [
+      { id: 20, name: "Tạo Phiếu Nhập" },
+      { id: 21, name: "Sửa Phiếu Nhập" },
+      { id: 22, name: "Xóa Phiếu Nhập" },
+    ],
+  },
+  {
+    label: "Phiếu Xuất",
+    perms: [
+      { id: 23, name: "Tạo Phiếu Xuất" },
+      { id: 24, name: "Sửa Phiếu Xuất" },
+      { id: 25, name: "Xóa Phiếu Xuất" },
+    ],
+  },
+  {
+    label: "Báo cáo & Duyệt",
+    perms: [
+      { id: 30, name: "Xem Báo cáo" },
+      { id: 31, name: "Duyệt Đơn Đặt hàng (PO)" },
+      { id: 32, name: "Duyệt Đơn Bán hàng (SO)" },
+    ],
+  },
+];
 
 const UserManagementPage = () => {
   const [users, setUsers] = useState([]);
@@ -24,7 +68,6 @@ const UserManagementPage = () => {
   const [form] = Form.useForm();
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState(null);
-
   const [messageApi, contextHolder] = message.useMessage();
 
   const danhSachVaiTro = [
@@ -37,10 +80,10 @@ const UserManagementPage = () => {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
+      // Giả định API này trả về mảng 'quyen' cho mỗi user
       const response = await userService.getAllUsers();
       setUsers(response.data);
     } catch (error) {
-      console.error("Lỗi khi tải danh sách người dùng:", error);
       messageApi.error("Không thể tải danh sách người dùng!");
     }
     setLoading(false);
@@ -50,7 +93,7 @@ const UserManagementPage = () => {
     fetchUsers();
   }, [fetchUsers]);
 
-  // --- (Các hàm logic y hệt như cũ) ---
+  // --- CÁC HÀM XỬ LÝ (SỬ DỤNG CÁC STATE SETTER) ---
 
   const handleOpenModal = () => {
     setEditingUser(null);
@@ -105,6 +148,7 @@ const UserManagementPage = () => {
 
   const handleCancel = () => {
     setIsModalVisible(false);
+    setEditingUser(null);
   };
 
   const handleOk = () => {
@@ -113,9 +157,6 @@ const UserManagementPage = () => {
       .then(async (values) => {
         try {
           if (editingUser) {
-            // Khi sửa, 'values' từ form không chứa 'tenDangNhap' (vì bị disabled)
-            // Hoặc nếu có, nó vẫn ổn.
-            // API updateUser của bạn nên bỏ qua 'tenDangNhap'
             await userService.updateUser(editingUser.maNguoiDung, values);
             messageApi.success("Cập nhật người dùng thành công!");
           } else {
@@ -123,24 +164,76 @@ const UserManagementPage = () => {
             messageApi.success("Tạo người dùng mới thành công!");
           }
           setIsModalVisible(false);
+          setEditingUser(null);
           fetchUsers();
         } catch (error) {
-          console.error("Chi tiết lỗi từ server:", error.response);
-          let errorMessage = "Có lỗi xảy ra!";
+          let errMsg = "Có lỗi xảy ra!";
           if (error.response?.data?.message) {
-            errorMessage = error.response.data.message;
-          } else if (typeof error.response?.data === "string") {
-            errorMessage = error.response.data;
+            errMsg = error.response.data.message;
           }
-          messageApi.error(errorMessage);
+          messageApi.error(errMsg);
         }
       })
       .catch((info) => {
-        console.log("Validate Form Thất Bại:", info);
-        messageApi.warning("Vui lòng điền đầy đủ thông tin!");
+        console.log("Validate Failed:", info);
       });
   };
 
+  // --- CÁC HÀM PHÂN QUYỀN (SỬ DỤNG state) ---
+  
+  const handleGrantPermission = async (userId, permId, permName) => {
+    try {
+      await userService.grantPermission(userId, permId);
+      messageApi.success(`Đã cấp quyền '${permName}'`);
+      fetchUsers();
+    } catch (error) {
+      messageApi.error(`Lỗi khi cấp quyền: ${error.response?.data?.message || 'Lỗi máy chủ'}`);
+    }
+  };
+
+  const handleRevokePermission = async (userId, permId, permName) => {
+    try {
+      await userService.revokePermission(userId, permId);
+      messageApi.success(`Đã thu hồi quyền '${permName}'`);
+      fetchUsers();
+    } catch (error) {
+      messageApi.error(`Lỗi khi thu hồi quyền: ${error.response?.data?.message || 'Lỗi máy chủ'}`);
+    }
+  };
+
+  const createPermissionMenu = (userRecord) => {
+    const userPerms = userRecord.quyen || [];
+    
+    const items = permissionGroups.map((group, index) => {
+      const subItems = group.perms.map(perm => {
+        const hasPermission = userPerms.includes(perm.id);
+
+        if (hasPermission) {
+          return {
+            key: `revoke-${perm.id}`,
+            label: `Thu hồi quyền: ${perm.name}`,
+            onClick: () => handleRevokePermission(userRecord.maNguoiDung, perm.id, perm.name)
+          };
+        } else {
+          return {
+            key: `grant-${perm.id}`,
+            label: `Cấp quyền: ${perm.name}`,
+            onClick: () => handleGrantPermission(userRecord.maNguoiDung, perm.id, perm.name)
+          };
+        }
+      });
+      
+      return {
+        key: `group-${index}`,
+        label: group.label,
+        children: subItems
+      };
+    });
+
+    return { items };
+  };
+
+  // Cột (columns)
   const columns = [
     { title: "Họ Tên", dataIndex: "hoTen", key: "hoTen" },
     { title: "Tên Đăng Nhập", dataIndex: "tenDangNhap", key: "tenDangNhap" },
@@ -151,19 +244,25 @@ const UserManagementPage = () => {
       title: "Hành động",
       key: "action",
       render: (_, record) => (
-        <Space size="middle">
-          <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            Sửa
-          </Button>
-          <Button
-            icon={<DeleteOutlined />}
-            danger
-            onClick={() => handleDelete(record.maNguoiDung)}
-          >
-            Xóa
-          </Button>
-        </Space>
-      ),
+          <Space size="middle" wrap>
+            <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              Sửa
+            </Button>
+            <Button
+              icon={<DeleteOutlined />}
+              danger
+              onClick={() => handleDelete(record.maNguoiDung)}
+            >
+              Xóa
+            </Button>
+            <Dropdown 
+              menu={createPermissionMenu(record)}
+              placement="bottomRight"
+            >
+              <Button icon={<SettingOutlined />}>Phân quyền</Button>
+            </Dropdown>
+          </Space>
+        )
     },
   ];
 
@@ -186,9 +285,9 @@ const UserManagementPage = () => {
         dataSource={users}
         loading={loading}
         rowKey="maNguoiDung"
+        pagination={{ pageSize: 5 }}
       />
 
-      {/* MODAL 1: THÊM/SỬA */}
       <Modal
         title={editingUser ? "Sửa người dùng" : "Tạo người dùng mới"}
         open={isModalVisible}
@@ -196,54 +295,24 @@ const UserManagementPage = () => {
         onCancel={handleCancel}
       >
         <Form form={form} layout="vertical" name="userForm">
-          {/* [!] ĐÂY LÀ THAY ĐỔI CỦA BẠN */}
-          <Form.Item
-            name="tenDangNhap"
-            label="Tên Đăng Nhập"
-            rules={[{ required: true, message: "Vui lòng nhập!" }]}
-          >
+          <Form.Item name="tenDangNhap" label="Tên Đăng Nhập" rules={[{ required: true }]} >
             <Input disabled={!!editingUser} />
           </Form.Item>
-
-          <Form.Item
-            name="hoTen"
-            label="Họ Tên"
-            rules={[{ required: true, message: "Vui lòng nhập!" }]}
-          >
+          <Form.Item name="hoTen" label="Họ Tên" rules={[{ required: true }]} >
             <Input />
           </Form.Item>
-          <Form.Item
-            name="email"
-            label="Email"
-            rules={[
-              { required: true, message: "Vui lòng nhập!" },
-              { type: "email", message: "Email không hợp lệ!" },
-            ]}
-          >
+          <Form.Item name="email" label="Email" rules={[{ required: true, type: "email" }]} >
             <Input />
           </Form.Item>
           {!editingUser && (
-            <Form.Item
-              name="matKhau"
-              label="Mật Khẩu"
-              rules={[{ required: true, message: "Vui lòng nhập!" }]}
-            >
+            <Form.Item name="matKhau" label="Mật Khẩu" rules={[{ required: true }]} >
               <Input.Password />
             </Form.Item>
           )}
-          <Form.Item
-            name="sdt"
-            label="Số Điện Thoại"
-            rules={[{ required: true, message: "Vui lòng nhập!" }]}
-          >
+          <Form.Item name="sdt" label="Số Điện Thoại" rules={[{ required: true }]} >
             <Input />
           </Form.Item>
-
-          <Form.Item
-            name="maVaiTro"
-            label="Vai Trò"
-            rules={[{ required: true, message: "Vui lòng chọn vai trò!" }]}
-          >
+          <Form.Item name="maVaiTro" label="Vai Trò" rules={[{ required: true }]} >
             <Select placeholder="Chọn một vai trò">
               {danhSachVaiTro.map((vt) => (
                 <Option key={vt.MaVaiTro} value={vt.MaVaiTro}>
@@ -255,7 +324,6 @@ const UserManagementPage = () => {
         </Form>
       </Modal>
 
-      {/* MODAL 2: XÁC NHẬN XÓA */}
       <Modal
         title="Xác nhận xóa"
         open={isDeleteModalOpen}

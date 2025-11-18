@@ -24,14 +24,12 @@ export const updatePhieuNhap = (phieuNhapId, updateData) => {
   return api.put(`${API_ENDPOINT}/${phieuNhapId}`, updateData);
 };
 
-// [!] 5. THÊM HÀM DUYỆT PHIẾU
-// Giả định API là: PUT /api/phieunhap/{id}/approve
+
 export const approvePhieuNhap = (phieuNhapId) => {
-  return api.put(`${API_ENDPOINT}/${phieuNhapId}/approve`);
+  return api.post(`${API_ENDPOINT}/${phieuNhapId}/approve`);
 };
 
-// [!] 6. THÊM HÀM HỦY (KHÔNG DUYỆT) PHIẾU
-// Giả định API là: PUT /api/phieunhap/{id}/reject
+
 export const rejectPhieuNhap = (phieuNhapId) => {
-  return api.put(`${API_ENDPOINT}/${phieuNhapId}/reject`);
+  return api.post(`${API_ENDPOINT}/${phieuNhapId}/cancel`);
 };

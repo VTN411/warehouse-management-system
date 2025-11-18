@@ -1,5 +1,6 @@
 // src/pages/PhieuNhapPage/index.jsx
 
+// [!] 1. IMPORT THÊM Dropdown VÀ DownOutlined
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Table,
@@ -9,9 +10,9 @@ import {
   Input,
   Space,
   message,
-  Select,
   InputNumber,
   Tag,
+  Dropdown, // Thêm Dropdown
 } from "antd";
 import {
   PlusOutlined,
@@ -19,56 +20,92 @@ import {
   MinusCircleOutlined,
   EditOutlined,
   ReloadOutlined,
-  CheckCircleOutlined, // [!] 1. THÊM ICON
-  CloseCircleOutlined, // [!] 1. THÊM ICON
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  DownOutlined, // Thêm icon DownOutlined
 } from "@ant-design/icons";
 import * as phieuNhapService from "../../services/phieunhap.service";
 
+
 const PhieuNhapPage = () => {
+  // Master list
   const [phieuNhapList, setPhieuNhapList] = useState([]);
+  
+  // [!] 2. THÊM 3 STATE MỚI
+  // List sẽ hiển thị trên bảng
+  const [displayedPhieuNhapList, setDisplayedPhieuNhapList] = useState([]); 
+  // State lưu trữ cài đặt Sắp xếp
+  const [sortConfig, setSortConfig] = useState(null); 
+  // State lưu trữ cài đặt Lọc
+  const [filterConfig, setFilterConfig] = useState(null); 
+
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [form] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
-
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingPhieuNhapId, setDeletingPhieuNhapId] = useState(null);
   const [editingPhieuNhap, setEditingPhieuNhap] = useState(null);
-
-  // [!] 2. THÊM STATE ĐỂ LƯU QUYỀN
   const [userPermissions, setUserPermissions] = useState([]);
 
-  // Hàm lấy danh sách phiếu nhập
+  // [!] 3. CẬP NHẬT fetchPhieuNhap
   const fetchPhieuNhap = useCallback(async () => {
     setLoading(true);
     try {
       const response = await phieuNhapService.getAllPhieuNhap();
-      setPhieuNhapList(response.data || []);
+      setPhieuNhapList(response.data || []); // Chỉ cập nhật master list
     } catch (error) {
       messageApi.error("Không thể tải danh sách phiếu nhập!");
     }
     setLoading(false);
   }, [messageApi]);
 
-  // [!] 3. CẬP NHẬT useEffect ĐỂ LẤY QUYỀN
   useEffect(() => {
-    fetchPhieuNhap(); // Tải danh sách phiếu
-
-    // Lấy thông tin user từ localStorage
+    fetchPhieuNhap();
     const storedUser = localStorage.getItem("user_info");
     if (storedUser) {
       const user = JSON.parse(storedUser);
       setUserPermissions(user.quyen || []);
     }
-  }, [fetchPhieuNhap]); // Chỉ chạy khi fetchPhieuNhap thay đổi
+  }, [fetchPhieuNhap]);
 
-  // [!] 4. THÊM BIẾN KIỂM TRA CHO TẤT CẢ QUYỀN
+  // [!] 4. THÊM useEffect ĐỂ XỬ LÝ LỌC/SẮP XẾP
+  useEffect(() => {
+    let data = [...phieuNhapList]; // Bắt đầu từ master list
+
+    // Bước 1: Lọc (theo trạng thái)
+    if (filterConfig && filterConfig.key === 'status') {
+      data = data.filter(item => item.trangThai === filterConfig.value);
+    }
+
+    // Bước 2: Sắp xếp
+    if (sortConfig) {
+      data.sort((a, b) => {
+        if (sortConfig.key === 'date') {
+          // Sắp xếp ngày tháng
+          const dateA = new Date(a.ngayLapPhieu);
+          const dateB = new Date(b.ngayLapPhieu);
+          return sortConfig.direction === 'asc' ? dateA - dateB : dateB - dateA;
+        }
+        if (sortConfig.key === 'price') {
+          // Sắp xếp giá tiền
+          return sortConfig.direction === 'asc' ? a.tongTien - b.tongTien : b.tongTien - a.tongTien;
+        }
+        return 0;
+      });
+    }
+
+    // Bước 3: Cập nhật bảng
+    setDisplayedPhieuNhapList(data);
+  }, [phieuNhapList, sortConfig, filterConfig]); // Chạy lại khi 1 trong 3 thay đổi
+
   const canApprove = userPermissions.includes("PERM_PHIEUNHAP_APPROVE");
   const canCancel = userPermissions.includes("PERM_PHIEUNHAP_CANCEL");
   const canEdit = userPermissions.includes("PERM_PHIEUNHAP_EDIT");
   const canDelete = userPermissions.includes("PERM_PHIEUNHAP_DELETE");
 
-  // --- (Các hàm Sửa/Thêm giữ nguyên) ---
+  // --- (Tất cả các hàm logic (handle...) giữ nguyên) ---
+  
   const handleOpenModal = () => {
     setEditingPhieuNhap(null);
     form.resetFields();
@@ -120,7 +157,6 @@ const PhieuNhapPage = () => {
       });
   };
 
-  // --- (Các hàm Xóa giữ nguyên) ---
   const handleDelete = (phieuNhapId) => {
     setDeletingPhieuNhapId(phieuNhapId);
     setIsDeleteModalOpen(true);
@@ -148,12 +184,11 @@ const PhieuNhapPage = () => {
     setDeletingPhieuNhapId(null);
   };
 
-  // [!] 5. THÊM HÀM XỬ LÝ DUYỆT VÀ HỦY
   const handleApprove = async (phieuNhapId) => {
     try {
       await phieuNhapService.approvePhieuNhap(phieuNhapId);
       messageApi.success("Duyệt phiếu nhập thành công!");
-      fetchPhieuNhap(); // Tải lại bảng
+      fetchPhieuNhap();
     } catch (error) {
       messageApi.error("Lỗi khi duyệt phiếu!");
     }
@@ -163,16 +198,20 @@ const PhieuNhapPage = () => {
     try {
       await phieuNhapService.rejectPhieuNhap(phieuNhapId);
       messageApi.success("Đã hủy phiếu nhập!");
-      fetchPhieuNhap(); // Tải lại bảng
+      fetchPhieuNhap();
     } catch (error) {
       messageApi.error("Lỗi khi hủy phiếu!");
     }
   };
 
-  // Cột Bảng
+  // [!] 5. XÓA BỎ 'sorter' KHỎI CÁC CỘT
   const columns = [
     { title: "Mã Phiếu", dataIndex: "maPhieuNhap", key: "maPhieuNhap" },
-    { title: "Ngày Lập", dataIndex: "ngayLapPhieu", key: "ngayLapPhieu" },
+    { 
+      title: "Ngày Lập", 
+      dataIndex: "ngayLapPhieu", 
+      key: "ngayLapPhieu",
+    },
     { 
       title: "Trạng Thái", 
       dataIndex: "trangThai", 
@@ -182,66 +221,34 @@ const PhieuNhapPage = () => {
         if (status === 2) return <Tag color="green">Đã duyệt</Tag>;
         if (status === 3) return <Tag color="red">Không duyệt</Tag>;
         return status;
-      }
+      },
     },
     { 
       title: "Tổng Tiền", 
       dataIndex: "tongTien", 
       key: "tongTien",
-      render: (value) => `${value?.toLocaleString()} đ` 
+      render: (value) => `${value?.toLocaleString()} đ`,
     },
     { title: "Mã NCC", dataIndex: "maNCC", key: "maNCC" },
     { title: "Mã Kho", dataIndex: "maKho", key: "maKho" },
     {
       title: 'Hành động',
       key: 'action',
-      // [!] 6. CẬP NHẬT LOGIC RENDER NÚT BẤM
       render: (_, record) => {
         const isChoDuyet = record.trangThai === 1;
-
         return (
           <Space size="small" wrap> 
-            {/* Nút Sửa: Hiển thị nếu Chờ duyệt VÀ có quyền Edit */}
             {isChoDuyet && canEdit && (
-              <Button 
-                icon={<EditOutlined />} 
-                onClick={() => handleEdit(record)}
-              >
-                Sửa
-              </Button>
+              <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>Sửa</Button>
             )}
-
-            {/* Nút Xóa: Hiển thị nếu Chờ duyệt VÀ có quyền Delete */}
             {isChoDuyet && canDelete && (
-              <Button
-                icon={<DeleteOutlined />}
-                danger
-                onClick={() => handleDelete(record.maPhieuNhap)}
-              >
-                Xóa
-              </Button>
+              <Button icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.maPhieuNhap)}>Xóa</Button>
             )}
-
-            {/* Nút Duyệt: Hiển thị nếu Chờ duyệt VÀ có quyền Approve */}
             {isChoDuyet && canApprove && (
-              <Button 
-                icon={<CheckCircleOutlined />} 
-                onClick={() => handleApprove(record.maPhieuNhap)}
-                style={{ color: 'green', borderColor: 'green' }}
-              >
-                Duyệt
-              </Button>
+              <Button icon={<CheckCircleOutlined />} onClick={() => handleApprove(record.maPhieuNhap)} style={{ color: 'green', borderColor: 'green' }}>Duyệt</Button>
             )}
-            
-            {/* Nút Hủy: Hiển thị nếu Chờ duyệt VÀ có quyền Cancel */}
             {isChoDuyet && canCancel && (
-              <Button 
-                icon={<CloseCircleOutlined />} 
-                onClick={() => handleReject(record.maPhieuNhap)}
-                danger
-              >
-                Hủy
-              </Button>
+              <Button icon={<CloseCircleOutlined />} onClick={() => handleReject(record.maPhieuNhap)} danger>Hủy</Button>
             )}
           </Space>
         )
@@ -249,10 +256,52 @@ const PhieuNhapPage = () => {
     },
   ];
 
+  // [!] 6. ĐỊNH NGHĨA MENU CHO DROPDOWN
+  const sortMenu = {
+    items: [
+      {
+        key: 'filter',
+        label: 'Lọc theo Trạng Thái',
+        children: [
+          { key: 'filter_1', label: 'Chờ duyệt', onClick: () => setFilterConfig({ key: 'status', value: 1 }) },
+          { key: 'filter_2', label: 'Đã duyệt', onClick: () => setFilterConfig({ key: 'status', value: 2 }) },
+          { key: 'filter_3', label: 'Không duyệt', onClick: () => setFilterConfig({ key: 'status', value: 3 }) },
+        ]
+      },
+      {
+        key: 'sort_date',
+        label: 'Sắp xếp theo Ngày tháng',
+        children: [
+          { key: 'date_asc', label: 'Cũ đến mới', onClick: () => setSortConfig({ key: 'date', direction: 'asc' }) },
+          { key: 'date_desc', label: 'Mới đến cũ', onClick: () => setSortConfig({ key: 'date', direction: 'desc' }) },
+        ]
+      },
+      {
+        key: 'sort_price',
+        label: 'Sắp xếp theo Giá tiền',
+        children: [
+          { key: 'price_asc', label: 'Thấp đến cao', onClick: () => setSortConfig({ key: 'price', direction: 'asc' }) },
+          { key: 'price_desc', label: 'Cao đến thấp', onClick: () => setSortConfig({ key: 'price', direction: 'desc' }) },
+        ]
+      },
+      { type: 'divider' },
+      {
+        key: 'reset',
+        label: 'Reset (Bỏ lọc)',
+        danger: true,
+        onClick: () => {
+          setFilterConfig(null);
+          setSortConfig(null);
+        }
+      }
+    ]
+  };
+
   return (
     <div>
       {contextHolder}
       
+      {/* [!] 7. THÊM NÚT DROPDOWN VÀO SPACE */}
       <Space style={{ marginBottom: 16 }}>
         <Button
           type="primary"
@@ -261,7 +310,6 @@ const PhieuNhapPage = () => {
         >
           Tạo Phiếu Nhập
         </Button>
-
         <Button 
           icon={<ReloadOutlined />} 
           onClick={fetchPhieuNhap}
@@ -269,13 +317,19 @@ const PhieuNhapPage = () => {
         >
           Tải lại
         </Button>
+        <Dropdown menu={sortMenu}>
+          <Button>
+            Lọc / Sắp xếp <DownOutlined />
+          </Button>
+        </Dropdown>
       </Space>
 
       <Table
         columns={columns}
-        dataSource={phieuNhapList}
+        dataSource={displayedPhieuNhapList} // [!] 8. SỬ DỤNG STATE MỚI
         loading={loading}
         rowKey="maPhieuNhap"
+        pagination={{ pageSize: 5 }}
       />
 
       {/* MODAL TẠO/SỬA PHIẾU NHẬP (Giữ nguyên) */}

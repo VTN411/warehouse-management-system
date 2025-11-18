@@ -24,3 +24,15 @@ export const updateUser = (userId, updateData) => {
 export const deleteUser = (userId) => {
   return api.delete(`${API_ENDPOINT}/${userId}`);
 };
+
+// [!] 5. THÊM HÀM GÁN QUYỀN
+// Dựa trên API: POST /api/admin/users/{userId}/permissions/{permissionId}
+export const grantPermission = (userId, permissionId) => {
+  return api.post(`/admin/users/${userId}/permissions/${permissionId}`);
+};
+
+// [!] 6. THÊM HÀM THU HỒI QUYỀN
+// Giả định API là: DELETE /api/admin/users/{userId}/permissions/{permissionId}
+export const revokePermission = (userId, permissionId) => {
+  return api.delete(`/admin/users/${userId}/permissions/${permissionId}`);
+};
