@@ -3,9 +3,13 @@ package stu.kho.backend.repository;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 import stu.kho.backend.entity.NhaCungCap;
 
+import java.sql.PreparedStatement;
+import java.sql.Statement;
 import java.util.List;
 import java.util.Optional;
 
@@ -14,6 +18,7 @@ public class JdbcNhaCungCapRepository implements NhaCungCapRepository {
 
     private final JdbcTemplate jdbcTemplate;
 
+    // RowMapper để ánh xạ dữ liệu từ CSDL sang Entity
     private final RowMapper<NhaCungCap> nccRowMapper = (rs, rowNum) -> {
         NhaCungCap ncc = new NhaCungCap();
         ncc.setMaNCC(rs.getInt("MaNCC"));
@@ -44,5 +49,52 @@ public class JdbcNhaCungCapRepository implements NhaCungCapRepository {
     public List<NhaCungCap> findAll() {
         String sql = "SELECT * FROM nhacungcap";
         return jdbcTemplate.query(sql, nccRowMapper);
+    }
+
+    // --- PHƯƠNG THỨC BỔ SUNG: SAVE (Trả về ID) ---
+    @Override
+    public int save(NhaCungCap ncc) {
+        String sql = "INSERT INTO nhacungcap (TenNCC, NguoiLienHe, SDT, DiaChi, Email) VALUES (?, ?, ?, ?, ?)";
+
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+
+        jdbcTemplate.update(connection -> {
+            PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+            ps.setString(1, ncc.getTenNCC());
+            ps.setString(2, ncc.getNguoiLienHe());
+            ps.setString(3, ncc.getSdt());
+            ps.setString(4, ncc.getDiaChi());
+            ps.setString(5, ncc.getEmail());
+            return ps;
+        }, keyHolder);
+
+        // Trả về MaNCC vừa được tạo
+        if (keyHolder.getKey() != null) {
+            return keyHolder.getKey().intValue();
+        } else {
+            return -1; // Hoặc ném ngoại lệ nếu cần
+        }
+    }
+
+    // --- PHƯƠNG THỨC BỔ SUNG: UPDATE ---
+    @Override
+    public int update(NhaCungCap ncc) {
+        String sql = "UPDATE nhacungcap SET TenNCC = ?, NguoiLienHe = ?, SDT = ?, DiaChi = ?, Email = ? WHERE MaNCC = ?";
+        return jdbcTemplate.update(sql,
+                ncc.getTenNCC(),
+                ncc.getNguoiLienHe(),
+                ncc.getSdt(),
+                ncc.getDiaChi(),
+                ncc.getEmail(),
+                ncc.getMaNCC()
+        );
+    }
+
+    // --- PHƯƠNG THỨC BỔ SUNG: DELETE ---
+    @Override
+    public int deleteById(Integer id) {
+        // Lưu ý: Việc xóa có thể thất bại nếu NCC này đang được tham chiếu ở bảng khác (khóa ngoại)
+        String sql = "DELETE FROM nhacungcap WHERE MaNCC = ?";
+        return jdbcTemplate.update(sql, id);
     }
 }
