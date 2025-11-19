@@ -22,8 +22,16 @@ import * as userService from "../../services/user.service";
 
 const { Option } = Select;
 
-// Định nghĩa tất cả các quyền
+// [!] CẬP NHẬT DANH SÁCH QUYỀN (THÊM SẢN PHẨM)
 const permissionGroups = [
+  {
+    label: "Sản phẩm",
+    perms: [
+      { id: 50, name: "Tạo Sản phẩm" },
+      { id: 51, name: "Sửa Sản phẩm" },
+      { id: 52, name: "Xóa Sản phẩm" },
+    ],
+  },
   {
     label: "Phiếu Nhập",
     perms: [
@@ -60,6 +68,8 @@ const UserManagementPage = () => {
   const [deletingUserId, setDeletingUserId] = useState(null);
   const [messageApi, contextHolder] = message.useMessage();
 
+  const [currentUserPermissions, setCurrentUserPermissions] = useState([]);
+
   const danhSachVaiTro = [
     { MaVaiTro: 1, TenVaiTro: "ADMIN" },
     { MaVaiTro: 2, TenVaiTro: "NHAN_VIEN" },
@@ -80,10 +90,22 @@ const UserManagementPage = () => {
 
   useEffect(() => {
     fetchUsers();
+    try {
+      const storedUser = localStorage.getItem("user_info");
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        setCurrentUserPermissions(user.quyen || []);
+      }
+    } catch (e) {
+      console.error("Lỗi đọc localStorage", e);
+    }
   }, [fetchUsers]);
 
-  // --- CÁC HÀM XỬ LÝ (SỬ DỤNG CÁC STATE SETTER) ---
+  // Dùng quyền tạo user để làm quyền admin tạm thời
+  const canShowActions = currentUserPermissions.includes("PERM_ADMIN_CREATE_USER") || 
+                         currentUserPermissions.includes(10); // Fallback ID
 
+  // --- Các hàm xử lý ---
   const handleOpenModal = () => {
     setEditingUser(null);
     form.resetFields();
@@ -96,7 +118,6 @@ const UserManagementPage = () => {
     const vaiTroId = danhSachVaiTro.find(
       (vt) => vt.TenVaiTro === record.tenVaiTro
     )?.MaVaiTro;
-
     form.setFieldsValue({
       tenDangNhap: record.tenDangNhap,
       hoTen: record.hoTen,
@@ -167,8 +188,6 @@ const UserManagementPage = () => {
         console.log("Validate Failed:", info);
       });
   };
-
-  // --- CÁC HÀM PHÂN QUYỀN ---
   
   const handleGrantPermission = async (userId, permId, permName) => {
     try {
@@ -190,24 +209,30 @@ const UserManagementPage = () => {
     }
   };
 
-  // [!] SỬA LẠI HÀM NÀY ĐỂ HIỂN THỊ CẢ 2 NÚT
+  // [!] SỬA LẠI HÀM NÀY: LUÔN HIỂN THỊ CẢ 2 NÚT (CẤP & THU HỒI)
   const createPermissionMenu = (userRecord) => {
+    const userPerms = userRecord.quyen || []; 
     
     const items = permissionGroups.map((group, index) => {
-      // Dùng flatMap để tạo ra 2 mục menu (Cấp & Thu hồi) cho MỖI quyền
-      const subItems = group.perms.flatMap(perm => [
-        {
-          key: `grant-${perm.id}`,
-          label: `Cấp quyền: ${perm.name}`,
-          onClick: () => handleGrantPermission(userRecord.maNguoiDung, perm.id, perm.name)
-        },
-        {
-          key: `revoke-${perm.id}`,
-          label: `Thu hồi quyền: ${perm.name}`,
-          danger: true, // Màu đỏ cho nút thu hồi
-          onClick: () => handleRevokePermission(userRecord.maNguoiDung, perm.id, perm.name)
-        }
-      ]);
+      // Dùng flatMap để tạo ra cả 2 mục cho mỗi quyền
+      const subItems = group.perms.flatMap(perm => {
+        // Bạn có thể thêm logic check icon (dấu tích) nếu muốn hiển thị trạng thái
+        // const hasPermission = userPerms.includes(perm.id); 
+        
+        return [
+          {
+            key: `grant-${perm.id}`,
+            label: `Cấp quyền: ${perm.name}`,
+            onClick: () => handleGrantPermission(userRecord.maNguoiDung, perm.id, perm.name)
+          },
+          {
+            key: `revoke-${perm.id}`,
+            label: `Thu hồi: ${perm.name}`,
+            danger: true,
+            onClick: () => handleRevokePermission(userRecord.maNguoiDung, perm.id, perm.name)
+          }
+        ];
+      });
       
       return {
         key: `group-${index}`,
@@ -219,7 +244,6 @@ const UserManagementPage = () => {
     return { items };
   };
 
-  // Cột (columns)
   const columns = [
     { title: "Họ Tên", dataIndex: "hoTen", key: "hoTen" },
     { title: "Tên Đăng Nhập", dataIndex: "tenDangNhap", key: "tenDangNhap" },
@@ -230,41 +254,44 @@ const UserManagementPage = () => {
       title: "Hành động",
       key: "action",
       render: (_, record) => (
-          <Space size="middle" wrap>
-            <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-              Sửa
-            </Button>
-            <Button
-              icon={<DeleteOutlined />}
-              danger
-              onClick={() => handleDelete(record.maNguoiDung)}
-            >
-              Xóa
-            </Button>
-            <Dropdown 
-              menu={createPermissionMenu(record)}
-              placement="bottomRight"
-            >
-              <Button icon={<SettingOutlined />}>Phân quyền</Button>
-            </Dropdown>
-          </Space>
+          canShowActions && (
+            <Space size="middle" wrap>
+              <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+                Sửa
+              </Button>
+              <Button
+                icon={<DeleteOutlined />}
+                danger
+                onClick={() => handleDelete(record.maNguoiDung)}
+              >
+                Xóa
+              </Button>
+              <Dropdown 
+                menu={createPermissionMenu(record)}
+                placement="bottomRight"
+              >
+                <Button icon={<SettingOutlined />}>Phân quyền</Button>
+              </Dropdown>
+            </Space>
+          )
         )
     },
   ];
 
-  // Phần Render (return)
   return (
     <div>
       {contextHolder}
 
-      <Button
-        type="primary"
-        icon={<PlusOutlined />}
-        onClick={handleOpenModal}
-        style={{ marginBottom: 16 }}
-      >
-        Thêm người dùng mới
-      </Button>
+      {canShowActions && (
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={handleOpenModal}
+          style={{ marginBottom: 16 }}
+        >
+          Thêm người dùng mới
+        </Button>
+      )}
 
       <Table
         columns={columns}

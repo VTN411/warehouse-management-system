@@ -11,6 +11,7 @@ import AdminLayout from './layouts/AdminLayout';
 import UserManagementPage from './pages/UserManagement';
 import ProfilePage from './pages/ProfilePage';
 import PhieuNhapPage from './pages/PhieuNhapPage'; 
+import ProductPage from './pages/ProductPage';
 
 import 'antd/dist/reset.css';
 import './App.css';
@@ -31,6 +32,7 @@ function App() {
               <Route path="/admin/users" element={<UserManagementPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/stock-in" element={<PhieuNhapPage />} />
+              <Route path="/products" element={<ProductPage />} />
             </Route>
           </Route>
 
