@@ -12,6 +12,7 @@ import stu.kho.backend.entity.SanPham;
 
 import java.sql.PreparedStatement;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,27 +21,52 @@ public class JdbcSanPhamRepository implements SanPhamRepository {
 
     private final JdbcTemplate jdbcTemplate;
     private final LoaiHangRepository loaiHangRepository;
-    // XÓA: private final NhaCungCapRepository nhaCungCapRepository;
+    // BỔ SUNG: Cần 2 repo này để lấy thông tin Nhà Cung Cấp (N:M)
+    private final NccSanPhamRepository nccSanPhamRepository;
+    private final NhaCungCapRepository nhaCungCapRepository;
 
     private final RowMapper<SanPham> sanPhamRowMapper;
 
-    // --- SỬA CONSTRUCTOR ---
+    // --- CONSTRUCTOR ĐẦY ĐỦ ---
     public JdbcSanPhamRepository(JdbcTemplate jdbcTemplate,
-                                 LoaiHangRepository loaiHangRepository) { // Xóa NhaCungCapRepository
+                                 LoaiHangRepository loaiHangRepository,
+                                 NccSanPhamRepository nccSanPhamRepository,
+                                 NhaCungCapRepository nhaCungCapRepository) {
         this.jdbcTemplate = jdbcTemplate;
         this.loaiHangRepository = loaiHangRepository;
+        this.nccSanPhamRepository = nccSanPhamRepository;
+        this.nhaCungCapRepository = nhaCungCapRepository;
 
-        // --- SỬA ROWMAPPER ---
+        // --- ROWMAPPER ĐẦY ĐỦ ---
         this.sanPhamRowMapper = (rs, rowNum) -> {
             SanPham sp = new SanPham();
+            // 1. Map các trường cơ bản (Bạn bị thiếu trong code cũ)
             sp.setMaSP(rs.getInt("MaSP"));
             sp.setTenSP(rs.getString("TenSP"));
+            sp.setDonViTinh(rs.getString("DonViTinh"));
+            sp.setGiaNhap(rs.getBigDecimal("GiaNhap"));
+            sp.setSoLuongTon(rs.getInt("SoLuongTon"));
+            sp.setMucTonToiThieu(rs.getInt("MucTonToiThieu"));
+            sp.setMucTonToiDa(rs.getInt("MucTonToiDa"));
             sp.setMaLoai(rs.getInt("MaLoai"));
 
+            // 2. Map Loại Hàng (1-N)
             if (sp.getMaLoai() != null) {
-                LoaiHang lh = loaiHangRepository.findById(sp.getMaLoai()).orElse(null);
-                sp.setLoaiHang(lh);
+                loaiHangRepository.findById(sp.getMaLoai()).ifPresent(sp::setLoaiHang);
             }
+
+            // 3. Map Danh Sách Nhà Cung Cấp (N-M) <-- PHẦN QUAN TRỌNG MỚI
+            // B1: Tìm list ID nhà cung cấp từ bảng trung gian
+            List<Integer> nccIds = nccSanPhamRepository.findNccIdsByMaSP(sp.getMaSP());
+
+            // B2: Tìm chi tiết từng NCC và đưa vào list
+            List<NhaCungCap> listNCC = new ArrayList<>();
+            for (Integer nccId : nccIds) {
+                nhaCungCapRepository.findById(nccId).ifPresent(listNCC::add);
+            }
+
+            // B3: Set vào đối tượng Sản phẩm
+            sp.setDanhSachNCC(listNCC);
 
             return sp;
         };
@@ -62,18 +88,21 @@ public class JdbcSanPhamRepository implements SanPhamRepository {
         String sql = "SELECT * FROM sanpham";
         return jdbcTemplate.query(sql, sanPhamRowMapper);
     }
+
     @Override
     public int save(SanPham sanPham) {
         String sql = "INSERT INTO sanpham (TenSP, DonViTinh, GiaNhap, SoLuongTon, MucTonToiThieu, MucTonToiDa, MaLoai) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?)";
+
         KeyHolder keyHolder = new GeneratedKeyHolder();
+
         jdbcTemplate.update(connection -> {
             PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
             ps.setString(1, sanPham.getTenSP());
             ps.setString(2, sanPham.getDonViTinh());
             ps.setBigDecimal(3, sanPham.getGiaNhap());
             ps.setInt(4, sanPham.getSoLuongTon() != null ? sanPham.getSoLuongTon() : 0);
-            ps.setObject(5, sanPham.getMucTonToiThieu()); // Dùng setObject cho trường có thể NULL
+            ps.setObject(5, sanPham.getMucTonToiThieu());
             ps.setObject(6, sanPham.getMucTonToiDa());
             ps.setObject(7, sanPham.getMaLoai());
             return ps;
@@ -83,7 +112,7 @@ public class JdbcSanPhamRepository implements SanPhamRepository {
         if (keyHolder.getKey() != null) {
             return keyHolder.getKey().intValue();
         } else {
-            return -1; // Hoặc ném lỗi
+            return -1;
         }
     }
 
@@ -105,7 +134,6 @@ public class JdbcSanPhamRepository implements SanPhamRepository {
 
     @Override
     public int deleteById(Integer id) {
-        // Cảnh báo: Cần đảm bảo các bảng chi tiết (chitietphieunhap,...) đã được xóa
         String sql = "DELETE FROM sanpham WHERE MaSP = ?";
         return jdbcTemplate.update(sql, id);
     }

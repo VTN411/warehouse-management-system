@@ -4,11 +4,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import stu.kho.backend.dto.ChiTietPhieuNhapRequest;
 import stu.kho.backend.dto.PhieuNhapRequest;
-import stu.kho.backend.entity.ChiTietKho;
-import stu.kho.backend.entity.ChiTietPhieuNhap;
-import stu.kho.backend.entity.HoatDong;
-import stu.kho.backend.entity.NguoiDung;
-import stu.kho.backend.entity.PhieuNhapHang;
+import stu.kho.backend.entity.*;
 import stu.kho.backend.repository.*;
 
 import java.math.BigDecimal;
@@ -273,27 +269,37 @@ public class PhieuNhapService {
     private void capNhatTonKho(Integer maKho, Integer maSP, Integer soLuongThayDoi) {
         if (soLuongThayDoi == 0) return;
 
+        // 1. Cập nhật bảng ChiTietKho (Chi tiết từng kho)
         Optional<ChiTietKho> tonKhoOpt = chiTietKhoRepository.findById(maSP, maKho);
 
         if (tonKhoOpt.isPresent()) {
             ChiTietKho tonKho = tonKhoOpt.get();
             int soLuongMoi = tonKho.getSoLuongTon() + soLuongThayDoi;
-
             if (soLuongMoi < 0) {
-                throw new RuntimeException("Lỗi nghiệp vụ: Tồn kho sản phẩm SP#" + maSP + " không đủ để thực hiện thao tác (Sẽ âm kho).");
+                throw new RuntimeException("Lỗi: Tồn kho không đủ để trừ.");
             }
             chiTietKhoRepository.updateSoLuongTon(maSP, maKho, soLuongMoi);
         } else {
             if (soLuongThayDoi < 0) {
-                throw new RuntimeException("Lỗi nghiệp vụ: Sản phẩm SP#" + maSP + " không có trong kho #" + maKho + " để trừ.");
+                throw new RuntimeException("Lỗi: Sản phẩm chưa có trong kho để trừ.");
             }
             ChiTietKho tonKhoMoi = new ChiTietKho();
             tonKhoMoi.setMaSP(maSP);
             tonKhoMoi.setMaKho(maKho);
             tonKhoMoi.setSoLuongTon(soLuongThayDoi);
-            // (Bạn có thể thêm logic nhập SoLo, NgayHetHan từ DTO nếu cần)
             chiTietKhoRepository.save(tonKhoMoi);
         }
+
+        // 2. CẬP NHẬT TỔN KHO TỔNG (Bảng SanPham)
+        // Logic: Tồn tổng = Tồn tổng cũ + Thay đổi
+        SanPham sanPham = sanPhamRepository.findById(maSP)
+                .orElseThrow(() -> new RuntimeException("Sản phẩm không tồn tại"));
+
+        int tongTonMoi = (sanPham.getSoLuongTon() == null ? 0 : sanPham.getSoLuongTon()) + soLuongThayDoi;
+
+        // Cập nhật lại vào đối tượng và lưu xuống DB
+        sanPham.setSoLuongTon(tongTonMoi);
+        sanPhamRepository.update(sanPham);
     }
 
     // Ghi Log Hoạt Động
