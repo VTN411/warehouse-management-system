@@ -7,5 +7,9 @@ import java.util.Optional;
 public interface KhoHangRepository {
     Optional<KhoHang> findById(Integer id);
     List<KhoHang> findAll();
-    // (Thêm save, update, delete nếu cần)
+
+    // Thêm các phương thức này:
+    int save(KhoHang kho);
+    int update(KhoHang kho);
+    int deleteById(Integer id);
 }
