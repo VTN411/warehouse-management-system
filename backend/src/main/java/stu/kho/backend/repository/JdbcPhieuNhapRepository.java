@@ -62,10 +62,6 @@ public class JdbcPhieuNhapRepository implements PhieuNhapRepository {
             if (pnh.getMaKho() != null) {
                 pnh.setKhoHang(khoHangRepository.findById(pnh.getMaKho()).orElse(null));
             }
-            if (pnh.getNguoiLap() != null) {
-                // (Lưu ý: Bạn cũng nên dùng getObject cho NguoiLap nếu nó có thể NULL)
-pnh.setNguoiLapObj(nguoiDungRepository.findById(pnh.getNguoiLap()).orElse(null));
-            }
 
             return pnh;
         };

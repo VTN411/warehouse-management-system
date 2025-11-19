@@ -48,9 +48,6 @@ public class JdbcPhieuXuatRepository implements PhieuXuatRepository {
             if (pxh.getMaKho() != null) {
                 pxh.setKhoHang(khoHangRepository.findById(pxh.getMaKho()).orElse(null));
             }
-            if (pxh.getNguoiLap() != null) {
-                pxh.setNguoiLapObj(nguoiDungRepository.findById(pxh.getNguoiLap()).orElse(null));
-            }
             if (pxh.getMaKH() != null) {
                 pxh.setKhachHang(khachHangRepository.findById(pxh.getMaKH()).orElse(null));
             }
