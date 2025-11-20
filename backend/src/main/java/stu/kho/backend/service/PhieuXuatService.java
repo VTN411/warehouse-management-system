@@ -117,7 +117,7 @@ public class PhieuXuatService {
     }
 
     // =================================================================
-    // 3. CANCEL (Hủy - HOÀN TRẢ TỒN KHO)
+    // 3. CANCEL (Hủy - KHÔNG HOÀN TRẢ TỒN KHO)
     // =================================================================
     @Transactional
     public PhieuXuatHang cancelPhieuXuat(Integer id, String tenNguoiHuy) {
@@ -126,20 +126,21 @@ public class PhieuXuatService {
 
         PhieuXuatHang phieuXuat = getPhieuXuatById(id);
 
+        // Kiểm tra trạng thái hiện tại
         if (phieuXuat.getTrangThai() == STATUS_DA_HUY) {
-            throw new RuntimeException("Phiếu đã hủy rồi.");
+            throw new RuntimeException("Phiếu này đã bị hủy trước đó.");
         }
 
-        // Nếu đã duyệt (đã trừ kho) -> Phải cộng lại (Hoàn tác)
+        // --- LOGIC MỚI: CHẶN HỦY NẾU ĐÃ DUYỆT ---
         if (phieuXuat.getTrangThai() == STATUS_DA_DUYET) {
-            for (ChiTietPhieuXuat ct : phieuXuat.getChiTiet()) {
-                // Số lượng DƯƠNG (+) để cộng lại
-                capNhatTonKho(phieuXuat.getMaKho(), ct.getMaSP(), ct.getSoLuong());
-            }
+            throw new RuntimeException("Không thể hủy phiếu đã được duyệt (Hàng đã xuất). Vui lòng tạo phiếu nhập hàng nếu cần điều chỉnh.");
         }
+        // ----------------------------------------
 
+        // Nếu phiếu đang CHỜ DUYỆT (1) -> Cho phép hủy
         phieuXuat.setTrangThai(STATUS_DA_HUY);
-        phieuXuat.setNguoiDuyet(nguoiHuy.getMaNguoiDung());
+        phieuXuat.setNguoiDuyet(nguoiHuy.getMaNguoiDung()); // Ghi nhận người thực hiện hủy
+
         phieuXuatRepository.update(phieuXuat);
 
         logActivity(nguoiHuy.getMaNguoiDung(), "Hủy Phiếu Xuất #" + id);

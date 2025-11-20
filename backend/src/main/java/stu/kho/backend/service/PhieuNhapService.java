@@ -123,33 +123,33 @@ public class PhieuNhapService {
     }
 
     // =================================================================
-    // 3. CANCEL (Hủy phiếu - Phương thức MỚI)
+    // 3. CANCEL (Hủy phiếu)
     // =================================================================
     @Transactional
-    public PhieuNhapHang cancelPhieuNhap(Integer maPhieuNhap, String tenNguoiHuy) {
+    public PhieuNhapHang cancelPhieuNhap(Integer id, String tenNguoiHuy) {
         NguoiDung nguoiHuy = nguoiDungRepository.findByTenDangNhap(tenNguoiHuy)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng (người hủy)."));
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-        PhieuNhapHang phieuNhap = getPhieuNhapById(maPhieuNhap);
+        PhieuNhapHang phieuNhap = getPhieuNhapById(id);
 
+        // Kiểm tra trạng thái hiện tại
         if (phieuNhap.getTrangThai() == STATUS_DA_HUY) {
             throw new RuntimeException("Phiếu này đã bị hủy trước đó.");
         }
 
-        // 1. HOÀN TRẢ TỒN KHO (UNDO) - Chỉ khi phiếu đã được duyệt
+        // --- LOGIC MỚI: CHẶN HỦY NẾU ĐÃ DUYỆT ---
         if (phieuNhap.getTrangThai() == STATUS_DA_DUYET) {
-            for (ChiTietPhieuNhap ct : phieuNhap.getChiTiet()) {
-                capNhatTonKho(phieuNhap.getMaKho(), ct.getMaSP(), -ct.getSoLuong()); // TRỪ đi số lượng
-            }
+            throw new RuntimeException("Không thể hủy phiếu đã được duyệt (Hàng đã nhập kho). Vui lòng tạo phiếu xuất để trả hàng nếu cần điều chỉnh.");
         }
+        // ----------------------------------------
 
-        // 2. Cập nhật trạng thái (Cả CHO_DUYET và DA_DUYET đều chuyển thành DA_HUY)
+        // Nếu phiếu đang CHỜ DUYỆT (1) -> Cho phép hủy
         phieuNhap.setTrangThai(STATUS_DA_HUY);
-        phieuNhap.setNguoiDuyet(nguoiHuy.getMaNguoiDung()); // Ghi nhận người hủy
+        phieuNhap.setNguoiDuyet(nguoiHuy.getMaNguoiDung()); // Ghi nhận người thực hiện hủy
+
         phieuNhapRepository.update(phieuNhap);
 
-        // 3. Ghi Log
-        logActivity(nguoiHuy.getMaNguoiDung(), "Hủy Phiếu Nhập Hàng #" + maPhieuNhap);
+        logActivity(nguoiHuy.getMaNguoiDung(), "Hủy Phiếu Nhập #" + id);
         return phieuNhap;
     }
 
