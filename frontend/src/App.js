@@ -12,6 +12,9 @@ import UserManagementPage from './pages/UserManagement';
 import ProfilePage from './pages/ProfilePage';
 import PhieuNhapPage from './pages/PhieuNhapPage'; 
 import ProductPage from './pages/ProductPage';
+import WarehousePage from './pages/WarehousePage';
+import SupplierPage from './pages/SupplierPage';
+import PhieuXuatPage from './pages/PhieuXuatPage';
 
 import 'antd/dist/reset.css';
 import './App.css';
@@ -33,6 +36,9 @@ function App() {
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/stock-in" element={<PhieuNhapPage />} />
               <Route path="/products" element={<ProductPage />} />
+              <Route path="/warehouses" element={<WarehousePage />} />
+              <Route path="/suppliers" element={<SupplierPage />} />
+              <Route path="/stock-out" element={<PhieuXuatPage />} />
             </Route>
           </Route>
 

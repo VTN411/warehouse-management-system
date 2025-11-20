@@ -12,6 +12,8 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/nhacungcap")
+@CrossOrigin(origins = "*")
+
 public class NhaCungCapController {
 
     private final NhaCungCapService nhaCungCapService;

@@ -181,6 +181,7 @@ const ProductPage = () => {
       </Space>
 
       <Table
+        className="fixed-height-table"
         columns={columns}
         dataSource={products}
         loading={loading}

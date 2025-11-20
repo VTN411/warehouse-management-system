@@ -25,19 +25,22 @@ import {
   DownOutlined,
 } from "@ant-design/icons";
 import * as phieuNhapService from "../../services/phieunhap.service";
-import * as userService from "../../services/user.service"; // [!] 1. IMPORT USER SERVICE
+import * as warehouseService from "../../services/warehouse.service";
+import * as supplierService from "../../services/supplier.service";
+import * as productService from "../../services/product.service"; // [!] Import Product Service
 
 const { Option } = Select;
 
 const PhieuNhapPage = () => {
-  // Master list
   const [phieuNhapList, setPhieuNhapList] = useState([]);
-  const [displayedPhieuNhapList, setDisplayedPhieuNhapList] = useState([]); 
-  const [sortConfig, setSortConfig] = useState(null); 
-  const [filterConfig, setFilterConfig] = useState(null); 
+  const [displayedPhieuNhapList, setDisplayedPhieuNhapList] = useState([]);
+  const [sortConfig, setSortConfig] = useState(null);
+  const [filterConfig, setFilterConfig] = useState(null);
 
-  // [!] 2. THÊM STATE ĐỂ LƯU DANH SÁCH USER (ĐỂ TRA CỨU TÊN)
-  const [userList, setUserList] = useState([]);
+  // Danh sách danh mục
+  const [listNCC, setListNCC] = useState([]);
+  const [listKho, setListKho] = useState([]);
+  const [listSanPham, setListSanPham] = useState([]); // [!] Thêm list Sản phẩm
 
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -48,43 +51,48 @@ const PhieuNhapPage = () => {
   const [editingPhieuNhap, setEditingPhieuNhap] = useState(null);
   const [userPermissions, setUserPermissions] = useState([]);
 
-  // Hàm lấy danh sách phiếu nhập
+  // --- CÁC HÀM API ---
+
   const fetchPhieuNhap = useCallback(async () => {
     setLoading(true);
     try {
       const response = await phieuNhapService.getAllPhieuNhap();
-      setPhieuNhapList(response.data || []); 
+      setPhieuNhapList(response.data || []);
     } catch (error) {
       messageApi.error("Không thể tải danh sách phiếu nhập!");
     }
     setLoading(false);
   }, [messageApi]);
 
-  // [!] 3. HÀM LẤY DANH SÁCH USER
-  const fetchUsers = useCallback(async () => {
+  const fetchCommonData = useCallback(async () => {
     try {
-      const response = await userService.getAllUsers();
-      setUserList(response.data || []);
+      const [resNCC, resKho, resSP] = await Promise.all([
+        supplierService.getAllSuppliers(),
+        warehouseService.getAllWarehouses(),
+        productService.getAllProducts(), // [!] Lấy luôn danh sách SP để hiển thị tên trong Form
+      ]);
+      setListNCC(resNCC.data || []);
+      setListKho(resKho.data || []);
+      setListSanPham(resSP.data || []);
     } catch (error) {
-      console.error("Lỗi tải danh sách user:", error);
+      console.error("Lỗi tải danh mục:", error);
     }
   }, []);
 
-  // [!] 4. GỌI CẢ 2 API KHI TRANG TẢI
   useEffect(() => {
     fetchPhieuNhap();
-    fetchUsers(); // Gọi thêm hàm này
+    fetchCommonData();
     
     const storedUser = localStorage.getItem("user_info");
     if (storedUser) {
       const user = JSON.parse(storedUser);
       setUserPermissions(user.quyen || []);
     }
-  }, [fetchPhieuNhap, fetchUsers]);
+  }, [fetchPhieuNhap, fetchCommonData]);
 
-  // Xử lý lọc/sắp xếp (Giữ nguyên)
+  // Logic lọc/sắp xếp (Giữ nguyên)
   useEffect(() => {
-    let data = [...phieuNhapList]; 
+    let data = [...phieuNhapList];
     if (filterConfig && filterConfig.key === 'status') {
       data = data.filter(item => item.trangThai === filterConfig.value);
     }
@@ -109,7 +117,8 @@ const PhieuNhapPage = () => {
   const canEdit = userPermissions.includes("PERM_PHIEUNHAP_EDIT");
   const canDelete = userPermissions.includes("PERM_PHIEUNHAP_DELETE");
 
-  // --- (Các hàm logic handle... giữ nguyên) ---
+  // --- CÁC HÀM XỬ LÝ ---
+
   const handleOpenModal = () => {
     setEditingPhieuNhap(null);
     form.resetFields();
@@ -117,15 +126,25 @@ const PhieuNhapPage = () => {
     setIsDeleteModalOpen(false);
   };
 
-  const handleEdit = (record) => {
+  // [!] SỬA LẠI HÀM handleEdit: GỌI API LẤY CHI TIẾT
+  const handleEdit = async (record) => {
     if (record.trangThai === 2 || record.trangThai === 3) {
       messageApi.warning("Không thể sửa phiếu đã được duyệt hoặc đã hủy.");
       return;
     }
-    setEditingPhieuNhap(record);
-    form.setFieldsValue(record);
-    setIsModalVisible(true);
-    setIsDeleteModalOpen(false);
+
+    try {
+      // Gọi API lấy chi tiết phiếu (bao gồm mảng 'chiTiet')
+      const response = await phieuNhapService.getPhieuNhapById(record.maPhieuNhap);
+      const fullData = response.data;
+
+      setEditingPhieuNhap(fullData);
+      form.setFieldsValue(fullData); // Đổ dữ liệu đầy đủ vào form
+      setIsModalVisible(true);
+      setIsDeleteModalOpen(false);
+    } catch (error) {
+      messageApi.error("Lỗi khi tải chi tiết phiếu nhập!");
+    }
   };
 
   const handleCancel = () => {
@@ -134,33 +153,32 @@ const PhieuNhapPage = () => {
   };
 
   const handleOk = () => {
-    form
-      .validateFields()
-      .then(async (values) => {
-        try {
-          if (editingPhieuNhap) {
-            await phieuNhapService.updatePhieuNhap(editingPhieuNhap.maPhieuNhap, values);
-            messageApi.success("Cập nhật phiếu nhập thành công!");
-          } else {
-            await phieuNhapService.createPhieuNhap(values);
-            messageApi.success("Tạo phiếu nhập thành công!");
-          }
-          setIsModalVisible(false);
-          setEditingPhieuNhap(null);
-          fetchPhieuNhap();
-        } catch (error) {
-          let errMsg = "Có lỗi xảy ra!";
-          if (error.response?.data?.message) {
-            errMsg = error.response.data.message;
-          }
-          messageApi.error(errMsg);
+    form.validateFields().then(async (values) => {
+      try {
+        if (editingPhieuNhap) {
+          await phieuNhapService.updatePhieuNhap(editingPhieuNhap.maPhieuNhap, values);
+          messageApi.success("Cập nhật phiếu nhập thành công!");
+        } else {
+          await phieuNhapService.createPhieuNhap(values);
+          messageApi.success("Tạo phiếu nhập thành công!");
         }
-      })
-      .catch((info) => {
-        console.log("Validate Failed:", info);
-      });
+        setIsModalVisible(false);
+        setEditingPhieuNhap(null);
+        fetchPhieuNhap();
+      } catch (error) {
+        let errMsg = "Có lỗi xảy ra!";
+        if (error.response?.data?.message) {
+          errMsg = error.response.data.message;
+        }
+        messageApi.error(errMsg);
+      }
+    })
+    .catch((info) => {
+      console.log("Validate Failed:", info);
+    });
   };
 
+  // ... (Các hàm Xóa, Duyệt, Hủy giữ nguyên) ...
   const handleDelete = (phieuNhapId) => {
     setDeletingPhieuNhapId(phieuNhapId);
     setIsDeleteModalOpen(true);
@@ -208,14 +226,7 @@ const PhieuNhapPage = () => {
     }
   };
 
-  // [!] 5. HÀM HELPER ĐỂ TÌM TÊN NGƯỜI DÙNG
-  const getUserName = (userId) => {
-    if (!userId) return "---";
-    const user = userList.find(u => u.maNguoiDung === userId);
-    return user ? user.hoTen : `ID: ${userId}`;
-  };
-
-  // [!] 6. CẬP NHẬT CỘT 'Người Duyệt'
+  // Cột bảng (Giữ nguyên)
   const columns = [
     { title: "Ngày Lập", dataIndex: "ngayLapPhieu", key: "ngayLapPhieu" },
     { 
@@ -235,17 +246,30 @@ const PhieuNhapPage = () => {
       key: "tongTien",
       render: (value) => `${value?.toLocaleString()} đ`,
     },
-    { title: "Mã NCC", dataIndex: "maNCC", key: "maNCC" },
-    { title: "Mã Kho", dataIndex: "maKho", key: "maKho" },
-    
-    // [!] HIỂN THỊ TÊN NGƯỜI DUYỆT
+    { 
+      title: "Nhà Cung Cấp", 
+      dataIndex: "maNCC", 
+      key: "maNCC",
+      render: (id) => {
+        const ncc = listNCC.find(item => item.maNCC === id);
+        return ncc ? ncc.tenNCC : `Mã: ${id}`;
+      }
+    },
+    { 
+      title: "Kho Nhập", 
+      dataIndex: "maKho", 
+      key: "maKho",
+      render: (id) => {
+        const kho = listKho.find(item => item.maKho === id);
+        return kho ? kho.tenKho : `Mã: ${id}`;
+      }
+    },
     { 
       title: "Người Duyệt", 
-      dataIndex: "nguoiDuyet", 
-      key: "nguoiDuyet",
-      render: (id) => getUserName(id) // Gọi hàm helper
+      dataIndex: "tenNguoiDuyet", 
+      key: "tenNguoiDuyet",
+      render: (text, record) => text || (record.nguoiDuyet ? `ID: ${record.nguoiDuyet}` : "---")
     },
-    
     {
       title: 'Hành động',
       key: 'action',
@@ -271,7 +295,6 @@ const PhieuNhapPage = () => {
     },
   ];
 
-  // Menu dropdown (Giữ nguyên)
   const sortMenu = {
     items: [
       {
@@ -324,21 +347,16 @@ const PhieuNhapPage = () => {
         >
           Tạo Phiếu Nhập
         </Button>
-        <Button 
-          icon={<ReloadOutlined />} 
-          onClick={fetchPhieuNhap}
-          loading={loading}
-        >
+        <Button icon={<ReloadOutlined />} onClick={fetchPhieuNhap} loading={loading}>
           Tải lại
         </Button>
         <Dropdown menu={sortMenu}>
-          <Button>
-            Lọc / Sắp xếp <DownOutlined />
-          </Button>
+          <Button>Lọc / Sắp xếp <DownOutlined /></Button>
         </Dropdown>
       </Space>
 
       <Table
+        className="fixed-height-table"
         columns={columns}
         dataSource={displayedPhieuNhapList}
         loading={loading}
@@ -346,7 +364,6 @@ const PhieuNhapPage = () => {
         pagination={{ pageSize: 5 }}
       />
 
-      {/* MODAL TẠO/SỬA */}
       <Modal
         title={editingPhieuNhap ? "Sửa Phiếu Nhập Hàng" : "Tạo Phiếu Nhập Hàng"}
         open={isModalVisible}
@@ -356,12 +373,30 @@ const PhieuNhapPage = () => {
       >
         <Form form={form} layout="vertical" name="phieuNhapForm">
           <Space wrap>
-            <Form.Item name="maNCC" label="Mã NCC" rules={[{ required: true, message: "Vui lòng nhập!" }]}>
-              <InputNumber style={{ width: 150 }} placeholder="Nhập ID NCC"/>
+            <Form.Item name="maNCC" label="Nhà Cung Cấp" rules={[{ required: true, message: "Vui lòng chọn!" }]}>
+              <Select 
+                style={{ width: 200 }} 
+                placeholder="Chọn NCC"
+                showSearch
+                optionFilterProp="children"
+              >
+                {listNCC.map(ncc => (
+                  <Option key={ncc.maNCC} value={ncc.maNCC}>{ncc.tenNCC}</Option>
+                ))}
+              </Select>
             </Form.Item>
             
-            <Form.Item name="maKho" label="Mã Kho" rules={[{ required: true, message: "Vui lòng nhập!" }]}>
-               <InputNumber style={{ width: 150 }} placeholder="Nhập ID Kho"/>
+            <Form.Item name="maKho" label="Kho Nhập" rules={[{ required: true, message: "Vui lòng chọn!" }]}>
+              <Select 
+                style={{ width: 200 }} 
+                placeholder="Chọn Kho"
+                showSearch
+                optionFilterProp="children"
+              >
+                {listKho.map(kho => (
+                  <Option key={kho.maKho} value={kho.maKho}>{kho.tenKho}</Option>
+                ))}
+              </Select>
             </Form.Item>
 
             <Form.Item name="chungTu" label="Chứng từ" rules={[{ required: true, message: "Vui lòng nhập!" }]}>
@@ -378,9 +413,14 @@ const PhieuNhapPage = () => {
                     <Form.Item
                       {...restField}
                       name={[name, "maSP"]}
-                      rules={[{ required: true, message: "Nhập ID SP" }]}
+                      rules={[{ required: true, message: "Chọn SP" }]}
                     >
-                       <InputNumber placeholder="Mã SP" />
+                      {/* [!] CẬP NHẬT: Dùng Select để chọn Sản Phẩm */}
+                      <Select style={{ width: 200 }} placeholder="Chọn SP" showSearch optionFilterProp="children">
+                        {listSanPham.map(sp => (
+                          <Option key={sp.maSP} value={sp.maSP}>{sp.tenSP}</Option>
+                        ))}
+                      </Select>
                     </Form.Item>
                     <Form.Item
                       {...restField}
@@ -416,7 +456,6 @@ const PhieuNhapPage = () => {
         </Form>
       </Modal>
 
-      {/* MODAL XÁC NHẬN XÓA */}
       <Modal
         title="Xác nhận xóa"
         open={isDeleteModalOpen}

@@ -36,3 +36,20 @@
     transform: rotate(360deg);
   }
 }
+/* Định nghĩa chiều cao cố định cho bảng */
+.fixed-height-table .ant-spin-nested-loading .ant-spin-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  /* Chiều cao tối thiểu: (5 dòng * 55px) + Header + Pagination ~ 450px */
+  min-height: 500px; 
+}
+
+.fixed-height-table .ant-table {
+  flex-grow: 1; /* Bảng sẽ chiếm hết khoảng trống còn lại */
+}
+
+.fixed-height-table .ant-pagination {
+  margin-top: 16px !important; /* Đảm bảo khoảng cách đẹp */
+  margin-bottom: 0 !important;
+}

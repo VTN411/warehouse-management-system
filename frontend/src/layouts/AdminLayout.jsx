@@ -19,20 +19,7 @@ function getItem(label, key, icon, children) {
   return { key, icon, children, label };
 }
 
-const baseMenuItems = [
-  getItem("Dashboard", "/dashboard", <PieChartOutlined />),
-  getItem("Danh mục", "sub1", <DesktopOutlined />, [
-    getItem("Sản phẩm", "/products"),
-    getItem("Kho hàng", "/warehouses"),
-    getItem("Nhà cung cấp", "/suppliers"),
-  ]),
-  getItem("Nhập xuất", "sub2", <TeamOutlined />, [
-    getItem("Nhập kho", "/stock-in"),
-    getItem("Xuất kho", "/stock-out"),
-  ]),
-  getItem("Báo cáo", "/reports", <FileOutlined />),
-];
-
+// Menu dành riêng cho Admin (Quản lý User)
 const adminMenuItems = [
   getItem("Quản lý Người dùng", "/admin/users", <UserOutlined />),
 ];
@@ -42,27 +29,83 @@ const AdminLayout = () => {
   const {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken();
-  const navigate = useNavigate(); // <-- Chúng ta sẽ dùng hàm này
+  const navigate = useNavigate();
   const location = useLocation();
   const { message } = App.useApp();
 
   const [currentUser, setCurrentUser] = useState(null);
-  const [menuItems, setMenuItems] = useState(baseMenuItems);
+  const [menuItems, setMenuItems] = useState([]);
 
   useEffect(() => {
     let user = null;
+    let permissions = [];
+    
     const storedUser = localStorage.getItem("user_info");
     if (storedUser) {
       user = JSON.parse(storedUser);
       setCurrentUser(user);
+      permissions = user.quyen || [];
     }
 
-    if (user && user.quyen && user.quyen.includes("PERM_ADMIN_CREATE_USER")) {
-      setMenuItems([...baseMenuItems, ...adminMenuItems]);
-    } else {
-      setMenuItems(baseMenuItems);
+    // Kiểm tra xem có phải Admin không
+    const roleName = user?.vaiTro || user?.tenVaiTro;
+    const isAdmin = roleName === "ADMIN";
+
+    // 1. Xây dựng Menu con cho "Danh mục"
+    const danhMucChildren = [
+      getItem("Sản phẩm", "/products"), 
+      
+      // Hiện nếu có quyền PERM_KHO_VIEW HOẶC là ADMIN
+      ...((permissions.includes("PERM_KHO_VIEW") || isAdmin)
+          ? [getItem("Kho hàng", "/warehouses")] 
+          : []
+      ),
+      
+      // Hiện nếu có quyền PERM_SUPPLIER_VIEW HOẶC là ADMIN
+      ...((permissions.includes("PERM_SUPPLIER_VIEW") || isAdmin)
+          ? [getItem("Nhà cung cấp", "/suppliers")]
+          : []
+      ),
+    ];
+
+    // 2. Xây dựng Menu con cho "Nhập xuất"
+    const nhapXuatChildren = [
+      ...((permissions.includes("PERM_PHIEUNHAP_CREATE") || permissions.includes("PERM_PHIEUNHAP_VIEW") || isAdmin)
+        ? [getItem("Nhập kho", "/stock-in")]
+        : []
+      ),
+
+      ...((permissions.includes("PERM_PHIEUXUAT_CREATE") || permissions.includes("PERM_PHIEUXUAT_VIEW") || isAdmin)
+        ? [getItem("Xuất kho", "/stock-out")]
+        : []
+      ),
+    ];
+
+    // 3. Tổng hợp Menu chính
+    const dynamicMenu = [
+      getItem("Dashboard", "/dashboard", <PieChartOutlined />),
+      
+      ...(danhMucChildren.length > 0 
+          ? [getItem("Danh mục", "sub1", <DesktopOutlined />, danhMucChildren)] 
+          : []
+      ),
+      
+      ...(nhapXuatChildren.length > 0 
+          ? [getItem("Nhập xuất", "sub2", <TeamOutlined />, nhapXuatChildren)]
+          : []
+      ),
+      
+      getItem("Báo cáo", "/reports", <FileOutlined />),
+    ];
+
+    // [!] 4. CẬP NHẬT LOGIC HIỂN THỊ MENU QUẢN LÝ USER
+    // Hiển thị nếu là ADMIN hoặc có quyền PERM_ADMIN_CREATE_USER
+    if (isAdmin || permissions.includes("PERM_ADMIN_CREATE_USER")) { 
+      dynamicMenu.push(...adminMenuItems);
     }
-  }, []);
+
+    setMenuItems(dynamicMenu);
+  }, []); 
 
   const onClickMenu = (e) => {
     navigate(e.key);
@@ -75,14 +118,12 @@ const AdminLayout = () => {
     navigate("/login");
   };
 
-  // Menu dropdown (hiển thị tên)
   const userMenu = [
-    // [!] ĐÃ SỬA LẠI DÒNG DƯỚI ĐÂY
     {
-      key: "profile", // Đổi key cho rõ nghĩa
+      key: "profile",
       label: "Thông tin tài khoản",
       icon: <UserOutlined />,
-      onClick: () => navigate('/profile'), // Thêm onClick để điều hướng
+      onClick: () => navigate('/profile'),
     },
     { type: "divider" },
     {
@@ -101,19 +142,21 @@ const AdminLayout = () => {
         collapsed={collapsed}
         onCollapse={(value) => setCollapsed(value)}
       >
-        <div
-          style={{
-            height: 32,
-            margin: 16,
-            background: "rgba(255, 255, 255, 0.2)",
-            color: "white",
-            textAlign: "center",
-            lineHeight: "32px",
-            fontWeight: "bold",
-            borderRadius: "6px",
-          }}
-        >
-          {collapsed ? "KHO" : "QUẢN LÝ KHO"}
+        <div style={{ margin: 16, textAlign: 'center' }}>
+            {/* Logo hoặc Text */}
+            <div
+            style={{
+                height: 32,
+                background: "rgba(255, 255, 255, 0.2)",
+                color: "white",
+                textAlign: "center",
+                lineHeight: "32px",
+                fontWeight: "bold",
+                borderRadius: "6px",
+            }}
+            >
+            {collapsed ? "KHO" : "QUẢN LÝ KHO"}
+            </div>
         </div>
 
         <Menu
@@ -151,7 +194,7 @@ const AdminLayout = () => {
                     {currentUser.hoTen}
                   </strong>
                   <span style={{ fontSize: "12px", color: "#8c8c8c" }}>
-                    {currentUser.vaiTro}
+                    {currentUser.vaiTro || currentUser.tenVaiTro}
                   </span>
                 </Space>
               ) : (
@@ -170,7 +213,7 @@ const AdminLayout = () => {
               borderRadius: borderRadiusLG,
             }}
           >
-            <Outlet />
+             <Outlet />
           </div>
         </Content>
         <Footer

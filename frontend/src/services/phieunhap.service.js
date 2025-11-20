@@ -33,3 +33,7 @@ export const approvePhieuNhap = (phieuNhapId) => {
 export const rejectPhieuNhap = (phieuNhapId) => {
   return api.post(`${API_ENDPOINT}/${phieuNhapId}/cancel`);
 };
+
+export const getPhieuNhapById = (id) => {
+  return api.get(`${API_ENDPOINT}/${id}`);
+};

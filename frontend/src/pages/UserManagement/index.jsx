@@ -22,14 +22,32 @@ import * as userService from "../../services/user.service";
 
 const { Option } = Select;
 
-// [!] CẬP NHẬT DANH SÁCH QUYỀN (THÊM SẢN PHẨM)
+// [!] DANH SÁCH QUYỀN ĐẦY ĐỦ (THEO SQL MỚI NHẤT)
 const permissionGroups = [
   {
-    label: "Sản phẩm",
+    label: "Quản lý Sản phẩm",
     perms: [
       { id: 50, name: "Tạo Sản phẩm" },
       { id: 51, name: "Sửa Sản phẩm" },
       { id: 52, name: "Xóa Sản phẩm" },
+    ],
+  },
+  {
+    label: "Quản lý Kho",
+    perms: [
+      { id: 70, name: "Xem Kho" },
+      { id: 71, name: "Tạo Kho" },
+      { id: 72, name: "Sửa Kho" },
+      { id: 73, name: "Xóa Kho" },
+    ],
+  },
+  {
+    label: "Nhà Cung Cấp",
+    perms: [
+      { id: 60, name: "Xem NCC" },
+      { id: 61, name: "Tạo NCC" },
+      { id: 62, name: "Sửa NCC" },
+      { id: 63, name: "Xóa NCC" },
     ],
   },
   {
@@ -38,6 +56,8 @@ const permissionGroups = [
       { id: 20, name: "Tạo Phiếu Nhập" },
       { id: 21, name: "Sửa Phiếu Nhập" },
       { id: 22, name: "Xóa Phiếu Nhập" },
+      { id: 40, name: "Duyệt Phiếu Nhập" },
+      { id: 41, name: "Hủy Phiếu Nhập" },
     ],
   },
   {
@@ -46,14 +66,15 @@ const permissionGroups = [
       { id: 23, name: "Tạo Phiếu Xuất" },
       { id: 24, name: "Sửa Phiếu Xuất" },
       { id: 25, name: "Xóa Phiếu Xuất" },
+      { id: 42, name: "Duyệt Phiếu Xuất" },
+      { id: 43, name: "Hủy Phiếu Xuất" },
     ],
   },
   {
-    label: "Báo cáo & Duyệt",
+    label: "Hệ thống & Báo cáo",
     perms: [
+      { id: 10, name: "Quản lý User (Admin)" },
       { id: 30, name: "Xem Báo cáo" },
-      { id: 31, name: "Duyệt Đơn Đặt hàng (PO)" },
-      { id: 32, name: "Duyệt Đơn Bán hàng (SO)" },
     ],
   },
 ];
@@ -101,9 +122,9 @@ const UserManagementPage = () => {
     }
   }, [fetchUsers]);
 
-  // Dùng quyền tạo user để làm quyền admin tạm thời
+  // Logic hiển thị nút (Admin hoặc có quyền tạo user)
   const canShowActions = currentUserPermissions.includes("PERM_ADMIN_CREATE_USER") || 
-                         currentUserPermissions.includes(10); // Fallback ID
+                         currentUserPermissions.includes(10);
 
   // --- Các hàm xử lý ---
   const handleOpenModal = () => {
@@ -195,7 +216,7 @@ const UserManagementPage = () => {
       messageApi.success(`Đã cấp quyền '${permName}'`);
       fetchUsers();
     } catch (error) {
-      messageApi.error(`Lỗi khi cấp quyền: ${error.response?.data?.message || 'Lỗi máy chủ'}`);
+      messageApi.error(`Lỗi: ${error.response?.data?.message || 'Không thể cấp quyền'}`);
     }
   };
 
@@ -205,34 +226,28 @@ const UserManagementPage = () => {
       messageApi.success(`Đã thu hồi quyền '${permName}'`);
       fetchUsers();
     } catch (error) {
-      messageApi.error(`Lỗi khi thu hồi quyền: ${error.response?.data?.message || 'Lỗi máy chủ'}`);
+      messageApi.error(`Lỗi: ${error.response?.data?.message || 'Không thể thu hồi quyền'}`);
     }
   };
 
-  // [!] SỬA LẠI HÀM NÀY: LUÔN HIỂN THỊ CẢ 2 NÚT (CẤP & THU HỒI)
+  // [!] SỬA LẠI: HIỂN THỊ CẢ 2 NÚT (CẤP & THU HỒI) CHO MỌI QUYỀN
   const createPermissionMenu = (userRecord) => {
-    const userPerms = userRecord.quyen || []; 
     
     const items = permissionGroups.map((group, index) => {
-      // Dùng flatMap để tạo ra cả 2 mục cho mỗi quyền
-      const subItems = group.perms.flatMap(perm => {
-        // Bạn có thể thêm logic check icon (dấu tích) nếu muốn hiển thị trạng thái
-        // const hasPermission = userPerms.includes(perm.id); 
-        
-        return [
-          {
-            key: `grant-${perm.id}`,
-            label: `Cấp quyền: ${perm.name}`,
-            onClick: () => handleGrantPermission(userRecord.maNguoiDung, perm.id, perm.name)
-          },
-          {
-            key: `revoke-${perm.id}`,
-            label: `Thu hồi: ${perm.name}`,
-            danger: true,
-            onClick: () => handleRevokePermission(userRecord.maNguoiDung, perm.id, perm.name)
-          }
-        ];
-      });
+      // Dùng flatMap để sinh ra 2 nút cho mỗi quyền
+      const subItems = group.perms.flatMap(perm => [
+        {
+          key: `grant-${perm.id}`,
+          label: `Cấp: ${perm.name}`,
+          onClick: () => handleGrantPermission(userRecord.maNguoiDung, perm.id, perm.name)
+        },
+        {
+          key: `revoke-${perm.id}`,
+          label: `Thu hồi: ${perm.name}`,
+          danger: true, // Màu đỏ
+          onClick: () => handleRevokePermission(userRecord.maNguoiDung, perm.id, perm.name)
+        }
+      ]);
       
       return {
         key: `group-${index}`,
@@ -269,6 +284,7 @@ const UserManagementPage = () => {
               <Dropdown 
                 menu={createPermissionMenu(record)}
                 placement="bottomRight"
+                trigger={['click']} // Bấm để mở
               >
                 <Button icon={<SettingOutlined />}>Phân quyền</Button>
               </Dropdown>
@@ -294,6 +310,7 @@ const UserManagementPage = () => {
       )}
 
       <Table
+        className="fixed-height-table"
         columns={columns}
         dataSource={users}
         loading={loading}

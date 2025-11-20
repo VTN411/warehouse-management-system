@@ -12,6 +12,8 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/kho")
+@CrossOrigin(origins = "*")
+
 public class KhoHangController {
 
     private final KhoHangService khoHangService;
