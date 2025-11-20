@@ -84,6 +84,15 @@ public class UserService {
         // (Cần xử lý logic ràng buộc khóa ngoại tại đây nếu có)
         nguoiDungRepository.deleteById(id);
     }
+    // --- PHƯƠNG THỨC MỚI: Lấy thông tin người dùng theo Username ---
+    public UserResponse getMyInfo(String tenDangNhap) {
+        // 1. Tìm user trong DB
+        NguoiDung user = nguoiDungRepository.findByTenDangNhap(tenDangNhap)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng: " + tenDangNhap));
+
+        // 2. Chuyển đổi sang DTO (Loại bỏ mật khẩu)
+        return convertToUserResponse(user);
+    }
 
     // HÀM TIỆN ÍCH: Chuyển NguoiDung (Entity) sang UserResponse (DTO)
     private UserResponse convertToUserResponse(NguoiDung user) {

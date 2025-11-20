@@ -2,7 +2,6 @@ package stu.kho.backend.dto;
 
 import lombok.Data;
 
-// DTO này dùng để trả về danh sách user, an toàn (không lộ mật khẩu)
 @Data
 public class UserResponse {
     private Integer maNguoiDung;
@@ -10,5 +9,5 @@ public class UserResponse {
     private String hoTen;
     private String email;
     private String sdt;
-    private String tenVaiTro; // Trả về tên Vai Trò (thay vì ID)
+    private String tenVaiTro; // Chỉ trả về tên vai trò (VD: ADMIN)
 }
