@@ -160,4 +160,24 @@ import java.util.stream.Stream;
         String sql = "DELETE FROM nguoidung WHERE MaNguoiDung = ?";
         return jdbcTemplate.update(sql, id);
     }
+    @Override
+    public List<Integer> findPermissionIdsByRoleId(Integer maVaiTro) {
+        String sql = "SELECT MaChucNang FROM phanquyen WHERE MaVaiTro = ?";
+        try {
+            return jdbcTemplate.queryForList(sql, Integer.class, maVaiTro);
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    // 2. Lấy ID quyền từ bảng NGUOIDUNG_CHUCNANG (theo User)
+    @Override
+    public List<Integer> findDirectPermissionIdsByUserId(Integer maNguoiDung) {
+        String sql = "SELECT MaChucNang FROM nguoidung_chucnang WHERE MaNguoiDung = ?";
+        try {
+            return jdbcTemplate.queryForList(sql, Integer.class, maNguoiDung);
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
 }

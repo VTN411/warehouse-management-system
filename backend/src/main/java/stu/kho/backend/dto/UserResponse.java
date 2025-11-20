@@ -2,6 +2,8 @@ package stu.kho.backend.dto;
 
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 public class UserResponse {
     private Integer maNguoiDung;
@@ -10,4 +12,5 @@ public class UserResponse {
     private String email;
     private String sdt;
     private String tenVaiTro; // Chỉ trả về tên vai trò (VD: ADMIN)
+    private List<Integer> dsQuyenSoHuu;
 }

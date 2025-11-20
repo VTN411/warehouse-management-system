@@ -10,7 +10,10 @@ import stu.kho.backend.entity.VaiTro;
 import stu.kho.backend.repository.NguoiDungRepository;
 import stu.kho.backend.repository.VaiTroRepository;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -52,10 +55,43 @@ public class UserService {
     }
     public List<UserResponse> getAllUsers() {
         List<NguoiDung> users = nguoiDungRepository.findAll();
-        // Chuyển Entity sang DTO để trả về
+
+        // Chuyển đổi từng User entity sang DTO kèm theo logic gộp quyền
         return users.stream()
-                .map(this::convertToUserResponse)
+                .map(this::convertToUserResponseWithPermissions) // Gọi hàm chuyển đổi mới
                 .collect(Collectors.toList());
+    }
+    private UserResponse convertToUserResponseWithPermissions(NguoiDung user) {
+        UserResponse dto = new UserResponse();
+        dto.setMaNguoiDung(user.getMaNguoiDung());
+        dto.setTenDangNhap(user.getTenDangNhap());
+        dto.setHoTen(user.getHoTen());
+        dto.setEmail(user.getEmail());
+        dto.setSdt(user.getSdt());
+
+        Integer maVaiTro = null;
+        if (user.getVaiTro() != null) {
+            dto.setTenVaiTro(user.getVaiTro().getTenVaiTro());
+            maVaiTro = user.getVaiTro().getMaVaiTro();
+        }
+
+        // --- LOGIC GỘP QUYỀN ---
+        Set<Integer> quyenSet = new HashSet<>();
+
+        // Bước 1: Lấy quyền từ Vai trò (nếu có)
+        if (maVaiTro != null) {
+            List<Integer> rolePerms = nguoiDungRepository.findPermissionIdsByRoleId(maVaiTro);
+            quyenSet.addAll(rolePerms);
+        }
+
+        // Bước 2: Lấy quyền riêng của User
+        List<Integer> userPerms = nguoiDungRepository.findDirectPermissionIdsByUserId(user.getMaNguoiDung());
+        quyenSet.addAll(userPerms);
+
+        // Bước 3: Set (HashSet) đã tự động loại bỏ trùng lặp. Chuyển về List.
+        dto.setDsQuyenSoHuu(new ArrayList<>(quyenSet));
+
+        return dto;
     }
 
     // 2. SỬA USER
@@ -91,7 +127,7 @@ public class UserService {
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng: " + tenDangNhap));
 
         // 2. Chuyển đổi sang DTO (Loại bỏ mật khẩu)
-        return convertToUserResponse(user);
+        return convertToUserResponseWithPermissions(user);
     }
 
     // HÀM TIỆN ÍCH: Chuyển NguoiDung (Entity) sang UserResponse (DTO)

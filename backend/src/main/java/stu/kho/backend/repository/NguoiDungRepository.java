@@ -30,4 +30,9 @@ public interface NguoiDungRepository {
     int deleteById(Integer id);
     // Lấy quyền (chức năng) được gán trực tiếp cho user
     List<String> getDirectAuthoritiesByUserId(Integer maNguoiDung);
+    // Lấy danh sách ID quyền theo Vai Trò
+    List<Integer> findPermissionIdsByRoleId(Integer maVaiTro);
+
+    // Lấy danh sách ID quyền riêng của User
+    List<Integer> findDirectPermissionIdsByUserId(Integer maNguoiDung);
 }
