@@ -11,4 +11,6 @@ public interface NccSanPhamRepository {
 
     // Lấy danh sách NCC theo SP
     List<Integer> findNccIdsByMaSP(Integer maSP);
+
+    boolean existsLink(Integer maNCC, Integer maSP);
 }

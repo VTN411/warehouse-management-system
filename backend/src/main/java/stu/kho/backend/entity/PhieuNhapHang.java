@@ -1,10 +1,12 @@
 package stu.kho.backend.entity;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List; // <-- 1. THÊM IMPORT NÀY
+import java.util.List;
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 @Data
 public class PhieuNhapHang {
     private Integer maPhieuNhap;
