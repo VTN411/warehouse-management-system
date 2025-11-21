@@ -33,3 +33,7 @@ export const approvePhieuXuat = (id) => {
 export const rejectPhieuXuat = (id) => {
   return api.post(`${API_ENDPOINT}/${id}/cancel`);
 };
+
+export const getPhieuXuatById = (id) => {
+  return api.get(`${API_ENDPOINT}/${id}`);
+};

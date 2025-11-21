@@ -19,7 +19,6 @@ function getItem(label, key, icon, children) {
   return { key, icon, children, label };
 }
 
-// Menu dành riêng cho Admin (Quản lý User)
 const adminMenuItems = [
   getItem("Quản lý Người dùng", "/admin/users", <UserOutlined />),
 ];
@@ -38,50 +37,66 @@ const AdminLayout = () => {
 
   useEffect(() => {
     let user = null;
-    let permissions = [];
+    let perms = []; 
     
     const storedUser = localStorage.getItem("user_info");
     if (storedUser) {
-      user = JSON.parse(storedUser);
-      setCurrentUser(user);
-      permissions = user.quyen || [];
+      try {
+        const rawData = JSON.parse(storedUser);
+
+        // [!] LOGIC SỬA LỖI QUAN TRỌNG
+        // Kiểm tra xem dữ liệu có bị lồng trong key "quyen" như trong ảnh không
+        if (rawData.quyen && !Array.isArray(rawData.quyen) && rawData.quyen.maNguoiDung) {
+            // Nếu có, lấy ruột bên trong ra làm user chính
+            user = rawData.quyen;
+        } else {
+            // Nếu không, dùng trực tiếp
+            user = rawData;
+        }
+
+        setCurrentUser(user);
+
+        // Lấy quyền từ user đã được xử lý
+        const p1 = Array.isArray(user.quyen) ? user.quyen : [];
+        const p2 = Array.isArray(user.dsQuyenSoHuu) ? user.dsQuyenSoHuu : [];
+        
+        perms = [...new Set([...p1, ...p2])];
+
+        console.log(">>> USER SAU KHI FIX:", user); // Debug xem đúng chưa
+        console.log(">>> PERMISSIONS:", perms);
+
+      } catch (e) {
+        console.error("Lỗi parse user_info", e);
+      }
     }
 
-    // Kiểm tra xem có phải Admin không
-    const roleName = user?.vaiTro || user?.tenVaiTro;
-    const isAdmin = roleName === "ADMIN";
+    // Kiểm tra Admin (Chấp nhận cả 'vaiTro' và 'tenVaiTro')
+    const roleName = user?.vaiTro || user?.tenVaiTro || "";
+    const isAdmin = roleName.toUpperCase() === "ADMIN";
 
-    // 1. Xây dựng Menu con cho "Danh mục"
+    const hasPerm = (idCode, stringCode) => {
+      if (isAdmin) return true; 
+      return perms.includes(idCode) || perms.includes(stringCode);
+    };
+
+    // --- XÂY DỰNG MENU ---
+
+    // 1. Nhóm Danh mục
     const danhMucChildren = [
       getItem("Sản phẩm", "/products"), 
       
-      // Hiện nếu có quyền PERM_KHO_VIEW HOẶC là ADMIN
-      ...((permissions.includes("PERM_KHO_VIEW") || isAdmin)
-          ? [getItem("Kho hàng", "/warehouses")] 
-          : []
-      ),
-      
-      // Hiện nếu có quyền PERM_SUPPLIER_VIEW HOẶC là ADMIN
-      ...((permissions.includes("PERM_SUPPLIER_VIEW") || isAdmin)
-          ? [getItem("Nhà cung cấp", "/suppliers")]
-          : []
-      ),
+      ...(hasPerm(70, "PERM_KHO_VIEW") ? [getItem("Kho hàng", "/warehouses")] : []),
+      ...(hasPerm(60, "PERM_SUPPLIER_VIEW") ? [getItem("Nhà cung cấp", "/suppliers")] : []),
+      ...(hasPerm(90, "PERM_CUSTOMER_VIEW") ? [getItem("Khách hàng", "/customers")] : []),
     ];
 
-    // 2. Xây dựng Menu con cho "Nhập xuất"
+    // 2. Nhóm Nhập xuất
     const nhapXuatChildren = [
-      ...((permissions.includes("PERM_PHIEUNHAP_CREATE") || permissions.includes("PERM_PHIEUNHAP_VIEW") || isAdmin)
-        ? [getItem("Nhập kho", "/stock-in")]
-        : []
-      ),
-
-      ...((permissions.includes("PERM_PHIEUXUAT_CREATE") || permissions.includes("PERM_PHIEUXUAT_VIEW") || isAdmin)
-        ? [getItem("Xuất kho", "/stock-out")]
-        : []
-      ),
+      getItem("Nhập kho", "/stock-in"),
+      getItem("Xuất kho", "/stock-out"),
     ];
 
-    // 3. Tổng hợp Menu chính
+    // 3. Menu Chính
     const dynamicMenu = [
       getItem("Dashboard", "/dashboard", <PieChartOutlined />),
       
@@ -95,12 +110,11 @@ const AdminLayout = () => {
           : []
       ),
       
-      getItem("Báo cáo", "/reports", <FileOutlined />),
+      ...(hasPerm(30, "PERM_VIEW_REPORT") ? [getItem("Báo cáo", "/reports", <FileOutlined />)] : []),
     ];
 
-    // [!] 4. CẬP NHẬT LOGIC HIỂN THỊ MENU QUẢN LÝ USER
-    // Hiển thị nếu là ADMIN hoặc có quyền PERM_ADMIN_CREATE_USER
-    if (isAdmin || permissions.includes("PERM_ADMIN_CREATE_USER")) { 
+    // 4. Menu Admin
+    if (isAdmin || perms.includes(10)) { 
       dynamicMenu.push(...adminMenuItems);
     }
 
@@ -143,7 +157,6 @@ const AdminLayout = () => {
         onCollapse={(value) => setCollapsed(value)}
       >
         <div style={{ margin: 16, textAlign: 'center' }}>
-            {/* Logo hoặc Text */}
             <div
             style={{
                 height: 32,

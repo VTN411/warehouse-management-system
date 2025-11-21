@@ -21,19 +21,27 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 import * as productService from "../../services/product.service";
+// [!] 1. IMPORT SERVICE NHÀ CUNG CẤP
+import * as supplierService from "../../services/supplier.service";
 
 const { Option } = Select;
 
+const PERM_CREATE_ID = 50;
+const PERM_EDIT_ID = 51;
+const PERM_DELETE_ID = 52;
+
 const ProductPage = () => {
   const [products, setProducts] = useState([]);
+  // [!] 2. STATE LƯU DANH SÁCH NCC
+  const [listNCC, setListNCC] = useState([]);
+  
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [form] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
+  
   const [permissions, setPermissions] = useState([]);
-
-  // State cho modal xóa
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingProductId, setDeletingProductId] = useState(null);
 
@@ -48,24 +56,45 @@ const ProductPage = () => {
     setLoading(false);
   }, [messageApi]);
 
+  // [!] 3. HÀM LẤY DANH SÁCH NCC
+  const fetchCommonData = useCallback(async () => {
+    try {
+      const response = await supplierService.getAllSuppliers();
+      setListNCC(response.data || []);
+    } catch (error) {
+      console.error("Lỗi tải danh sách NCC:", error);
+      // Không báo lỗi 403 ra màn hình để tránh làm phiền user nếu họ không có quyền xem
+    }
+  }, []);
+
   useEffect(() => {
     fetchProducts();
-    const storedUser = localStorage.getItem("user_info");
-    if (storedUser) {
-      const user = JSON.parse(storedUser);
-      setPermissions(user.quyen || []);
-    }
-  }, [fetchProducts]);
+    fetchCommonData(); // Gọi hàm lấy dữ liệu chung
 
-  const canCreate = permissions.includes("PERM_PRODUCT_CREATE");
-  const canEdit = permissions.includes("PERM_PRODUCT_EDIT");
-  const canDelete = permissions.includes("PERM_PRODUCT_DELETE");
+    try {
+      const storedUser = localStorage.getItem("user_info");
+      if (storedUser) {
+        let user = JSON.parse(storedUser);
+        if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung) {
+             user = user.quyen;
+        }
+        let perms = user.dsQuyenSoHuu || user.quyen;
+        if (!Array.isArray(perms)) perms = [];
+        setPermissions(perms);
+      }
+    } catch (e) {
+      setPermissions([]);
+    }
+  }, [fetchProducts, fetchCommonData]);
+
+  const canCreate = permissions.includes(PERM_CREATE_ID);
+  const canEdit = permissions.includes(PERM_EDIT_ID);
+  const canDelete = permissions.includes(PERM_DELETE_ID);
 
   const handleOpenModal = () => {
     setEditingProduct(null);
     form.resetFields();
     setIsModalVisible(true);
-    setIsDeleteModalOpen(false);
   };
 
   const handleEdit = (record) => {
@@ -73,10 +102,10 @@ const ProductPage = () => {
     form.setFieldsValue({
       ...record,
       maLoai: record.loaiHang?.maLoai || record.maLoai, 
+      // Đảm bảo danhSachMaNCC là mảng để Select mode="multiple" hiển thị đúng
       danhSachMaNCC: record.danhSachMaNCC || [], 
     });
     setIsModalVisible(true);
-    setIsDeleteModalOpen(false);
   };
 
   const handleCancel = () => {
@@ -105,7 +134,6 @@ const ProductPage = () => {
   const handleDelete = (id) => {
     setDeletingProductId(id);
     setIsDeleteModalOpen(true);
-    setIsModalVisible(false);
   };
 
   const handleDeleteConfirm = async () => {
@@ -116,11 +144,6 @@ const ProductPage = () => {
     } catch (error) {
       messageApi.error("Lỗi khi xóa sản phẩm!");
     }
-    setIsDeleteModalOpen(false);
-    setDeletingProductId(null);
-  };
-
-  const handleDeleteCancel = () => {
     setIsDeleteModalOpen(false);
     setDeletingProductId(null);
   };
@@ -186,16 +209,15 @@ const ProductPage = () => {
         dataSource={products}
         loading={loading}
         rowKey="maSP"
-        pagination={{ pageSize: 5 }} // [!] ĐÃ SỬA THÀNH 5
+        pagination={{ pageSize: 5 }}
         scroll={{ x: 1000 }}
       />
 
-      {/* MODAL THÊM/SỬA */}
       <Modal
         title={editingProduct ? "Sửa Sản Phẩm" : "Thêm Sản Phẩm"}
         open={isModalVisible}
         onOk={handleOk}
-        onCancel={handleCancel}
+        onCancel={() => setIsModalVisible(false)}
         width={800}
       >
         <Form form={form} layout="vertical">
@@ -247,16 +269,23 @@ const ProductPage = () => {
             </Col>
           </Row>
 
+          {/* [!] 4. SỬA LẠI THÀNH SELECT CHỌN NCC TỪ API */}
           <Form.Item 
             name="danhSachMaNCC" 
-            label="Mã Nhà Cung Cấp (Nhập số rồi ấn Enter)"
+            label="Nhà Cung Cấp"
           >
             <Select 
-              mode="tags" 
+              mode="multiple" // Cho phép chọn nhiều
               style={{ width: '100%' }} 
-              placeholder="Nhập ID NCC (ví dụ: 1) rồi nhấn Enter" 
-              tokenSeparators={[',']}
-            />
+              placeholder="Chọn nhà cung cấp"
+              optionFilterProp="children"
+            >
+              {listNCC.map(ncc => (
+                <Option key={ncc.maNCC} value={ncc.maNCC}>
+                  {ncc.tenNCC}
+                </Option>
+              ))}
+            </Select>
           </Form.Item>
 
           <Form.Item name="moTa" label="Mô Tả">
@@ -265,12 +294,11 @@ const ProductPage = () => {
         </Form>
       </Modal>
 
-      {/* MODAL XÁC NHẬN XÓA */}
       <Modal
         title="Xác nhận xóa"
         open={isDeleteModalOpen}
         onOk={handleDeleteConfirm}
-        onCancel={handleDeleteCancel}
+        onCancel={() => setIsDeleteModalOpen(false)}
         okText="Xóa"
         cancelText="Hủy"
         okType="danger"

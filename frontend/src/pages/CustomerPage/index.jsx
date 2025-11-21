@@ -1,4 +1,4 @@
-// src/pages/WarehousePage/index.jsx
+// src/pages/CustomerPage/index.jsx
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
@@ -16,75 +16,78 @@ import {
   DeleteOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
-import * as warehouseService from "../../services/warehouse.service";
+import * as customerService from "../../services/customer.service";
 
-// [!] 1. CẬP NHẬT ID QUYỀN (Theo file SQL mới nhất)
-const PERM_KHO_CREATE = 71;
-const PERM_KHO_EDIT = 72;
-const PERM_KHO_DELETE = 73;
+// [!] ĐỊNH NGHĨA ID QUYỀN (Theo SQL)
+const PERM_VIEW = 90;
+const PERM_CREATE = 91;
+const PERM_EDIT = 92;
+const PERM_DELETE = 93;
 
-const WarehousePage = () => {
-  const [warehouses, setWarehouses] = useState([]);
+const CustomerPage = () => {
+  const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [editingWarehouse, setEditingWarehouse] = useState(null);
+  const [editingCustomer, setEditingCustomer] = useState(null);
   const [form] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
   
   const [permissions, setPermissions] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
 
+  // State cho modal xóa
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
-  const fetchWarehouses = useCallback(async () => {
+  // 1. LẤY DỮ LIỆU
+  const fetchCustomers = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await warehouseService.getAllWarehouses();
-      setWarehouses(response.data || []);
+      const response = await customerService.getAllCustomers();
+      setCustomers(response.data || []);
     } catch (error) {
-      messageApi.error("Không thể tải danh sách kho!");
+      messageApi.error("Không thể tải danh sách khách hàng!");
     }
     setLoading(false);
   }, [messageApi]);
 
-  // [!] 2. CẬP NHẬT LOGIC LẤY QUYỀN (Chuẩn hóa giống các trang khác)
+  // 2. CHECK QUYỀN
   useEffect(() => {
-    fetchWarehouses();
+    fetchCustomers();
     try {
       const storedUser = localStorage.getItem("user_info");
       if (storedUser) {
         let user = JSON.parse(storedUser);
-        
-        // Fix lỗi dữ liệu lồng nhau (nếu có)
         if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung) {
              user = user.quyen;
         }
+        
+        const role = user.vaiTro || user.tenVaiTro || "";
+        setIsAdmin(role === "ADMIN");
 
-        // Lấy mảng ID quyền
         let perms = user.dsQuyenSoHuu || user.quyen;
         if (!Array.isArray(perms)) perms = [];
-        
         setPermissions(perms);
       }
     } catch (e) {
-      console.error("Lỗi đọc quyền:", e);
       setPermissions([]);
     }
-  }, [fetchWarehouses]);
+  }, [fetchCustomers]);
 
-  // [!] 3. KIỂM TRA QUYỀN BẰNG SỐ ID
-  const canCreate = permissions.includes(PERM_KHO_CREATE); // ID 71
-  const canEdit = permissions.includes(PERM_KHO_EDIT);     // ID 72
-  const canDelete = permissions.includes(PERM_KHO_DELETE); // ID 73
+  // Biến kiểm tra quyền
+  const canCreate = isAdmin || permissions.includes(PERM_CREATE);
+  const canEdit = isAdmin || permissions.includes(PERM_EDIT);
+  const canDelete = isAdmin || permissions.includes(PERM_DELETE);
 
+  // --- XỬ LÝ MODAL ---
   const handleOpenModal = () => {
-    setEditingWarehouse(null);
+    setEditingCustomer(null);
     form.resetFields();
     setIsModalVisible(true);
   };
 
   const handleEdit = (record) => {
-    setEditingWarehouse(record);
+    setEditingCustomer(record);
     form.setFieldsValue(record);
     setIsModalVisible(true);
   };
@@ -92,21 +95,22 @@ const WarehousePage = () => {
   const handleOk = () => {
     form.validateFields().then(async (values) => {
       try {
-        if (editingWarehouse) {
-          await warehouseService.updateWarehouse(editingWarehouse.maKho, values);
-          messageApi.success("Cập nhật kho thành công!");
+        if (editingCustomer) {
+          await customerService.updateCustomer(editingCustomer.maKH, values);
+          messageApi.success("Cập nhật khách hàng thành công!");
         } else {
-          await warehouseService.createWarehouse(values);
-          messageApi.success("Tạo kho mới thành công!");
+          await customerService.createCustomer(values);
+          messageApi.success("Thêm khách hàng thành công!");
         }
         setIsModalVisible(false);
-        fetchWarehouses();
+        fetchCustomers();
       } catch (error) {
         messageApi.error("Có lỗi xảy ra!");
       }
     });
   };
 
+  // --- XỬ LÝ XÓA ---
   const handleDelete = (id) => {
     setDeletingId(id);
     setIsDeleteModalOpen(true);
@@ -114,40 +118,39 @@ const WarehousePage = () => {
 
   const handleDeleteConfirm = async () => {
     try {
-      await warehouseService.deleteWarehouse(deletingId);
-      messageApi.success("Xóa kho thành công!");
-      fetchWarehouses();
+      await customerService.deleteCustomer(deletingId);
+      messageApi.success("Xóa khách hàng thành công!");
+      fetchCustomers();
     } catch (error) {
-      messageApi.error("Lỗi khi xóa kho!");
+      messageApi.error("Lỗi khi xóa khách hàng!");
     }
     setIsDeleteModalOpen(false);
     setDeletingId(null);
   };
 
+  // --- CẤU HÌNH CỘT ---
   const columns = [
-    { title: "Mã Kho", dataIndex: "maKho", key: "maKho", width: 80 },
-    { title: "Tên Kho", dataIndex: "tenKho", key: "tenKho", width: 200 },
+    { title: "Mã KH", dataIndex: "maKH", key: "maKH", width: 80 },
+    { title: "Tên Khách Hàng", dataIndex: "tenKH", key: "tenKH", width: 200 },
+    { title: "SĐT", dataIndex: "sdt", key: "sdt" },
+    { title: "Email", dataIndex: "email", key: "email" },
     { title: "Địa Chỉ", dataIndex: "diaChi", key: "diaChi" },
-    { title: "Ghi Chú", dataIndex: "ghiChu", key: "ghiChu" },
     {
       title: "Hành động",
       key: "action",
       width: 150,
       render: (_, record) => (
         <Space size="middle">
-          {/* Chỉ hiện nút Sửa nếu có quyền ID 72 */}
           {canEdit && (
             <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>
               Sửa
             </Button>
           )}
-          
-          {/* Chỉ hiện nút Xóa nếu có quyền ID 73 */}
           {canDelete && (
             <Button 
               icon={<DeleteOutlined />} 
               danger 
-              onClick={() => handleDelete(record.maKho)}
+              onClick={() => handleDelete(record.maKH)}
             >
               Xóa
             </Button>
@@ -161,14 +164,12 @@ const WarehousePage = () => {
     <div>
       {contextHolder}
       <Space style={{ marginBottom: 16 }}>
-        {/* Chỉ hiện nút Thêm nếu có quyền ID 71 */}
         {canCreate && (
           <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal}>
-            Thêm Kho Mới
+            Thêm Khách Hàng
           </Button>
         )}
-        
-        <Button icon={<ReloadOutlined />} onClick={fetchWarehouses} loading={loading}>
+        <Button icon={<ReloadOutlined />} onClick={fetchCustomers} loading={loading}>
           Tải lại
         </Button>
       </Space>
@@ -176,38 +177,38 @@ const WarehousePage = () => {
       <Table
         className="fixed-height-table"
         columns={columns}
-        dataSource={warehouses}
+        dataSource={customers}
         loading={loading}
-        rowKey="maKho"
+        rowKey="maKH"
         pagination={{ pageSize: 5 }}
       />
 
       {/* MODAL THÊM/SỬA */}
       <Modal
-        title={editingWarehouse ? "Sửa Kho Hàng" : "Thêm Kho Hàng"}
+        title={editingCustomer ? "Sửa Khách Hàng" : "Thêm Khách Hàng"}
         open={isModalVisible}
         onOk={handleOk}
         onCancel={() => setIsModalVisible(false)}
       >
         <Form form={form} layout="vertical">
           <Form.Item 
-            name="tenKho" 
-            label="Tên Kho" 
-            rules={[{ required: true, message: "Vui lòng nhập tên kho!" }]}
+            name="tenKH" 
+            label="Tên Khách Hàng" 
+            rules={[{ required: true, message: "Vui lòng nhập tên!" }]}
           >
-            <Input placeholder="Ví dụ: Kho Chính" />
+            <Input placeholder="Ví dụ: Nguyễn Văn A" />
           </Form.Item>
 
-          <Form.Item 
-            name="diaChi" 
-            label="Địa Chỉ" 
-            rules={[{ required: true, message: "Vui lòng nhập địa chỉ!" }]}
-          >
-            <Input placeholder="Ví dụ: 123 Đường ABC..." />
+          <Form.Item name="sdt" label="Số Điện Thoại">
+            <Input placeholder="Ví dụ: 0909..." />
           </Form.Item>
 
-          <Form.Item name="ghiChu" label="Ghi Chú">
-            <Input.TextArea rows={3} />
+          <Form.Item name="email" label="Email" rules={[{ type: 'email' }]}>
+            <Input placeholder="Ví dụ: email@domain.com" />
+          </Form.Item>
+
+          <Form.Item name="diaChi" label="Địa Chỉ">
+            <Input.TextArea rows={2} placeholder="Ví dụ: TP.HCM..." />
           </Form.Item>
         </Form>
       </Modal>
@@ -222,10 +223,10 @@ const WarehousePage = () => {
         cancelText="Hủy"
         okType="danger"
       >
-        <p>Bạn có chắc muốn xóa kho này không? Hành động này không thể hoàn tác.</p>
+        <p>Bạn có chắc muốn xóa khách hàng này không?</p>
       </Modal>
     </div>
   );
 };
 
-export default WarehousePage;
+export default CustomerPage;

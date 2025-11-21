@@ -11,7 +11,8 @@ import {
   message,
   InputNumber,
   Tag,
-  Select, // [!] 1. IMPORT SELECT
+  Select,
+  Dropdown,
 } from "antd";
 import {
   PlusOutlined,
@@ -21,36 +22,43 @@ import {
   ReloadOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
+  DownOutlined,
 } from "@ant-design/icons";
 import * as phieuXuatService from "../../services/phieuxuat.service";
-// [!] 2. IMPORT SERVICE KHO
-import * as warehouseService from "../../services/warehouse.service"; 
+import * as warehouseService from "../../services/warehouse.service";
+import * as productService from "../../services/product.service";
+import * as customerService from "../../services/customer.service";
 
 const { Option } = Select;
 
-// Định nghĩa tên quyền
-const PERM_CREATE = "PERM_PHIEUXUAT_CREATE";
-const PERM_EDIT = "PERM_PHIEUXUAT_EDIT";
-const PERM_DELETE = "PERM_PHIEUXUAT_DELETE";
-const PERM_APPROVE = "PERM_PHIEUXUAT_APPROVE";
-const PERM_CANCEL = "PERM_PHIEUXUAT_CANCEL";
+// [!] SỬA LẠI ID QUYỀN THÀNH SỐ (KHỚP VỚI CSDL)
+const PERM_CREATE = 23;
+const PERM_EDIT = 24;
+const PERM_DELETE = 25;
+const PERM_APPROVE = 42; // ID quyền Duyệt
+const PERM_CANCEL = 43; // ID quyền Hủy
 
 const PhieuXuatPage = () => {
   const [listData, setListData] = useState([]);
-  // [!] 3. STATE LƯU DANH SÁCH KHO
+  const [displayedListData, setDisplayedListData] = useState([]);
+  const [sortConfig, setSortConfig] = useState(null);
+  const [filterConfig, setFilterConfig] = useState(null);
+
   const [listKho, setListKho] = useState([]);
-  
+  const [listSanPham, setListSanPham] = useState([]);
+  const [listKhachHang, setListKhachHang] = useState([]);
+
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
   const [form] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
-  
+
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [permissions, setPermissions] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  // Hàm lấy dữ liệu phiếu xuất
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -62,55 +70,117 @@ const PhieuXuatPage = () => {
     setLoading(false);
   }, [messageApi]);
 
-  // [!] 4. HÀM LẤY DANH SÁCH KHO
-  const fetchWarehouses = useCallback(async () => {
+  const fetchCommonData = useCallback(async () => {
     try {
-      const response = await warehouseService.getAllWarehouses();
-      setListKho(response.data || []);
+      const [resKho, resSP, resKH] = await Promise.all([
+        warehouseService.getAllWarehouses(),
+        productService.getAllProducts(),
+        customerService.getAllCustomers(),
+      ]);
+      setListKho(resKho.data || []);
+      setListSanPham(resSP.data || []);
+      setListKhachHang(resKH.data || []);
     } catch (error) {
-      console.error("Lỗi tải danh sách kho:", error);
+      console.error("Lỗi tải danh mục:", error);
     }
   }, []);
 
   useEffect(() => {
     fetchData();
-    fetchWarehouses(); // [!] Gọi hàm lấy kho khi trang tải
+    fetchCommonData();
 
     const storedUser = localStorage.getItem("user_info");
     if (storedUser) {
-      const user = JSON.parse(storedUser);
-      setPermissions(user.quyen || []);
-    }
-  }, [fetchData, fetchWarehouses]);
+      try {
+        let user = JSON.parse(storedUser);
+        if (
+          user.quyen &&
+          !Array.isArray(user.quyen) &&
+          user.quyen.maNguoiDung
+        ) {
+          user = user.quyen;
+        }
 
-  const canCreate = permissions.includes(PERM_CREATE);
-  const canEdit = permissions.includes(PERM_EDIT);
-  const canDelete = permissions.includes(PERM_DELETE);
-  const canApprove = permissions.includes(PERM_APPROVE);
-  const canCancel = permissions.includes(PERM_CANCEL);
+        const role = user.vaiTro || user.tenVaiTro || "";
+        setIsAdmin(role === "ADMIN");
+
+        // Lấy mảng ID quyền
+        let perms = user.dsQuyenSoHuu || user.quyen;
+        if (!Array.isArray(perms)) perms = [];
+        setPermissions(perms);
+      } catch (e) {
+        setPermissions([]);
+      }
+    }
+  }, [fetchData, fetchCommonData]);
+
+  useEffect(() => {
+    let data = [...listData];
+    if (filterConfig && filterConfig.key === "status") {
+      data = data.filter((item) => item.trangThai === filterConfig.value);
+    }
+    if (sortConfig) {
+      data.sort((a, b) => {
+        if (sortConfig.key === "date") {
+          const dateA = new Date(a.ngayLapPhieu);
+          const dateB = new Date(b.ngayLapPhieu);
+          return sortConfig.direction === "asc" ? dateA - dateB : dateB - dateA;
+        }
+        if (sortConfig.key === "price") {
+          return sortConfig.direction === "asc"
+            ? a.tongTien - b.tongTien
+            : b.tongTien - a.tongTien;
+        }
+        return 0;
+      });
+    }
+    setDisplayedListData(data);
+  }, [listData, sortConfig, filterConfig]);
+
+  // Hàm kiểm tra quyền
+  const checkPerm = (id) => isAdmin || permissions.includes(id);
+
+  const canCreate = checkPerm(PERM_CREATE);
+  const canEdit = checkPerm(PERM_EDIT);
+  const canDelete = checkPerm(PERM_DELETE);
+  const canApprove = checkPerm(PERM_APPROVE); // Check ID 42
+  const canCancel = checkPerm(PERM_CANCEL); // Check ID 43
 
   // --- XỬ LÝ MODAL ---
   const handleOpenModal = () => {
     setEditingRecord(null);
     form.resetFields();
     setIsModalVisible(true);
+    setIsDeleteModalOpen(false);
   };
 
-  const handleEdit = (record) => {
+  const handleEdit = async (record) => {
     if (record.trangThai === 2 || record.trangThai === 3) {
       messageApi.warning("Không thể sửa phiếu đã duyệt/hủy.");
       return;
     }
-    setEditingRecord(record);
-    form.setFieldsValue(record);
-    setIsModalVisible(true);
+
+    try {
+      const response = await phieuXuatService.getPhieuXuatById(
+        record.maPhieuXuat
+      );
+      const fullData = response.data;
+      setEditingRecord(fullData);
+      form.setFieldsValue(fullData);
+      setIsModalVisible(true);
+    } catch (error) {
+      messageApi.error("Lỗi tải chi tiết phiếu!");
+    }
   };
 
   const handleOk = () => {
     form.validateFields().then(async (values) => {
       try {
         if (editingRecord) {
-          await phieuXuatService.updatePhieuXuat(editingRecord.maPhieuXuat, values);
+          await phieuXuatService.updatePhieuXuat(
+            editingRecord.maPhieuXuat,
+            values
+          );
           messageApi.success("Cập nhật phiếu xuất thành công!");
         } else {
           await phieuXuatService.createPhieuXuat(values);
@@ -124,7 +194,6 @@ const PhieuXuatPage = () => {
     });
   };
 
-  // --- XỬ LÝ XÓA ---
   const handleDelete = (id) => {
     setDeletingId(id);
     setIsDeleteModalOpen(true);
@@ -142,7 +211,6 @@ const PhieuXuatPage = () => {
     setDeletingId(null);
   };
 
-  // --- DUYỆT / HỦY ---
   const handleApprove = async (id) => {
     try {
       await phieuXuatService.approvePhieuXuat(id);
@@ -163,43 +231,121 @@ const PhieuXuatPage = () => {
     }
   };
 
-  // --- CỘT BẢNG ---
+  const sortMenu = {
+    items: [
+      {
+        key: "filter",
+        label: "Lọc theo Trạng Thái",
+        children: [
+          {
+            key: "filter_1",
+            label: "Chờ duyệt",
+            onClick: () => setFilterConfig({ key: "status", value: 1 }),
+          },
+          {
+            key: "filter_2",
+            label: "Đã duyệt",
+            onClick: () => setFilterConfig({ key: "status", value: 2 }),
+          },
+          {
+            key: "filter_3",
+            label: "Không duyệt",
+            onClick: () => setFilterConfig({ key: "status", value: 3 }),
+          },
+        ],
+      },
+      {
+        key: "sort_date",
+        label: "Sắp xếp theo Ngày tháng",
+        children: [
+          {
+            key: "date_asc",
+            label: "Cũ đến mới",
+            onClick: () => setSortConfig({ key: "date", direction: "asc" }),
+          },
+          {
+            key: "date_desc",
+            label: "Mới đến cũ",
+            onClick: () => setSortConfig({ key: "date", direction: "desc" }),
+          },
+        ],
+      },
+      {
+        key: "sort_price",
+        label: "Sắp xếp theo Giá tiền",
+        children: [
+          {
+            key: "price_asc",
+            label: "Thấp đến cao",
+            onClick: () => setSortConfig({ key: "price", direction: "asc" }),
+          },
+          {
+            key: "price_desc",
+            label: "Cao đến thấp",
+            onClick: () => setSortConfig({ key: "price", direction: "desc" }),
+          },
+        ],
+      },
+      { type: "divider" },
+      {
+        key: "reset",
+        label: "Reset (Bỏ lọc)",
+        danger: true,
+        onClick: () => {
+          setFilterConfig(null);
+          setSortConfig(null);
+        },
+      },
+    ],
+  };
+
   const columns = [
-    { title: "Mã PX", dataIndex: "maPhieuXuat", key: "maPhieuXuat", width: 80 },
-    { title: "Ngày Lập", dataIndex: "ngayLapPhieu", key: "ngayLapPhieu" },
-    { 
-      title: "Trạng Thái", 
-      dataIndex: "trangThai", 
+    {
+      title: "Ngày Lập",
+      dataIndex: "ngayLapPhieu",
+      key: "ngayLapPhieu",
+    },
+    {
+      title: "Trạng Thái",
+      dataIndex: "trangThai",
       key: "trangThai",
       render: (status) => {
         if (status === 1) return <Tag color="orange">Chờ duyệt</Tag>;
         if (status === 2) return <Tag color="green">Đã duyệt</Tag>;
         if (status === 3) return <Tag color="red">Không duyệt</Tag>;
         return status;
-      }
+      },
     },
-    { 
-      title: "Tổng Tiền", 
-      dataIndex: "tongTien", 
-      key: "tongTien", 
-      render: (v) => `${v?.toLocaleString()} đ` 
+    {
+      title: "Tổng Tiền",
+      dataIndex: "tongTien",
+      key: "tongTien",
+      render: (v) => `${v?.toLocaleString()} đ`,
     },
-    { title: "Mã KH", dataIndex: "maKH", key: "maKH" }, 
-    // Hiển thị tên Kho nếu có thể (cần join bảng hoặc tra cứu từ listKho)
-    { 
-      title: "Kho Xuất", 
-      dataIndex: "maKho", 
+    {
+      title: "Khách Hàng",
+      dataIndex: "maKH",
+      key: "maKH",
+      render: (id) => {
+        const kh = listKhachHang.find((item) => item.maKH === id);
+        return kh ? kh.tenKH : `Mã: ${id}`;
+      },
+    },
+    {
+      title: "Kho Xuất",
+      dataIndex: "maKho",
       key: "maKho",
       render: (maKho) => {
-        const kho = listKho.find(k => k.maKho === maKho);
+        const kho = listKho.find((k) => k.maKho === maKho);
         return kho ? kho.tenKho : `Mã: ${maKho}`;
-      }
+      },
     },
-    { 
-        title: "Người Duyệt", 
-        dataIndex: "tenNguoiDuyet", 
-        key: "tenNguoiDuyet",
-        render: (text, record) => text || (record.nguoiDuyet ? `ID: ${record.nguoiDuyet}` : "---")
+    {
+      title: "Người Duyệt",
+      dataIndex: "tenNguoiDuyet",
+      key: "tenNguoiDuyet",
+      render: (text, record) =>
+        text || (record.nguoiDuyet ? `ID: ${record.nguoiDuyet}` : "---"),
     },
     {
       title: "Hành động",
@@ -208,17 +354,43 @@ const PhieuXuatPage = () => {
         const isChoDuyet = record.trangThai === 1;
         return (
           <Space size="small" wrap>
+            {/* NÚT SỬA/XÓA */}
             {isChoDuyet && canEdit && (
-              <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>Sửa</Button>
+              <Button
+                icon={<EditOutlined />}
+                onClick={() => handleEdit(record)}
+              >
+                Sửa
+              </Button>
             )}
             {isChoDuyet && canDelete && (
-              <Button icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.maPhieuXuat)}>Xóa</Button>
+              <Button
+                icon={<DeleteOutlined />}
+                danger
+                onClick={() => handleDelete(record.maPhieuXuat)}
+              >
+                Xóa
+              </Button>
             )}
+
+            {/* NÚT DUYỆT/HỦY */}
             {isChoDuyet && canApprove && (
-              <Button icon={<CheckCircleOutlined />} onClick={() => handleApprove(record.maPhieuXuat)} style={{ color: 'green', borderColor: 'green' }}>Duyệt</Button>
+              <Button
+                icon={<CheckCircleOutlined />}
+                onClick={() => handleApprove(record.maPhieuXuat)}
+                style={{ color: "green", borderColor: "green" }}
+              >
+                Duyệt
+              </Button>
             )}
             {isChoDuyet && canCancel && (
-              <Button icon={<CloseCircleOutlined />} onClick={() => handleReject(record.maPhieuXuat)} danger>Hủy</Button>
+              <Button
+                icon={<CloseCircleOutlined />}
+                onClick={() => handleReject(record.maPhieuXuat)}
+                danger
+              >
+                Hủy
+              </Button>
             )}
           </Space>
         );
@@ -231,19 +403,28 @@ const PhieuXuatPage = () => {
       {contextHolder}
       <Space style={{ marginBottom: 16 }}>
         {canCreate && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleOpenModal}
+          >
             Tạo Phiếu Xuất
           </Button>
         )}
         <Button icon={<ReloadOutlined />} onClick={fetchData} loading={loading}>
           Tải lại
         </Button>
+        <Dropdown menu={sortMenu} trigger={["click"]}>
+          <Button>
+            Lọc / Sắp xếp <DownOutlined />
+          </Button>
+        </Dropdown>
       </Space>
 
       <Table
         className="fixed-height-table"
         columns={columns}
-        dataSource={listData}
+        dataSource={displayedListData}
         loading={loading}
         rowKey="maPhieuXuat"
         pagination={{ pageSize: 5 }}
@@ -259,29 +440,49 @@ const PhieuXuatPage = () => {
       >
         <Form form={form} layout="vertical">
           <Space wrap>
-            <Form.Item name="maKH" label="Mã Khách Hàng" rules={[{ required: true }]}>
-              <InputNumber style={{ width: 150 }} placeholder="Nhập ID KH" />
-            </Form.Item>
-            
-            {/* [!] 5. THAY THẾ INPUTNUMBER BẰNG SELECT */}
-            <Form.Item 
-              name="maKho" 
-              label="Kho Xuất Hàng" 
-              rules={[{ required: true, message: "Vui lòng chọn kho!" }]}
+            <Form.Item
+              name="maKH"
+              label="Khách Hàng"
+              rules={[{ required: true, message: "Vui lòng chọn khách hàng!" }]}
             >
-              <Select 
-                style={{ width: 200 }} 
-                placeholder="Chọn Kho"
+              <Select
+                style={{ width: 200 }}
+                placeholder="Chọn Khách Hàng"
                 showSearch
                 optionFilterProp="children"
               >
-                {listKho.map(kho => (
-                  <Option key={kho.maKho} value={kho.maKho}>{kho.tenKho}</Option>
+                {listKhachHang.map((kh) => (
+                  <Option key={kh.maKH} value={kh.maKH}>
+                    {kh.tenKH}
+                  </Option>
                 ))}
               </Select>
             </Form.Item>
 
-            <Form.Item name="chungTu" label="Chứng Từ" rules={[{ required: true }]}>
+            <Form.Item
+              name="maKho"
+              label="Kho Xuất Hàng"
+              rules={[{ required: true, message: "Vui lòng chọn kho!" }]}
+            >
+              <Select
+                style={{ width: 200 }}
+                placeholder="Chọn Kho"
+                showSearch
+                optionFilterProp="children"
+              >
+                {listKho.map((kho) => (
+                  <Option key={kho.maKho} value={kho.maKho}>
+                    {kho.tenKho}
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+
+            <Form.Item
+              name="chungTu"
+              label="Chứng Từ"
+              rules={[{ required: true }]}
+            >
               <Input placeholder="VD: PX-001" />
             </Form.Item>
           </Space>
@@ -291,19 +492,48 @@ const PhieuXuatPage = () => {
             {(fields, { add, remove }) => (
               <>
                 {fields.map(({ key, name, ...restField }) => (
-                  <Space key={key} style={{ display: "flex", marginBottom: 8 }} align="baseline">
-                    <Form.Item {...restField} name={[name, "maSP"]} rules={[{ required: true, message: "Nhập Mã SP" }]}>
-                      <InputNumber placeholder="Mã SP" />
+                  <Space
+                    key={key}
+                    style={{ display: "flex", marginBottom: 8 }}
+                    align="baseline"
+                  >
+                    <Form.Item
+                      {...restField}
+                      name={[name, "maSP"]}
+                      rules={[{ required: true, message: "Nhập Mã SP" }]}
+                    >
+                      <Select
+                        style={{ width: 200 }}
+                        placeholder="Chọn SP"
+                        showSearch
+                        optionFilterProp="children"
+                      >
+                        {listSanPham.map((sp) => (
+                          <Option key={sp.maSP} value={sp.maSP}>
+                            {sp.tenSP}
+                          </Option>
+                        ))}
+                      </Select>
                     </Form.Item>
-                    <Form.Item {...restField} name={[name, "soLuong"]} rules={[{ required: true, message: "Nhập SL" }]}>
+                    <Form.Item
+                      {...restField}
+                      name={[name, "soLuong"]}
+                      rules={[{ required: true, message: "Nhập SL" }]}
+                    >
                       <InputNumber placeholder="Số lượng" min={1} />
                     </Form.Item>
-                    <Form.Item {...restField} name={[name, "donGia"]} rules={[{ required: true, message: "Nhập Giá" }]}>
-                      <InputNumber 
-                        placeholder="Đơn giá" 
+                    <Form.Item
+                      {...restField}
+                      name={[name, "donGia"]}
+                      rules={[{ required: true, message: "Nhập Giá" }]}
+                    >
+                      <InputNumber
+                        placeholder="Đơn giá"
                         min={0}
-                        formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                        parser={value => value.replace(/\$\s?|(,*)/g, '')}
+                        formatter={(value) =>
+                          `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                        }
+                        parser={(value) => value.replace(/\$\s?|(,*)/g, "")}
                         style={{ width: 150 }}
                       />
                     </Form.Item>
@@ -311,7 +541,12 @@ const PhieuXuatPage = () => {
                   </Space>
                 ))}
                 <Form.Item>
-                  <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+                  <Button
+                    type="dashed"
+                    onClick={() => add()}
+                    block
+                    icon={<PlusOutlined />}
+                  >
                     Thêm sản phẩm
                   </Button>
                 </Form.Item>

@@ -15,6 +15,7 @@ import ProductPage from './pages/ProductPage';
 import WarehousePage from './pages/WarehousePage';
 import SupplierPage from './pages/SupplierPage';
 import PhieuXuatPage from './pages/PhieuXuatPage';
+import CustomerPage from './pages/CustomerPage';
 
 import 'antd/dist/reset.css';
 import './App.css';
@@ -39,6 +40,7 @@ function App() {
               <Route path="/warehouses" element={<WarehousePage />} />
               <Route path="/suppliers" element={<SupplierPage />} />
               <Route path="/stock-out" element={<PhieuXuatPage />} />
+              <Route path="/customers" element={<CustomerPage />} />
             </Route>
           </Route>
 

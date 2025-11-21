@@ -18,10 +18,10 @@ import {
 } from "@ant-design/icons";
 import * as supplierService from "../../services/supplier.service";
 
-// [!] ĐỊNH NGHĨA TÊN QUYỀN (STRING)
-const PERM_SUPPLIER_CREATE = "PERM_SUPPLIER_CREATE";
-const PERM_SUPPLIER_EDIT = "PERM_SUPPLIER_EDIT";
-const PERM_SUPPLIER_DELETE = "PERM_SUPPLIER_DELETE";
+// [!] 1. CẬP NHẬT ID QUYỀN (Theo SQL)
+const PERM_SUPPLIER_CREATE = 61;
+const PERM_SUPPLIER_EDIT = 62;
+const PERM_SUPPLIER_DELETE = 63;
 
 const SupplierPage = () => {
   const [suppliers, setSuppliers] = useState([]);
@@ -32,12 +32,12 @@ const SupplierPage = () => {
   const [messageApi, contextHolder] = message.useMessage();
   
   const [permissions, setPermissions] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // State cho modal xóa
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
-  // 1. LẤY DỮ LIỆU TỪ API
   const fetchSuppliers = useCallback(async () => {
     setLoading(true);
     try {
@@ -49,20 +49,39 @@ const SupplierPage = () => {
     setLoading(false);
   }, [messageApi]);
 
-  // 2. CHECK QUYỀN VÀ LOAD DATA
+  // [!] 2. CẬP NHẬT LOGIC LẤY QUYỀN (Chuẩn hóa)
   useEffect(() => {
     fetchSuppliers();
-    const storedUser = localStorage.getItem("user_info");
-    if (storedUser) {
-      const user = JSON.parse(storedUser);
-      setPermissions(user.quyen || []);
+    try {
+      const storedUser = localStorage.getItem("user_info");
+      if (storedUser) {
+        let user = JSON.parse(storedUser);
+        
+        // Fix lỗi dữ liệu lồng nhau
+        if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung) {
+             user = user.quyen;
+        }
+
+        // Kiểm tra Admin
+        const role = user.vaiTro || user.tenVaiTro || "";
+        setIsAdmin(role === "ADMIN");
+
+        // Lấy mảng ID quyền
+        let perms = user.dsQuyenSoHuu || user.quyen;
+        if (!Array.isArray(perms)) perms = [];
+        
+        setPermissions(perms);
+      }
+    } catch (e) {
+      console.error("Lỗi đọc quyền:", e);
+      setPermissions([]);
     }
   }, [fetchSuppliers]);
 
-  // Biến kiểm tra quyền
-  const canCreate = permissions.includes(PERM_SUPPLIER_CREATE);
-  const canEdit = permissions.includes(PERM_SUPPLIER_EDIT);
-  const canDelete = permissions.includes(PERM_SUPPLIER_DELETE);
+  // [!] 3. KIỂM TRA QUYỀN: Có ID quyền HOẶC là Admin
+  const canCreate = isAdmin || permissions.includes(PERM_SUPPLIER_CREATE); // ID 61
+  const canEdit = isAdmin || permissions.includes(PERM_SUPPLIER_EDIT);     // ID 62
+  const canDelete = isAdmin || permissions.includes(PERM_SUPPLIER_DELETE); // ID 63
 
   // --- XỬ LÝ MODAL THÊM / SỬA ---
   const handleOpenModal = () => {
@@ -127,11 +146,14 @@ const SupplierPage = () => {
       width: 150,
       render: (_, record) => (
         <Space size="middle">
+          {/* Nút Sửa (Quyền 62) */}
           {canEdit && (
             <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>
               Sửa
             </Button>
           )}
+          
+          {/* Nút Xóa (Quyền 63) */}
           {canDelete && (
             <Button 
               icon={<DeleteOutlined />} 
@@ -150,7 +172,7 @@ const SupplierPage = () => {
     <div>
       {contextHolder}
       <Space style={{ marginBottom: 16 }}>
-        {/* Nút Thêm chỉ hiện khi có quyền CREATE */}
+        {/* Nút Thêm (Quyền 61) */}
         {canCreate && (
           <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal}>
             Thêm Nhà Cung Cấp

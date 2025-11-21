@@ -1,28 +1,18 @@
 // src/pages/UserManagement/index.jsx
+// (Giữ nguyên các import và logic, chỉ thêm vào permissionGroups)
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Table,
-  Button,
-  Modal,
-  Form,
-  Input,
-  Space,
-  message,
-  Select,
-  Dropdown,
+  Table, Button, Modal, Form, Input, Space, message, Select, Dropdown,
 } from "antd";
 import {
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  SettingOutlined,
+  PlusOutlined, EditOutlined, DeleteOutlined, SettingOutlined,
 } from "@ant-design/icons";
 import * as userService from "../../services/user.service";
 
 const { Option } = Select;
 
-// [!] DANH SÁCH QUYỀN ĐẦY ĐỦ (THEO SQL MỚI NHẤT)
+// [!] CẬP NHẬT DANH SÁCH QUYỀN
 const permissionGroups = [
   {
     label: "Quản lý Sản phẩm",
@@ -51,6 +41,15 @@ const permissionGroups = [
     ],
   },
   {
+    label: "Khách Hàng", // [!] MỚI THÊM NHÓM NÀY
+    perms: [
+      { id: 90, name: "Xem Khách Hàng" },
+      { id: 91, name: "Tạo Khách Hàng" },
+      { id: 92, name: "Sửa Khách Hàng" },
+      { id: 93, name: "Xóa Khách Hàng" },
+    ],
+  },
+  {
     label: "Phiếu Nhập",
     perms: [
       { id: 20, name: "Tạo Phiếu Nhập" },
@@ -70,13 +69,13 @@ const permissionGroups = [
       { id: 43, name: "Hủy Phiếu Xuất" },
     ],
   },
-  {
-    label: "Hệ thống & Báo cáo",
-    perms: [
-      { id: 10, name: "Quản lý User (Admin)" },
-      { id: 30, name: "Xem Báo cáo" },
-    ],
-  },
+  // {
+  //   label: "Hệ thống & Báo cáo",
+  //   perms: [
+  //     { id: 10, name: "Quản lý User (Admin)" },
+  //     { id: 30, name: "Xem Báo cáo" },
+  //   ],
+  // },
 ];
 
 const UserManagementPage = () => {
@@ -90,6 +89,7 @@ const UserManagementPage = () => {
   const [messageApi, contextHolder] = message.useMessage();
 
   const [currentUserPermissions, setCurrentUserPermissions] = useState([]);
+  const [currentUserRole, setCurrentUserRole] = useState(null);
 
   const danhSachVaiTro = [
     { MaVaiTro: 1, TenVaiTro: "ADMIN" },
@@ -114,19 +114,27 @@ const UserManagementPage = () => {
     try {
       const storedUser = localStorage.getItem("user_info");
       if (storedUser) {
-        const user = JSON.parse(storedUser);
-        setCurrentUserPermissions(user.quyen || []);
+        let user = JSON.parse(storedUser);
+        if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung) {
+           user = user.quyen;
+        }
+        const roleName = user.vaiTro || user.tenVaiTro || "";
+        setCurrentUserRole(roleName);
+        let perms = user.dsQuyenSoHuu || user.quyen;
+        if (!Array.isArray(perms)) perms = [];
+        setCurrentUserPermissions(perms);
       }
     } catch (e) {
-      console.error("Lỗi đọc localStorage", e);
+      setCurrentUserPermissions([]);
     }
   }, [fetchUsers]);
 
-  // Logic hiển thị nút (Admin hoặc có quyền tạo user)
-  const canShowActions = currentUserPermissions.includes("PERM_ADMIN_CREATE_USER") || 
-                         currentUserPermissions.includes(10);
+  const isMyRoleAdmin = currentUserRole === "ADMIN";
+  const canEdit = isMyRoleAdmin || currentUserPermissions.includes(11);
+  const canDelete = isMyRoleAdmin || currentUserPermissions.includes(12);
+  const canCreate = isMyRoleAdmin || currentUserPermissions.includes(10);
+  const canManagePerms = isMyRoleAdmin; 
 
-  // --- Các hàm xử lý ---
   const handleOpenModal = () => {
     setEditingUser(null);
     form.resetFields();
@@ -183,31 +191,22 @@ const UserManagementPage = () => {
   };
 
   const handleOk = () => {
-    form
-      .validateFields()
-      .then(async (values) => {
-        try {
-          if (editingUser) {
-            await userService.updateUser(editingUser.maNguoiDung, values);
-            messageApi.success("Cập nhật người dùng thành công!");
-          } else {
-            await userService.createUser(values);
-            messageApi.success("Tạo người dùng mới thành công!");
-          }
-          setIsModalVisible(false);
-          setEditingUser(null);
-          fetchUsers();
-        } catch (error) {
-          let errMsg = "Có lỗi xảy ra!";
-          if (error.response?.data?.message) {
-            errMsg = error.response.data.message;
-          }
-          messageApi.error(errMsg);
+    form.validateFields().then(async (values) => {
+      try {
+        if (editingUser) {
+          await userService.updateUser(editingUser.maNguoiDung, values);
+          messageApi.success("Cập nhật người dùng thành công!");
+        } else {
+          await userService.createUser(values);
+          messageApi.success("Tạo người dùng mới thành công!");
         }
-      })
-      .catch((info) => {
-        console.log("Validate Failed:", info);
-      });
+        setIsModalVisible(false);
+        setEditingUser(null);
+        fetchUsers();
+      } catch (error) {
+        messageApi.error("Có lỗi xảy ra!");
+      }
+    });
   };
   
   const handleGrantPermission = async (userId, permId, permName) => {
@@ -230,32 +229,33 @@ const UserManagementPage = () => {
     }
   };
 
-  // [!] SỬA LẠI: HIỂN THỊ CẢ 2 NÚT (CẤP & THU HỒI) CHO MỌI QUYỀN
   const createPermissionMenu = (userRecord) => {
+    const userPerms = userRecord.dsQuyenSoHuu || []; 
     
     const items = permissionGroups.map((group, index) => {
-      // Dùng flatMap để sinh ra 2 nút cho mỗi quyền
-      const subItems = group.perms.flatMap(perm => [
-        {
-          key: `grant-${perm.id}`,
-          label: `Cấp: ${perm.name}`,
-          onClick: () => handleGrantPermission(userRecord.maNguoiDung, perm.id, perm.name)
-        },
-        {
-          key: `revoke-${perm.id}`,
-          label: `Thu hồi: ${perm.name}`,
-          danger: true, // Màu đỏ
-          onClick: () => handleRevokePermission(userRecord.maNguoiDung, perm.id, perm.name)
+      const subItems = group.perms.flatMap(perm => {
+        const hasPermission = userPerms.includes(perm.id);
+        if (hasPermission) {
+          return {
+            key: `revoke-${perm.id}`,
+            label: `Thu hồi: ${perm.name}`,
+            danger: true,
+            onClick: () => handleRevokePermission(userRecord.maNguoiDung, perm.id, perm.name)
+          };
+        } else {
+          return {
+            key: `grant-${perm.id}`,
+            label: `Cấp: ${perm.name}`,
+            onClick: () => handleGrantPermission(userRecord.maNguoiDung, perm.id, perm.name)
+          };
         }
-      ]);
-      
+      });
       return {
         key: `group-${index}`,
         label: group.label,
         children: subItems
       };
     });
-
     return { items };
   };
 
@@ -269,27 +269,19 @@ const UserManagementPage = () => {
       title: "Hành động",
       key: "action",
       render: (_, record) => (
-          canShowActions && (
-            <Space size="middle" wrap>
-              <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-                Sửa
-              </Button>
-              <Button
-                icon={<DeleteOutlined />}
-                danger
-                onClick={() => handleDelete(record.maNguoiDung)}
-              >
-                Xóa
-              </Button>
-              <Dropdown 
-                menu={createPermissionMenu(record)}
-                placement="bottomRight"
-                trigger={['click']} // Bấm để mở
-              >
+        <Space size="middle" wrap>
+            {canEdit && (
+              <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>Sửa</Button>
+            )}
+            {canDelete && (
+              <Button icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.maNguoiDung)}>Xóa</Button>
+            )}
+            {canManagePerms && (
+              <Dropdown menu={createPermissionMenu(record)} placement="bottomRight" trigger={['click']}>
                 <Button icon={<SettingOutlined />}>Phân quyền</Button>
               </Dropdown>
-            </Space>
-          )
+            )}
+          </Space>
         )
     },
   ];
@@ -297,75 +289,42 @@ const UserManagementPage = () => {
   return (
     <div>
       {contextHolder}
-
-      {canShowActions && (
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={handleOpenModal}
-          style={{ marginBottom: 16 }}
-        >
+      {canCreate && (
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal} style={{ marginBottom: 16 }}>
           Thêm người dùng mới
         </Button>
       )}
-
-      <Table
-        className="fixed-height-table"
-        columns={columns}
-        dataSource={users}
-        loading={loading}
-        rowKey="maNguoiDung"
-        pagination={{ pageSize: 5 }}
-      />
-
-      <Modal
-        title={editingUser ? "Sửa người dùng" : "Tạo người dùng mới"}
-        open={isModalVisible}
-        onOk={handleOk}
-        onCancel={handleCancel}
-      >
+      <Table className="fixed-height-table" columns={columns} dataSource={users} loading={loading} rowKey="maNguoiDung" pagination={{ pageSize: 5 }} />
+      <Modal title={editingUser ? "Sửa người dùng" : "Tạo người dùng mới"} open={isModalVisible} onOk={handleOk} onCancel={handleCancel}>
         <Form form={form} layout="vertical" name="userForm">
-          <Form.Item name="tenDangNhap" label="Tên Đăng Nhập" rules={[{ required: true }]} >
+          <Form.Item name="tenDangNhap" label="Tên Đăng Nhập" rules={[{ required: true }]}>
             <Input disabled={!!editingUser} />
           </Form.Item>
-          <Form.Item name="hoTen" label="Họ Tên" rules={[{ required: true }]} >
+          <Form.Item name="hoTen" label="Họ Tên" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="email" label="Email" rules={[{ required: true, type: "email" }]} >
+          <Form.Item name="email" label="Email" rules={[{ required: true, type: "email" }]}>
             <Input />
           </Form.Item>
           {!editingUser && (
-            <Form.Item name="matKhau" label="Mật Khẩu" rules={[{ required: true }]} >
+            <Form.Item name="matKhau" label="Mật Khẩu" rules={[{ required: true }]}>
               <Input.Password />
             </Form.Item>
           )}
-          <Form.Item name="sdt" label="Số Điện Thoại" rules={[{ required: true }]} >
+          <Form.Item name="sdt" label="Số Điện Thoại" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="maVaiTro" label="Vai Trò" rules={[{ required: true }]} >
+          <Form.Item name="maVaiTro" label="Vai Trò" rules={[{ required: true }]}>
             <Select placeholder="Chọn một vai trò">
               {danhSachVaiTro.map((vt) => (
-                <Option key={vt.MaVaiTro} value={vt.MaVaiTro}>
-                  {vt.TenVaiTro}
-                </Option>
+                <Option key={vt.MaVaiTro} value={vt.MaVaiTro}>{vt.TenVaiTro}</Option>
               ))}
             </Select>
           </Form.Item>
         </Form>
       </Modal>
-
-      <Modal
-        title="Xác nhận xóa"
-        open={isDeleteModalOpen}
-        onOk={handleDeleteConfirm}
-        onCancel={handleDeleteCancel}
-        okText="Xóa"
-        cancelText="Hủy"
-        okType="danger"
-      >
-        <p>
-          Bạn có chắc muốn xóa người dùng này? Hành động này không thể hoàn tác.
-        </p>
+      <Modal title="Xác nhận xóa" open={isDeleteModalOpen} onOk={handleDeleteConfirm} onCancel={handleDeleteCancel} okText="Xóa" cancelText="Hủy" okType="danger">
+        <p>Bạn có chắc muốn xóa người dùng này? Hành động này không thể hoàn tác.</p>
       </Modal>
     </div>
   );

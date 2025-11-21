@@ -27,9 +27,15 @@ import {
 import * as phieuNhapService from "../../services/phieunhap.service";
 import * as warehouseService from "../../services/warehouse.service";
 import * as supplierService from "../../services/supplier.service";
-import * as productService from "../../services/product.service"; // [!] Import Product Service
+import * as productService from "../../services/product.service";
 
 const { Option } = Select;
+
+const PERM_CREATE = 20;
+const PERM_EDIT = 21;
+const PERM_DELETE = 22;
+const PERM_APPROVE = 40;
+const PERM_CANCEL = 41;
 
 const PhieuNhapPage = () => {
   const [phieuNhapList, setPhieuNhapList] = useState([]);
@@ -37,21 +43,23 @@ const PhieuNhapPage = () => {
   const [sortConfig, setSortConfig] = useState(null);
   const [filterConfig, setFilterConfig] = useState(null);
 
-  // Danh sách danh mục
   const [listNCC, setListNCC] = useState([]);
   const [listKho, setListKho] = useState([]);
-  const [listSanPham, setListSanPham] = useState([]); // [!] Thêm list Sản phẩm
+  const [listSanPham, setListSanPham] = useState([]);
+
+  const [selectedNCC, setSelectedNCC] = useState(null);
 
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [form] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
+  
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingPhieuNhapId, setDeletingPhieuNhapId] = useState(null);
   const [editingPhieuNhap, setEditingPhieuNhap] = useState(null);
-  const [userPermissions, setUserPermissions] = useState([]);
-
-  // --- CÁC HÀM API ---
+  
+  const [permissions, setPermissions] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const fetchPhieuNhap = useCallback(async () => {
     setLoading(true);
@@ -69,7 +77,7 @@ const PhieuNhapPage = () => {
       const [resNCC, resKho, resSP] = await Promise.all([
         supplierService.getAllSuppliers(),
         warehouseService.getAllWarehouses(),
-        productService.getAllProducts(), // [!] Lấy luôn danh sách SP để hiển thị tên trong Form
+        productService.getAllProducts(),
       ]);
       setListNCC(resNCC.data || []);
       setListKho(resKho.data || []);
@@ -85,17 +93,31 @@ const PhieuNhapPage = () => {
     
     const storedUser = localStorage.getItem("user_info");
     if (storedUser) {
-      const user = JSON.parse(storedUser);
-      setUserPermissions(user.quyen || []);
+      try {
+        let user = JSON.parse(storedUser);
+        if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung) {
+             user = user.quyen;
+        }
+        const role = user.vaiTro || user.tenVaiTro || "";
+        setIsAdmin(role === "ADMIN");
+        let perms = user.dsQuyenSoHuu || user.quyen;
+        if (!Array.isArray(perms)) perms = [];
+        setPermissions(perms);
+      } catch (e) {
+        setPermissions([]);
+      }
     }
   }, [fetchPhieuNhap, fetchCommonData]);
 
-  // Logic lọc/sắp xếp (Giữ nguyên)
   useEffect(() => {
-    let data = [...phieuNhapList];
+    let data = [...phieuNhapList]; // (Hoặc listData nếu ở trang Xuất)
+    
+    // 1. Lọc
     if (filterConfig && filterConfig.key === 'status') {
       data = data.filter(item => item.trangThai === filterConfig.value);
     }
+    
+    // 2. Sắp xếp
     if (sortConfig) {
       data.sort((a, b) => {
         if (sortConfig.key === 'date') {
@@ -104,46 +126,48 @@ const PhieuNhapPage = () => {
           return sortConfig.direction === 'asc' ? dateA - dateB : dateB - dateA;
         }
         if (sortConfig.key === 'price') {
-          return sortConfig.direction === 'asc' ? a.tongTien - b.tongTien : b.tongTien - a.tongTien;
+          // [!] FIX LỖI: Ép kiểu về số và xử lý null/undefined thành 0
+          const priceA = Number(a.tongTien) || 0;
+          const priceB = Number(b.tongTien) || 0;
+          
+          return sortConfig.direction === 'asc' ? priceA - priceB : priceB - priceA;
         }
         return 0;
       });
     }
-    setDisplayedPhieuNhapList(data);
+    setDisplayedPhieuNhapList(data); // (Hoặc setDisplayedListData nếu ở trang Xuất)
   }, [phieuNhapList, sortConfig, filterConfig]);
 
-  const canApprove = userPermissions.includes("PERM_PHIEUNHAP_APPROVE");
-  const canCancel = userPermissions.includes("PERM_PHIEUNHAP_CANCEL");
-  const canEdit = userPermissions.includes("PERM_PHIEUNHAP_EDIT");
-  const canDelete = userPermissions.includes("PERM_PHIEUNHAP_DELETE");
+  const checkPerm = (id) => isAdmin || permissions.includes(id);
+  const canCreate = checkPerm(PERM_CREATE);
+  const canEdit = checkPerm(PERM_EDIT);
+  const canDelete = checkPerm(PERM_DELETE);
+  const canApprove = checkPerm(PERM_APPROVE);
+  const canCancel = checkPerm(PERM_CANCEL);
 
-  // --- CÁC HÀM XỬ LÝ ---
-
+  // --- XỬ LÝ FORM ---
   const handleOpenModal = () => {
     setEditingPhieuNhap(null);
+    setSelectedNCC(null);
     form.resetFields();
     setIsModalVisible(true);
     setIsDeleteModalOpen(false);
   };
 
-  // [!] SỬA LẠI HÀM handleEdit: GỌI API LẤY CHI TIẾT
   const handleEdit = async (record) => {
     if (record.trangThai === 2 || record.trangThai === 3) {
       messageApi.warning("Không thể sửa phiếu đã được duyệt hoặc đã hủy.");
       return;
     }
-
     try {
-      // Gọi API lấy chi tiết phiếu (bao gồm mảng 'chiTiet')
       const response = await phieuNhapService.getPhieuNhapById(record.maPhieuNhap);
       const fullData = response.data;
-
       setEditingPhieuNhap(fullData);
-      form.setFieldsValue(fullData); // Đổ dữ liệu đầy đủ vào form
+      setSelectedNCC(fullData.maNCC); 
+      form.setFieldsValue(fullData);
       setIsModalVisible(true);
-      setIsDeleteModalOpen(false);
     } catch (error) {
-      messageApi.error("Lỗi khi tải chi tiết phiếu nhập!");
+      messageApi.error("Lỗi khi tải chi tiết phiếu!");
     }
   };
 
@@ -157,78 +181,108 @@ const PhieuNhapPage = () => {
       try {
         if (editingPhieuNhap) {
           await phieuNhapService.updatePhieuNhap(editingPhieuNhap.maPhieuNhap, values);
-          messageApi.success("Cập nhật phiếu nhập thành công!");
+          messageApi.success("Cập nhật thành công!");
         } else {
           await phieuNhapService.createPhieuNhap(values);
           messageApi.success("Tạo phiếu nhập thành công!");
         }
         setIsModalVisible(false);
-        setEditingPhieuNhap(null);
         fetchPhieuNhap();
       } catch (error) {
-        let errMsg = "Có lỗi xảy ra!";
-        if (error.response?.data?.message) {
-          errMsg = error.response.data.message;
-        }
-        messageApi.error(errMsg);
+        messageApi.error("Có lỗi xảy ra!");
       }
-    })
-    .catch((info) => {
-      console.log("Validate Failed:", info);
     });
   };
 
-  // ... (Các hàm Xóa, Duyệt, Hủy giữ nguyên) ...
-  const handleDelete = (phieuNhapId) => {
-    setDeletingPhieuNhapId(phieuNhapId);
+  // --- XỬ LÝ HÀNH ĐỘNG KHÁC ---
+  const handleDelete = (id) => {
+    setDeletingPhieuNhapId(id);
     setIsDeleteModalOpen(true);
-    setIsModalVisible(false);
   };
 
   const handleDeleteConfirm = async () => {
     try {
       await phieuNhapService.deletePhieuNhap(deletingPhieuNhapId);
-      messageApi.success("Xóa phiếu nhập thành công!");
+      messageApi.success("Đã xóa phiếu nhập!");
       fetchPhieuNhap();
     } catch (error) {
-      let errMsg = "Lỗi khi xóa phiếu nhập!";
-      if (error.response?.data?.message) {
-        errMsg = error.response.data.message;
-      }
-      messageApi.error(errMsg);
+      messageApi.error("Lỗi khi xóa!");
     }
     setIsDeleteModalOpen(false);
-    setDeletingPhieuNhapId(null);
   };
 
   const handleDeleteCancel = () => {
     setIsDeleteModalOpen(false);
-    setDeletingPhieuNhapId(null);
   };
 
-  const handleApprove = async (phieuNhapId) => {
+  const handleApprove = async (id) => {
     try {
-      await phieuNhapService.approvePhieuNhap(phieuNhapId);
-      messageApi.success("Duyệt phiếu nhập thành công!");
+      await phieuNhapService.approvePhieuNhap(id);
+      messageApi.success("Đã duyệt phiếu!");
       fetchPhieuNhap();
     } catch (error) {
-      messageApi.error("Lỗi khi duyệt phiếu!");
+      messageApi.error("Lỗi khi duyệt!");
     }
   };
 
-  const handleReject = async (phieuNhapId) => {
+  const handleReject = async (id) => {
     try {
-      await phieuNhapService.rejectPhieuNhap(phieuNhapId);
-      messageApi.success("Đã hủy phiếu nhập!");
+      await phieuNhapService.rejectPhieuNhap(id);
+      messageApi.success("Đã hủy phiếu!");
       fetchPhieuNhap();
     } catch (error) {
-      messageApi.error("Lỗi khi hủy phiếu!");
+      messageApi.error("Lỗi khi hủy!");
     }
   };
 
-  // Cột bảng (Giữ nguyên)
+  const sortMenu = {
+    items: [
+      {
+        key: 'filter',
+        label: 'Lọc theo Trạng Thái',
+        children: [
+          { key: 'filter_1', label: 'Chờ duyệt', onClick: () => setFilterConfig({ key: 'status', value: 1 }) },
+          { key: 'filter_2', label: 'Đã duyệt', onClick: () => setFilterConfig({ key: 'status', value: 2 }) },
+          { key: 'filter_3', label: 'Không duyệt', onClick: () => setFilterConfig({ key: 'status', value: 3 }) },
+        ]
+      },
+      {
+        key: 'sort_date',
+        label: 'Sắp xếp theo Ngày tháng',
+        children: [
+          { key: 'date_asc', label: 'Cũ đến mới', onClick: () => setSortConfig({ key: 'date', direction: 'asc' }) },
+          { key: 'date_desc', label: 'Mới đến cũ', onClick: () => setSortConfig({ key: 'date', direction: 'desc' }) },
+        ]
+      },
+      {
+        key: 'sort_price',
+        label: 'Sắp xếp theo Giá tiền',
+        children: [
+          { key: 'price_asc', label: 'Thấp đến cao', onClick: () => setSortConfig({ key: 'price', direction: 'asc' }) },
+          { key: 'price_desc', label: 'Cao đến thấp', onClick: () => setSortConfig({ key: 'price', direction: 'desc' }) },
+        ]
+      },
+      { type: 'divider' },
+      {
+        key: 'reset',
+        label: 'Reset (Bỏ lọc)',
+        danger: true,
+        onClick: () => {
+          setFilterConfig(null);
+          setSortConfig(null);
+        }
+      }
+    ]
+  };
+
+  // [!] CẬP NHẬT CỘT BẢNG: ĐÃ XÓA SORTER
   const columns = [
-    { title: "Ngày Lập", dataIndex: "ngayLapPhieu", key: "ngayLapPhieu" },
+    { 
+      title: "Ngày Lập", 
+      dataIndex: "ngayLapPhieu", 
+      key: "ngayLapPhieu", 
+      // Đã xóa sorter 
+    },
     { 
       title: "Trạng Thái", 
       dataIndex: "trangThai", 
@@ -245,6 +299,7 @@ const PhieuNhapPage = () => {
       dataIndex: "tongTien", 
       key: "tongTien",
       render: (value) => `${value?.toLocaleString()} đ`,
+      // Đã xóa sorter
     },
     { 
       title: "Nhà Cung Cấp", 
@@ -295,62 +350,19 @@ const PhieuNhapPage = () => {
     },
   ];
 
-  const sortMenu = {
-    items: [
-      {
-        key: 'filter',
-        label: 'Lọc theo Trạng Thái',
-        children: [
-          { key: 'filter_1', label: 'Chờ duyệt', onClick: () => setFilterConfig({ key: 'status', value: 1 }) },
-          { key: 'filter_2', label: 'Đã duyệt', onClick: () => setFilterConfig({ key: 'status', value: 2 }) },
-          { key: 'filter_3', label: 'Không duyệt', onClick: () => setFilterConfig({ key: 'status', value: 3 }) },
-        ]
-      },
-      {
-        key: 'sort_date',
-        label: 'Sắp xếp theo Ngày tháng',
-        children: [
-          { key: 'date_asc', label: 'Cũ đến mới', onClick: () => setSortConfig({ key: 'date', direction: 'asc' }) },
-          { key: 'date_desc', label: 'Mới đến cũ', onClick: () => setSortConfig({ key: 'date', direction: 'desc' }) },
-        ]
-      },
-      {
-        key: 'sort_price',
-        label: 'Sắp xếp theo Giá tiền',
-        children: [
-          { key: 'price_asc', label: 'Thấp đến cao', onClick: () => setSortConfig({ key: 'price', direction: 'asc' }) },
-          { key: 'price_desc', label: 'Cao đến thấp', onClick: () => setSortConfig({ key: 'price', direction: 'desc' }) },
-        ]
-      },
-      { type: 'divider' },
-      {
-        key: 'reset',
-        label: 'Reset (Bỏ lọc)',
-        danger: true,
-        onClick: () => {
-          setFilterConfig(null);
-          setSortConfig(null);
-        }
-      }
-    ]
-  };
-
   return (
     <div>
       {contextHolder}
-      
       <Space style={{ marginBottom: 16 }}>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={handleOpenModal}
-        >
-          Tạo Phiếu Nhập
-        </Button>
+        {canCreate && (
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal}>
+            Tạo Phiếu Nhập
+          </Button>
+        )}
         <Button icon={<ReloadOutlined />} onClick={fetchPhieuNhap} loading={loading}>
           Tải lại
         </Button>
-        <Dropdown menu={sortMenu}>
+        <Dropdown menu={sortMenu} trigger={['click']}>
           <Button>Lọc / Sắp xếp <DownOutlined /></Button>
         </Dropdown>
       </Space>
@@ -365,7 +377,7 @@ const PhieuNhapPage = () => {
       />
 
       <Modal
-        title={editingPhieuNhap ? "Sửa Phiếu Nhập Hàng" : "Tạo Phiếu Nhập Hàng"}
+        title={editingPhieuNhap ? "Sửa Phiếu Nhập" : "Tạo Phiếu Nhập"}
         open={isModalVisible}
         onOk={handleOk}
         onCancel={handleCancel}
@@ -376,9 +388,17 @@ const PhieuNhapPage = () => {
             <Form.Item name="maNCC" label="Nhà Cung Cấp" rules={[{ required: true, message: "Vui lòng chọn!" }]}>
               <Select 
                 style={{ width: 200 }} 
-                placeholder="Chọn NCC"
-                showSearch
+                placeholder="Chọn NCC" 
+                showSearch 
                 optionFilterProp="children"
+                onChange={(value) => {
+                    setSelectedNCC(value);
+                    const currentChiTiet = form.getFieldValue('chiTiet');
+                    if (currentChiTiet && currentChiTiet.length > 0) {
+                       form.setFieldsValue({ chiTiet: [] });
+                       message.info("Đã làm mới danh sách sản phẩm theo NCC");
+                    }
+                }}
               >
                 {listNCC.map(ncc => (
                   <Option key={ncc.maNCC} value={ncc.maNCC}>{ncc.tenNCC}</Option>
@@ -387,12 +407,7 @@ const PhieuNhapPage = () => {
             </Form.Item>
             
             <Form.Item name="maKho" label="Kho Nhập" rules={[{ required: true, message: "Vui lòng chọn!" }]}>
-              <Select 
-                style={{ width: 200 }} 
-                placeholder="Chọn Kho"
-                showSearch
-                optionFilterProp="children"
-              >
+              <Select style={{ width: 200 }} placeholder="Chọn Kho" showSearch optionFilterProp="children">
                 {listKho.map(kho => (
                   <Option key={kho.maKho} value={kho.maKho}>{kho.tenKho}</Option>
                 ))}
@@ -404,7 +419,7 @@ const PhieuNhapPage = () => {
             </Form.Item>
           </Space>
 
-          <h3>Chi tiết phiếu nhập</h3>
+          <h3>Chi tiết sản phẩm</h3>
           <Form.List name="chiTiet">
             {(fields, { add, remove }) => (
               <>
@@ -415,10 +430,26 @@ const PhieuNhapPage = () => {
                       name={[name, "maSP"]}
                       rules={[{ required: true, message: "Chọn SP" }]}
                     >
-                      {/* [!] CẬP NHẬT: Dùng Select để chọn Sản Phẩm */}
-                      <Select style={{ width: 200 }} placeholder="Chọn SP" showSearch optionFilterProp="children">
-                        {listSanPham.map(sp => (
-                          <Option key={sp.maSP} value={sp.maSP}>{sp.tenSP}</Option>
+                      <Select 
+                        style={{ width: 200 }} 
+                        placeholder={selectedNCC ? "Chọn Sản phẩm" : "Vui lòng chọn NCC trước"} 
+                        showSearch 
+                        optionFilterProp="children"
+                        disabled={!selectedNCC}
+                      >
+                        {listSanPham
+                          .filter(sp => {
+                            if (sp.maNCC == selectedNCC) return true;
+                            if (sp.danhSachNCC && Array.isArray(sp.danhSachNCC)) {
+                                return sp.danhSachNCC.some(ncc => ncc.maNCC === selectedNCC);
+                            }
+                            if (sp.danhSachMaNCC && Array.isArray(sp.danhSachMaNCC)) {
+                                return sp.danhSachMaNCC.includes(selectedNCC);
+                            }
+                            return false;
+                          })
+                          .map(sp => (
+                            <Option key={sp.maSP} value={sp.maSP}>{sp.tenSP}</Option>
                         ))}
                       </Select>
                     </Form.Item>
