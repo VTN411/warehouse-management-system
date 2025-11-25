@@ -1,0 +1,16 @@
+package stu.kho.backend.repository;
+
+import stu.kho.backend.entity.PhieuDieuChuyen;
+
+import java.util.List;
+import java.util.Optional;
+
+public interface PhieuDieuChuyenRepository {
+    Integer save(PhieuDieuChuyen phieu);
+
+    void update(PhieuDieuChuyen phieu);
+
+    Optional<PhieuDieuChuyen> findById(Integer id);
+
+    List<PhieuDieuChuyen> findAll();
+}
