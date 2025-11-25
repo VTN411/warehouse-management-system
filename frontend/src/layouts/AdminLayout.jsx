@@ -8,6 +8,7 @@ import {
   TeamOutlined,
   UserOutlined,
   LogoutOutlined,
+  HistoryOutlined,
 } from "@ant-design/icons";
 import { Layout, Menu, theme, Avatar, Dropdown, Space, App } from "antd";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
@@ -21,6 +22,7 @@ function getItem(label, key, icon, children) {
 
 const adminMenuItems = [
   getItem("Quản lý Người dùng", "/admin/users", <UserOutlined />),
+  getItem("Nhật ký Hệ thống", "/system-logs", <HistoryOutlined />),
 ];
 
 const AdminLayout = () => {
