@@ -2,6 +2,7 @@ package stu.kho.backend.service;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile; // <-- Import quan trọng
 import stu.kho.backend.dto.SanPhamRequest;
 import stu.kho.backend.entity.HoatDong;
 import stu.kho.backend.entity.SanPham;
@@ -16,22 +17,25 @@ public class SanPhamService {
     private final NccSanPhamRepository nccSanPhamRepository;
     private final HoatDongRepository hoatDongRepository;
     private final NguoiDungRepository nguoiDungRepository;
+    private final CloudinaryService cloudinaryService; // Service upload ảnh
 
     public SanPhamService(SanPhamRepository sanPhamRepository,
                           NccSanPhamRepository nccSanPhamRepository,
                           HoatDongRepository hoatDongRepository,
-                          NguoiDungRepository nguoiDungRepository) {
+                          NguoiDungRepository nguoiDungRepository,
+                          CloudinaryService cloudinaryService) {
         this.sanPhamRepository = sanPhamRepository;
         this.nccSanPhamRepository = nccSanPhamRepository;
         this.hoatDongRepository = hoatDongRepository;
         this.nguoiDungRepository = nguoiDungRepository;
+        this.cloudinaryService = cloudinaryService;
     }
 
     // =================================================================
-    // 1. CREATE
+    // 1. CREATE (Thêm mới có ảnh)
     // =================================================================
     @Transactional
-    public SanPham createSanPham(SanPhamRequest request, String tenNguoiTao) {
+    public SanPham createSanPham(SanPhamRequest request, MultipartFile imageFile, String tenNguoiTao) {
         // 1. Tạo đối tượng SanPham
         SanPham sp = new SanPham();
         sp.setTenSP(request.getTenSP());
@@ -42,11 +46,18 @@ public class SanPhamService {
         sp.setMaLoai(request.getMaLoai());
         sp.setSoLuongTon(0); // Mặc định tồn kho là 0
 
+        // --- XỬ LÝ ẢNH ---
+        if (imageFile != null && !imageFile.isEmpty()) {
+            String imageUrl = cloudinaryService.uploadImage(imageFile);
+            sp.setHinhAnh(imageUrl); // Lưu URL ảnh vào DB
+        }
+        // -----------------
+
         // 2. Lưu vào bảng 'sanpham' và lấy ID
         int maSP = sanPhamRepository.save(sp);
         sp.setMaSP(maSP);
 
-        // 3. Lưu liên kết N:M với Nhà Cung Cấp (bảng 'ncc_sanpham')
+        // 3. Lưu liên kết N:M với Nhà Cung Cấp
         if (request.getDanhSachMaNCC() != null) {
             for (Integer maNCC : request.getDanhSachMaNCC()) {
                 nccSanPhamRepository.linkNccToSanPham(maNCC, maSP);
@@ -55,14 +66,16 @@ public class SanPhamService {
 
         // 4. Ghi log
         logActivity(tenNguoiTao, "Thêm sản phẩm mới: " + sp.getTenSP());
-        return sp;
+
+        // Trả về đầy đủ thông tin (bao gồm cả list NCC vừa thêm)
+        return getSanPhamById(maSP);
     }
 
     // =================================================================
-    // 2. UPDATE
+    // 2. UPDATE (Cập nhật có ảnh)
     // =================================================================
     @Transactional
-    public SanPham updateSanPham(Integer id, SanPhamRequest request, String tenNguoiSua) {
+    public SanPham updateSanPham(Integer id, SanPhamRequest request, MultipartFile imageFile, String tenNguoiSua) {
         SanPham spCu = sanPhamRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm ID: " + id));
 
@@ -74,19 +87,21 @@ public class SanPhamService {
         spCu.setMucTonToiDa(request.getMucTonToiDa());
         spCu.setMaLoai(request.getMaLoai());
 
+        // --- XỬ LÝ ẢNH (Chỉ cập nhật nếu có file mới gửi lên) ---
+        if (imageFile != null && !imageFile.isEmpty()) {
+            String imageUrl = cloudinaryService.uploadImage(imageFile);
+            spCu.setHinhAnh(imageUrl);
+        }
+        // --------------------------------------------------------
+
         sanPhamRepository.update(spCu);
 
         // 2. Cập nhật liên kết NCC (Xóa cũ -> Thêm mới)
-        // Lưu ý: Đây là cách đơn giản nhất. Cách tối ưu hơn là so sánh list cũ/mới.
-
-        // Xóa tất cả liên kết cũ của SP này (Bạn cần thêm hàm này vào Repo hoặc loop xóa từng cái)
-        // Giả sử ta loop qua danh sách NCC cũ để xóa (cần lấy danh sách cũ trước)
         List<Integer> oldNccIds = nccSanPhamRepository.findNccIdsByMaSP(id);
         for (Integer oldNccId : oldNccIds) {
             nccSanPhamRepository.unlinkNccFromSanPham(oldNccId, id);
         }
 
-        // Thêm liên kết mới
         if (request.getDanhSachMaNCC() != null) {
             for (Integer maNCC : request.getDanhSachMaNCC()) {
                 nccSanPhamRepository.linkNccToSanPham(maNCC, id);
@@ -94,7 +109,8 @@ public class SanPhamService {
         }
 
         logActivity(tenNguoiSua, "Cập nhật sản phẩm ID: " + id);
-        return spCu;
+
+        return getSanPhamById(id);
     }
 
     // =================================================================
@@ -106,7 +122,7 @@ public class SanPhamService {
             throw new RuntimeException("Sản phẩm không tồn tại.");
         }
 
-        // 1. Xóa liên kết N:M trước (nếu chưa set ON DELETE CASCADE trong DB)
+        // 1. Xóa liên kết N:M trước
         List<Integer> nccIds = nccSanPhamRepository.findNccIdsByMaSP(id);
         for (Integer nccId : nccIds) {
             nccSanPhamRepository.unlinkNccFromSanPham(nccId, id);
@@ -119,7 +135,7 @@ public class SanPhamService {
     }
 
     // =================================================================
-    // 4. READ (Get All / Get By ID)
+    // 4. READ
     // =================================================================
     public List<SanPham> getAllSanPham() {
         return sanPhamRepository.findAll();

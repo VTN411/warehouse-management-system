@@ -20,7 +20,7 @@ public class SanPham {
     // --- Khóa Ngoại  ---
     private Integer maLoai;
 
-
+    private String hinhAnh;
     // --- Các đối tượng liên quan (Optional) ---
     private LoaiHang loaiHang;
 
