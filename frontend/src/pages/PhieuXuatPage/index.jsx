@@ -13,6 +13,8 @@ import {
   Tag,
   Select,
   Dropdown,
+  Descriptions,
+  Divider,
 } from "antd";
 import {
   PlusOutlined,
@@ -23,20 +25,22 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   DownOutlined,
+  EyeOutlined,
 } from "@ant-design/icons";
 import * as phieuXuatService from "../../services/phieuxuat.service";
 import * as warehouseService from "../../services/warehouse.service";
 import * as productService from "../../services/product.service";
 import * as customerService from "../../services/customer.service";
+import * as userService from "../../services/user.service"; // [!] 1. IMPORT USER SERVICE
 
 const { Option } = Select;
 
-// [!] SỬA LẠI ID QUYỀN THÀNH SỐ (KHỚP VỚI CSDL)
+// Định nghĩa tên quyền
 const PERM_CREATE = 23;
 const PERM_EDIT = 24;
 const PERM_DELETE = 25;
-const PERM_APPROVE = 42; // ID quyền Duyệt
-const PERM_CANCEL = 43; // ID quyền Hủy
+const PERM_APPROVE = 42;
+const PERM_CANCEL = 43;
 
 const PhieuXuatPage = () => {
   const [listData, setListData] = useState([]);
@@ -46,16 +50,21 @@ const PhieuXuatPage = () => {
 
   const [listKho, setListKho] = useState([]);
   const [listSanPham, setListSanPham] = useState([]);
-  const [listKhachHang, setListKhachHang] = useState([]);
+  const [listKhachHang, setListKhachHang] = useState([]); 
+  const [listUser, setListUser] = useState([]); // [!] 2. STATE LIST USER
 
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
   const [form] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
-
+  
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [viewingPhieuXuat, setViewingPhieuXuat] = useState(null);
+
   const [permissions, setPermissions] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -70,16 +79,21 @@ const PhieuXuatPage = () => {
     setLoading(false);
   }, [messageApi]);
 
+  // [!] 3. LẤY DANH SÁCH USER
   const fetchCommonData = useCallback(async () => {
     try {
-      const [resKho, resSP, resKH] = await Promise.all([
+      const [resKho, resSP, resKH, resUser] = await Promise.allSettled([
         warehouseService.getAllWarehouses(),
         productService.getAllProducts(),
         customerService.getAllCustomers(),
+        userService.getAllUsers(), // Gọi API user
       ]);
-      setListKho(resKho.data || []);
-      setListSanPham(resSP.data || []);
-      setListKhachHang(resKH.data || []);
+      
+      if (resKho.status === 'fulfilled') setListKho(resKho.value.data || []);
+      if (resSP.status === 'fulfilled') setListSanPham(resSP.value.data || []);
+      if (resKH.status === 'fulfilled') setListKhachHang(resKH.value.data || []);
+      if (resUser.status === 'fulfilled') setListUser(resUser.value.data || []); // Lưu list user
+
     } catch (error) {
       console.error("Lỗi tải danh mục:", error);
     }
@@ -93,18 +107,12 @@ const PhieuXuatPage = () => {
     if (storedUser) {
       try {
         let user = JSON.parse(storedUser);
-        if (
-          user.quyen &&
-          !Array.isArray(user.quyen) &&
-          user.quyen.maNguoiDung
-        ) {
-          user = user.quyen;
+        if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung) {
+             user = user.quyen;
         }
-
         const role = user.vaiTro || user.tenVaiTro || "";
         setIsAdmin(role === "ADMIN");
 
-        // Lấy mảng ID quyền
         let perms = user.dsQuyenSoHuu || user.quyen;
         if (!Array.isArray(perms)) perms = [];
         setPermissions(perms);
@@ -116,20 +124,20 @@ const PhieuXuatPage = () => {
 
   useEffect(() => {
     let data = [...listData];
-    if (filterConfig && filterConfig.key === "status") {
-      data = data.filter((item) => item.trangThai === filterConfig.value);
+    if (filterConfig && filterConfig.key === 'status') {
+      data = data.filter(item => item.trangThai === filterConfig.value);
     }
     if (sortConfig) {
       data.sort((a, b) => {
-        if (sortConfig.key === "date") {
+        if (sortConfig.key === 'date') {
           const dateA = new Date(a.ngayLapPhieu);
           const dateB = new Date(b.ngayLapPhieu);
-          return sortConfig.direction === "asc" ? dateA - dateB : dateB - dateA;
+          return sortConfig.direction === 'asc' ? dateA - dateB : dateB - dateA;
         }
-        if (sortConfig.key === "price") {
-          return sortConfig.direction === "asc"
-            ? a.tongTien - b.tongTien
-            : b.tongTien - a.tongTien;
+        if (sortConfig.key === 'price') {
+          const priceA = Number(a.tongTien) || 0;
+          const priceB = Number(b.tongTien) || 0;
+          return sortConfig.direction === 'asc' ? priceA - priceB : priceB - priceA;
         }
         return 0;
       });
@@ -137,14 +145,27 @@ const PhieuXuatPage = () => {
     setDisplayedListData(data);
   }, [listData, sortConfig, filterConfig]);
 
-  // Hàm kiểm tra quyền
   const checkPerm = (id) => isAdmin || permissions.includes(id);
-
+  
   const canCreate = checkPerm(PERM_CREATE);
   const canEdit = checkPerm(PERM_EDIT);
   const canDelete = checkPerm(PERM_DELETE);
-  const canApprove = checkPerm(PERM_APPROVE); // Check ID 42
-  const canCancel = checkPerm(PERM_CANCEL); // Check ID 43
+  const canApprove = checkPerm(PERM_APPROVE);
+  const canCancel = checkPerm(PERM_CANCEL);
+
+  // [!] HELPER LẤY TÊN USER
+  const getUserName = (userId) => {
+    if (!userId) return "---";
+    const user = listUser.find(u => u.maNguoiDung === userId);
+    return user ? user.hoTen : `ID: ${userId}`;
+  };
+
+  const renderStatus = (status) => {
+    if (status === 1) return <Tag color="orange">Chờ duyệt</Tag>;
+    if (status === 2) return <Tag color="green">Đã duyệt</Tag>;
+    if (status === 3) return <Tag color="red">Không duyệt</Tag>;
+    return status;
+  };
 
   // --- XỬ LÝ MODAL ---
   const handleOpenModal = () => {
@@ -159,17 +180,24 @@ const PhieuXuatPage = () => {
       messageApi.warning("Không thể sửa phiếu đã duyệt/hủy.");
       return;
     }
-
     try {
-      const response = await phieuXuatService.getPhieuXuatById(
-        record.maPhieuXuat
-      );
+      const response = await phieuXuatService.getPhieuXuatById(record.maPhieuXuat);
       const fullData = response.data;
       setEditingRecord(fullData);
       form.setFieldsValue(fullData);
       setIsModalVisible(true);
     } catch (error) {
-      messageApi.error("Lỗi tải chi tiết phiếu!");
+      messageApi.error("Lỗi tải chi tiết phiếu xuất!");
+    }
+  };
+
+  const handleViewDetail = async (record) => {
+    try {
+      const response = await phieuXuatService.getPhieuXuatById(record.maPhieuXuat);
+      setViewingPhieuXuat(response.data);
+      setIsDetailModalOpen(true);
+    } catch (error) {
+      messageApi.error("Lỗi khi tải chi tiết phiếu!");
     }
   };
 
@@ -177,10 +205,7 @@ const PhieuXuatPage = () => {
     form.validateFields().then(async (values) => {
       try {
         if (editingRecord) {
-          await phieuXuatService.updatePhieuXuat(
-            editingRecord.maPhieuXuat,
-            values
-          );
+          await phieuXuatService.updatePhieuXuat(editingRecord.maPhieuXuat, values);
           messageApi.success("Cập nhật phiếu xuất thành công!");
         } else {
           await phieuXuatService.createPhieuXuat(values);
@@ -234,163 +259,122 @@ const PhieuXuatPage = () => {
   const sortMenu = {
     items: [
       {
-        key: "filter",
-        label: "Lọc theo Trạng Thái",
+        key: 'filter',
+        label: 'Lọc theo Trạng Thái',
         children: [
-          {
-            key: "filter_1",
-            label: "Chờ duyệt",
-            onClick: () => setFilterConfig({ key: "status", value: 1 }),
-          },
-          {
-            key: "filter_2",
-            label: "Đã duyệt",
-            onClick: () => setFilterConfig({ key: "status", value: 2 }),
-          },
-          {
-            key: "filter_3",
-            label: "Không duyệt",
-            onClick: () => setFilterConfig({ key: "status", value: 3 }),
-          },
-        ],
+          { key: 'filter_1', label: 'Chờ duyệt', onClick: () => setFilterConfig({ key: 'status', value: 1 }) },
+          { key: 'filter_2', label: 'Đã duyệt', onClick: () => setFilterConfig({ key: 'status', value: 2 }) },
+          { key: 'filter_3', label: 'Không duyệt', onClick: () => setFilterConfig({ key: 'status', value: 3 }) },
+        ]
       },
       {
-        key: "sort_date",
-        label: "Sắp xếp theo Ngày tháng",
+        key: 'sort_date',
+        label: 'Sắp xếp theo Ngày tháng',
         children: [
-          {
-            key: "date_asc",
-            label: "Cũ đến mới",
-            onClick: () => setSortConfig({ key: "date", direction: "asc" }),
-          },
-          {
-            key: "date_desc",
-            label: "Mới đến cũ",
-            onClick: () => setSortConfig({ key: "date", direction: "desc" }),
-          },
-        ],
+          { key: 'date_asc', label: 'Cũ đến mới', onClick: () => setSortConfig({ key: 'date', direction: 'asc' }) },
+          { key: 'date_desc', label: 'Mới đến cũ', onClick: () => setSortConfig({ key: 'date', direction: 'desc' }) },
+        ]
       },
       {
-        key: "sort_price",
-        label: "Sắp xếp theo Giá tiền",
+        key: 'sort_price',
+        label: 'Sắp xếp theo Giá tiền',
         children: [
-          {
-            key: "price_asc",
-            label: "Thấp đến cao",
-            onClick: () => setSortConfig({ key: "price", direction: "asc" }),
-          },
-          {
-            key: "price_desc",
-            label: "Cao đến thấp",
-            onClick: () => setSortConfig({ key: "price", direction: "desc" }),
-          },
-        ],
+          { key: 'price_asc', label: 'Thấp đến cao', onClick: () => setSortConfig({ key: 'price', direction: 'asc' }) },
+          { key: 'price_desc', label: 'Cao đến thấp', onClick: () => setSortConfig({ key: 'price', direction: 'desc' }) },
+        ]
       },
-      { type: "divider" },
+      { type: 'divider' },
       {
-        key: "reset",
-        label: "Reset (Bỏ lọc)",
+        key: 'reset',
+        label: 'Reset (Bỏ lọc)',
         danger: true,
         onClick: () => {
           setFilterConfig(null);
           setSortConfig(null);
-        },
-      },
-    ],
+        }
+      }
+    ]
   };
 
+  // --- CẤU HÌNH CỘT ---
   const columns = [
-    {
-      title: "Ngày Lập",
-      dataIndex: "ngayLapPhieu",
+    { 
+      title: "Ngày Lập", 
+      dataIndex: "ngayLapPhieu", 
       key: "ngayLapPhieu",
+      width: "12%", 
     },
-    {
-      title: "Trạng Thái",
-      dataIndex: "trangThai",
+    { 
+      title: "Trạng Thái", 
+      dataIndex: "trangThai", 
       key: "trangThai",
-      render: (status) => {
-        if (status === 1) return <Tag color="orange">Chờ duyệt</Tag>;
-        if (status === 2) return <Tag color="green">Đã duyệt</Tag>;
-        if (status === 3) return <Tag color="red">Không duyệt</Tag>;
-        return status;
-      },
+      width: "10%", 
+      render: renderStatus,
     },
-    {
-      title: "Tổng Tiền",
-      dataIndex: "tongTien",
-      key: "tongTien",
-      render: (v) => `${v?.toLocaleString()} đ`,
+    { 
+      title: "Tổng Tiền", 
+      dataIndex: "tongTien", 
+      key: "tongTien", 
+      width: "10%",
+      render: (v) => `${Number(v || 0).toLocaleString()} đ` 
     },
-    {
-      title: "Khách Hàng",
-      dataIndex: "maKH",
+    { 
+      title: "Khách Hàng", 
+      dataIndex: "maKH", 
       key: "maKH",
+      width: "18%",
       render: (id) => {
-        const kh = listKhachHang.find((item) => item.maKH === id);
+        const kh = listKhachHang.find(item => item.maKH === id);
         return kh ? kh.tenKH : `Mã: ${id}`;
-      },
+      }
     },
-    {
-      title: "Kho Xuất",
-      dataIndex: "maKho",
+    { 
+      title: "Kho Xuất", 
+      dataIndex: "maKho", 
       key: "maKho",
+      width: "10%",
       render: (maKho) => {
-        const kho = listKho.find((k) => k.maKho === maKho);
+        const kho = listKho.find(k => k.maKho === maKho);
         return kho ? kho.tenKho : `Mã: ${maKho}`;
-      },
+      }
     },
-    {
-      title: "Người Duyệt",
-      dataIndex: "tenNguoiDuyet",
-      key: "tenNguoiDuyet",
-      render: (text, record) =>
-        text || (record.nguoiDuyet ? `ID: ${record.nguoiDuyet}` : "---"),
+    // [!] 4. CỘT NGƯỜI LẬP
+    { 
+      title: "Người Lập", 
+      dataIndex: "nguoiLap", 
+      key: "nguoiLap",
+      width: "12%",
+      render: (id) => getUserName(id)
+    },
+    // [!] 5. CỘT NGƯỜI DUYỆT
+    { 
+        title: "Người Duyệt", 
+        dataIndex: "nguoiDuyet", // Hoặc 'tenNguoiDuyet' nếu backend có trả về
+        key: "nguoiDuyet",
+        width: "12%",
+        render: (text, record) => getUserName(record.nguoiDuyet)
     },
     {
       title: "Hành động",
       key: "action",
+      width: "16%",
       render: (_, record) => {
         const isChoDuyet = record.trangThai === 1;
         return (
-          <Space size="small" wrap>
-            {/* NÚT SỬA/XÓA */}
+          <Space size="small" wrap={false} style={{ display: 'flex', flexWrap: 'nowrap' }}>
+            <Button icon={<EyeOutlined />} onClick={() => handleViewDetail(record)} title="Xem" />
+            
             {isChoDuyet && canEdit && (
-              <Button
-                icon={<EditOutlined />}
-                onClick={() => handleEdit(record)}
-              >
-                Sửa
-              </Button>
+              <Button icon={<EditOutlined />} onClick={() => handleEdit(record)} />
             )}
             {isChoDuyet && canDelete && (
-              <Button
-                icon={<DeleteOutlined />}
-                danger
-                onClick={() => handleDelete(record.maPhieuXuat)}
-              >
-                Xóa
-              </Button>
+              <Button icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.maPhieuXuat)} />
             )}
-
-            {/* NÚT DUYỆT/HỦY */}
             {isChoDuyet && canApprove && (
-              <Button
-                icon={<CheckCircleOutlined />}
-                onClick={() => handleApprove(record.maPhieuXuat)}
-                style={{ color: "green", borderColor: "green" }}
-              >
-                Duyệt
-              </Button>
+              <Button icon={<CheckCircleOutlined />} onClick={() => handleApprove(record.maPhieuXuat)} style={{ color: 'green', borderColor: 'green' }} />
             )}
             {isChoDuyet && canCancel && (
-              <Button
-                icon={<CloseCircleOutlined />}
-                onClick={() => handleReject(record.maPhieuXuat)}
-                danger
-              >
-                Hủy
-              </Button>
+              <Button icon={<CloseCircleOutlined />} onClick={() => handleReject(record.maPhieuXuat)} danger />
             )}
           </Space>
         );
@@ -403,21 +387,15 @@ const PhieuXuatPage = () => {
       {contextHolder}
       <Space style={{ marginBottom: 16 }}>
         {canCreate && (
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleOpenModal}
-          >
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal}>
             Tạo Phiếu Xuất
           </Button>
         )}
         <Button icon={<ReloadOutlined />} onClick={fetchData} loading={loading}>
           Tải lại
         </Button>
-        <Dropdown menu={sortMenu} trigger={["click"]}>
-          <Button>
-            Lọc / Sắp xếp <DownOutlined />
-          </Button>
+        <Dropdown menu={sortMenu} trigger={['click']}>
+          <Button>Lọc / Sắp xếp <DownOutlined /></Button>
         </Dropdown>
       </Space>
 
@@ -428,6 +406,7 @@ const PhieuXuatPage = () => {
         loading={loading}
         rowKey="maPhieuXuat"
         pagination={{ pageSize: 5 }}
+        scroll={{ x: 'max-content' }}
       />
 
       {/* MODAL THÊM/SỬA */}
@@ -440,49 +419,28 @@ const PhieuXuatPage = () => {
       >
         <Form form={form} layout="vertical">
           <Space wrap>
-            <Form.Item
-              name="maKH"
-              label="Khách Hàng"
-              rules={[{ required: true, message: "Vui lòng chọn khách hàng!" }]}
-            >
-              <Select
-                style={{ width: 200 }}
-                placeholder="Chọn Khách Hàng"
+            <Form.Item name="maKH" label="Khách Hàng" rules={[{ required: true }]}>
+              <Select 
+                style={{ width: 200 }} 
+                placeholder="Chọn Khách Hàng" 
                 showSearch
                 optionFilterProp="children"
               >
-                {listKhachHang.map((kh) => (
-                  <Option key={kh.maKH} value={kh.maKH}>
-                    {kh.tenKH}
-                  </Option>
+                {listKhachHang.map(kh => (
+                  <Option key={kh.maKH} value={kh.maKH}>{kh.tenKH}</Option>
+                ))}
+              </Select>
+            </Form.Item>
+            
+            <Form.Item name="maKho" label="Kho Xuất Hàng" rules={[{ required: true, message: "Vui lòng chọn kho!" }]}>
+              <Select style={{ width: 200 }} placeholder="Chọn Kho" showSearch optionFilterProp="children">
+                {listKho.map(kho => (
+                  <Option key={kho.maKho} value={kho.maKho}>{kho.tenKho}</Option>
                 ))}
               </Select>
             </Form.Item>
 
-            <Form.Item
-              name="maKho"
-              label="Kho Xuất Hàng"
-              rules={[{ required: true, message: "Vui lòng chọn kho!" }]}
-            >
-              <Select
-                style={{ width: 200 }}
-                placeholder="Chọn Kho"
-                showSearch
-                optionFilterProp="children"
-              >
-                {listKho.map((kho) => (
-                  <Option key={kho.maKho} value={kho.maKho}>
-                    {kho.tenKho}
-                  </Option>
-                ))}
-              </Select>
-            </Form.Item>
-
-            <Form.Item
-              name="chungTu"
-              label="Chứng Từ"
-              rules={[{ required: true }]}
-            >
+            <Form.Item name="chungTu" label="Chứng Từ" rules={[{ required: true }]}>
               <Input placeholder="VD: PX-001" />
             </Form.Item>
           </Space>
@@ -492,48 +450,23 @@ const PhieuXuatPage = () => {
             {(fields, { add, remove }) => (
               <>
                 {fields.map(({ key, name, ...restField }) => (
-                  <Space
-                    key={key}
-                    style={{ display: "flex", marginBottom: 8 }}
-                    align="baseline"
-                  >
-                    <Form.Item
-                      {...restField}
-                      name={[name, "maSP"]}
-                      rules={[{ required: true, message: "Nhập Mã SP" }]}
-                    >
-                      <Select
-                        style={{ width: 200 }}
-                        placeholder="Chọn SP"
-                        showSearch
-                        optionFilterProp="children"
-                      >
-                        {listSanPham.map((sp) => (
-                          <Option key={sp.maSP} value={sp.maSP}>
-                            {sp.tenSP}
-                          </Option>
+                  <Space key={key} style={{ display: "flex", marginBottom: 8 }} align="baseline">
+                    <Form.Item {...restField} name={[name, "maSP"]} rules={[{ required: true, message: "Nhập Mã SP" }]}>
+                      <Select style={{ width: 200 }} placeholder="Chọn SP" showSearch optionFilterProp="children">
+                        {listSanPham.map(sp => (
+                          <Option key={sp.maSP} value={sp.maSP}>{sp.tenSP}</Option>
                         ))}
                       </Select>
                     </Form.Item>
-                    <Form.Item
-                      {...restField}
-                      name={[name, "soLuong"]}
-                      rules={[{ required: true, message: "Nhập SL" }]}
-                    >
+                    <Form.Item {...restField} name={[name, "soLuong"]} rules={[{ required: true, message: "Nhập SL" }]}>
                       <InputNumber placeholder="Số lượng" min={1} />
                     </Form.Item>
-                    <Form.Item
-                      {...restField}
-                      name={[name, "donGia"]}
-                      rules={[{ required: true, message: "Nhập Giá" }]}
-                    >
-                      <InputNumber
-                        placeholder="Đơn giá"
+                    <Form.Item {...restField} name={[name, "donGia"]} rules={[{ required: true, message: "Nhập Giá" }]}>
+                      <InputNumber 
+                        placeholder="Đơn giá" 
                         min={0}
-                        formatter={(value) =>
-                          `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                        }
-                        parser={(value) => value.replace(/\$\s?|(,*)/g, "")}
+                        formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                        parser={value => value.replace(/\$\s?|(,*)/g, '')}
                         style={{ width: 150 }}
                       />
                     </Form.Item>
@@ -541,12 +474,7 @@ const PhieuXuatPage = () => {
                   </Space>
                 ))}
                 <Form.Item>
-                  <Button
-                    type="dashed"
-                    onClick={() => add()}
-                    block
-                    icon={<PlusOutlined />}
-                  >
+                  <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
                     Thêm sản phẩm
                   </Button>
                 </Form.Item>
@@ -567,6 +495,67 @@ const PhieuXuatPage = () => {
         okType="danger"
       >
         <p>Bạn có chắc muốn xóa phiếu xuất này?</p>
+      </Modal>
+
+      {/* [!] MODAL XEM CHI TIẾT */}
+      <Modal
+        title="Chi tiết Phiếu Xuất"
+        open={isDetailModalOpen}
+        onCancel={() => setIsDetailModalOpen(false)}
+        footer={[<Button key="close" onClick={() => setIsDetailModalOpen(false)}>Đóng</Button>]}
+        width={900}
+      >
+        {viewingPhieuXuat && (
+          <div>
+            <Descriptions bordered column={2}>
+              <Descriptions.Item label="Mã Phiếu">{viewingPhieuXuat.maPhieuXuat}</Descriptions.Item>
+              <Descriptions.Item label="Ngày Lập">{viewingPhieuXuat.ngayLapPhieu}</Descriptions.Item>
+              <Descriptions.Item label="Trạng Thái">{renderStatus(viewingPhieuXuat.trangThai)}</Descriptions.Item>
+              <Descriptions.Item label="Tổng Tiền">{Number(viewingPhieuXuat.tongTien).toLocaleString()} đ</Descriptions.Item>
+              <Descriptions.Item label="Khách Hàng">
+                {listKhachHang.find(kh => kh.maKH === viewingPhieuXuat.maKH)?.tenKH || viewingPhieuXuat.maKH}
+              </Descriptions.Item>
+              <Descriptions.Item label="Kho Xuất">
+                {listKho.find(k => k.maKho === viewingPhieuXuat.maKho)?.tenKho || viewingPhieuXuat.maKho}
+              </Descriptions.Item>
+              <Descriptions.Item label="Chứng Từ">{viewingPhieuXuat.chungTu}</Descriptions.Item>
+              <Descriptions.Item label="Người Lập">{getUserName(viewingPhieuXuat.nguoiLap)}</Descriptions.Item>
+              <Descriptions.Item label="Người Duyệt">{getUserName(viewingPhieuXuat.nguoiDuyet)}</Descriptions.Item>
+            </Descriptions>
+
+            <Divider orientation="left">Danh sách sản phẩm</Divider>
+
+            <Table 
+              dataSource={viewingPhieuXuat.chiTiet || []}
+              rowKey="maSP"
+              pagination={false}
+              columns={[
+                {
+                  title: 'Sản Phẩm',
+                  dataIndex: 'maSP',
+                  key: 'maSP',
+                  render: (id) => listSanPham.find(sp => sp.maSP === id)?.tenSP || `SP-${id}`
+                },
+                {
+                  title: 'Số Lượng',
+                  dataIndex: 'soLuong',
+                  key: 'soLuong',
+                },
+                {
+                  title: 'Đơn Giá',
+                  dataIndex: 'donGia',
+                  key: 'donGia',
+                  render: (val) => `${Number(val).toLocaleString()} đ`
+                },
+                {
+                  title: 'Thành Tiền',
+                  key: 'thanhTien',
+                  render: (_, r) => `${(r.soLuong * r.donGia).toLocaleString()} đ`
+                }
+              ]}
+            />
+          </div>
+        )}
       </Modal>
     </div>
   );
