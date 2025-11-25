@@ -98,7 +98,7 @@
                 hoatDongRepository.save(log);
             }
         }
-        @GetMapping
+        @GetMapping("/users")
         @PreAuthorize("hasAuthority('PERM_ADMIN_VIEW_USERS')")
         public ResponseEntity<List<UserResponse>> getAllUsers() {
             return ResponseEntity.ok(userService.getAllUsers());
