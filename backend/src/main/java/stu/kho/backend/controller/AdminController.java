@@ -4,6 +4,7 @@
     import org.springframework.security.access.prepost.PreAuthorize; // Đảm bảo import đúng
     import org.springframework.security.core.Authentication; // Cần thiết để lấy user hiện tại
     import org.springframework.web.bind.annotation.*;
+    import stu.kho.backend.dto.HoatDongResponse;
     import stu.kho.backend.dto.UserCreateRequest;
     import stu.kho.backend.dto.UserResponse;
     import stu.kho.backend.dto.UserUpdateRequest;
@@ -19,7 +20,7 @@
     // import stu.kho.backend.service.ConfigService;
 
     @RestController
-    @RequestMapping("/api/admin/users")
+    @RequestMapping("/api/admin")
     @CrossOrigin(origins = "*")
 
     public class AdminController {
@@ -41,7 +42,7 @@
         }
 
         // 1. Tạo User mới (Đã sửa phân quyền)
-        @PostMapping
+        @PostMapping("/users")
         @PreAuthorize("hasAuthority('PERM_ADMIN_CREATE_USER')")
         public ResponseEntity<String> createUser(@RequestBody UserCreateRequest request, Authentication authentication) {
             try {
@@ -104,7 +105,7 @@
         }
 
         // 3. SỬA (UPDATE)
-        @PutMapping("/{id}")
+        @PutMapping("/users/{id}")
         @PreAuthorize("hasAuthority('PERM_ADMIN_EDIT_USER')")
         public ResponseEntity<String> updateUser(@PathVariable Integer id, @RequestBody UserUpdateRequest request, Authentication authentication) {
             try {
@@ -117,7 +118,7 @@
         }
 
         // 4. XÓA (DELETE)
-        @DeleteMapping("/{id}")
+        @DeleteMapping("/users/{id}")
         @PreAuthorize("hasAuthority('PERM_ADMIN_DELETE_USER')")
         public ResponseEntity<String> deleteUser(@PathVariable Integer id, Authentication authentication) {
             try {
@@ -128,7 +129,7 @@
                 return ResponseEntity.badRequest().body(e.getMessage());
             }
         }
-        @PostMapping("/{maND}/permissions/{maCN}")
+        @PostMapping("/users/{maND}/permissions/{maCN}")
         @PreAuthorize("hasAuthority('PERM_ADMIN_EDIT_USER')") // Hoặc quyền 'PERM_EDIT_PERMISSIONS'
         public ResponseEntity<String> assignPermissionToUser(@PathVariable Integer maND, @PathVariable Integer maCN, Authentication authentication) {
             try {
@@ -140,7 +141,7 @@
             }
         }
 
-        @DeleteMapping("/{maND}/permissions/{maCN}")
+        @DeleteMapping("/users/{maND}/permissions/{maCN}")
         @PreAuthorize("hasAuthority('PERM_ADMIN_DELETE_USER')") // Hoặc quyền 'PERM_EDIT_PERMISSIONS'
         public ResponseEntity<String> revokePermissionFromUser(@PathVariable Integer maND, @PathVariable Integer maCN, Authentication authentication) {
             try {
@@ -178,5 +179,11 @@
             } catch (Exception e) {
                 return ResponseEntity.badRequest().body("Xóa liên kết NCC thất bại: " + e.getMessage());
             }
+        }
+        @GetMapping("/logs")
+        @PreAuthorize("hasAuthority('PERM_SYSTEM_LOG')") // Bảo vệ bằng quyền mới
+        public ResponseEntity<List<HoatDongResponse>> getSystemLogs() {
+            List<HoatDongResponse> logs = hoatDongRepository.findAllLogs();
+            return ResponseEntity.ok(logs);
         }
     }
