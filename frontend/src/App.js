@@ -17,6 +17,8 @@ import SupplierPage from './pages/SupplierPage';
 import PhieuXuatPage from './pages/PhieuXuatPage';
 import CustomerPage from './pages/CustomerPage';
 import SystemLogPage from './pages/SystemLogPage';
+import ReportPage from './pages/ReportPage';
+import TransferPage from './pages/TransferPage';
 
 import 'antd/dist/reset.css';
 import './App.css';
@@ -43,6 +45,8 @@ function App() {
               <Route path="/stock-out" element={<PhieuXuatPage />} />
               <Route path="/customers" element={<CustomerPage />} />
               <Route path="/system-logs" element={<SystemLogPage />} />
+              <Route path="/reports" element={<ReportPage />} />
+              <Route path="/stock-transfer" element={<TransferPage />} />
             </Route>
           </Route>
 
