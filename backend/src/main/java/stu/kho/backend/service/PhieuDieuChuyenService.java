@@ -176,7 +176,79 @@ public class PhieuDieuChuyenService {
         // (Tổng = Kho1 + Kho2). Nếu Kho1 - 10 và Kho2 + 10 thì Tổng không đổi.
         // Nên KHÔNG cần cập nhật bảng SanPham ở đây.
     }
+    @Transactional
+    public PhieuDieuChuyen update(Integer id, PhieuDieuChuyenRequest req, String username) {
+        NguoiDung user = nguoiDungRepo.findByTenDangNhap(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
+        PhieuDieuChuyen pdc = getById(id);
+
+        if (pdc.getTrangThai() != STATUS_CHO_DUYET) {
+            throw new RuntimeException("Chỉ được sửa phiếu khi đang chờ duyệt.");
+        }
+
+        if (req.getMaKhoXuat().equals(req.getMaKhoNhap())) {
+            throw new RuntimeException("Kho xuất và Kho nhập không được trùng nhau.");
+        }
+
+        // 1. Xóa chi tiết cũ
+        chiTietDieuChuyenRepo.deleteByMaPhieuDC(id);
+
+        // 2. Thêm chi tiết MỚI
+        for (var item : req.getChiTiet()) {
+            // Kiểm tra tồn kho nguồn có đủ cho số lượng mới không
+            checkTonKho(req.getMaKhoXuat(), item.getMaSP(), item.getSoLuong());
+
+            ChiTietDieuChuyen ct = new ChiTietDieuChuyen();
+            ct.setMaPhieuDC(id);
+            ct.setMaSP(item.getMaSP());
+            ct.setSoLuong(item.getSoLuong());
+            chiTietDieuChuyenRepo.save(ct);
+        }
+
+        // 3. Cập nhật thông tin phiếu chính
+        pdc.setMaKhoXuat(req.getMaKhoXuat());
+        pdc.setMaKhoNhap(req.getMaKhoNhap());
+        pdc.setGhiChu(req.getGhiChu());
+        pdc.setChungTu(req.getChungTu());
+
+        phieuDieuChuyenRepo.update(pdc);
+
+        logActivity(user.getMaNguoiDung(), "Cập nhật phiếu điều chuyển #" + id);
+        return getById(id);
+    }
+
+    // =================================================================
+    // 5. DELETE (Xóa phiếu)
+    // =================================================================
+    @Transactional
+    public void delete(Integer id, String username) {
+        NguoiDung user = nguoiDungRepo.findByTenDangNhap(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        PhieuDieuChuyen pdc = getById(id);
+
+        // Nếu phiếu ĐÃ DUYỆT -> Phải HOÀN TRẢ tồn kho trước khi xóa
+        if (pdc.getTrangThai() == STATUS_DA_DUYET) {
+            for (var item : pdc.getChiTiet()) {
+                // Logic hoàn trả: Cộng lại Kho Xuất, Trừ đi Kho Nhập
+                // 1. Cộng lại Kho Xuất
+                capNhatTonKho(pdc.getMaKhoXuat(), item.getMaSP(), item.getSoLuong());
+
+                // 2. Trừ đi Kho Nhập (Cần kiểm tra xem kho nhập có đủ hàng để trừ không)
+                checkTonKho(pdc.getMaKhoNhap(), item.getMaSP(), item.getSoLuong());
+                capNhatTonKho(pdc.getMaKhoNhap(), item.getMaSP(), -item.getSoLuong());
+            }
+        }
+
+        // 1. Xóa chi tiết
+        chiTietDieuChuyenRepo.deleteByMaPhieuDC(id);
+
+        // 2. Xóa phiếu chính
+        phieuDieuChuyenRepo.deleteById(id);
+
+        logActivity(user.getMaNguoiDung(), "Xóa phiếu điều chuyển #" + id);
+    }
     private void logActivity(Integer maUser, String act) {
         HoatDong hd = new HoatDong();
         hd.setMaNguoiDung(maUser);

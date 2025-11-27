@@ -10,6 +10,8 @@ public interface PhieuDieuChuyenRepository {
 
     void update(PhieuDieuChuyen phieu);
 
+    void deleteById(Integer id);
+
     Optional<PhieuDieuChuyen> findById(Integer id);
 
     List<PhieuDieuChuyen> findAll();

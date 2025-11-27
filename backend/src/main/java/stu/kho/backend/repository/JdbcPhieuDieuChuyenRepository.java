@@ -78,10 +78,24 @@ public class JdbcPhieuDieuChuyenRepository implements PhieuDieuChuyenRepository 
 
     @Override
     public void update(PhieuDieuChuyen phieu) {
-        String sql = "UPDATE phieudieuchuyen SET TrangThai = ?, NguoiDuyet = ? WHERE MaPhieuDC = ?";
-        jdbcTemplate.update(sql, phieu.getTrangThai(), phieu.getNguoiDuyet(), phieu.getMaPhieuDC());
+        // Cập nhật thông tin chung (trừ ngày tạo và người tạo)
+        String sql = "UPDATE phieudieuchuyen SET MaKhoXuat = ?, MaKhoNhap = ?, GhiChu = ?, ChungTu = ?, TrangThai = ?, NguoiDuyet = ? WHERE MaPhieuDC = ?";
+        jdbcTemplate.update(sql,
+                phieu.getMaKhoXuat(),
+                phieu.getMaKhoNhap(),
+                phieu.getGhiChu(),
+                phieu.getChungTu(),
+                phieu.getTrangThai(),
+                phieu.getNguoiDuyet(),
+                phieu.getMaPhieuDC()
+        );
     }
 
+    @Override
+    public void deleteById(Integer id) {
+        String sql = "DELETE FROM phieudieuchuyen WHERE MaPhieuDC = ?";
+        jdbcTemplate.update(sql, id);
+    }
     @Override
     public Optional<PhieuDieuChuyen> findById(Integer id) {
         try {
@@ -97,4 +111,5 @@ public class JdbcPhieuDieuChuyenRepository implements PhieuDieuChuyenRepository 
         String sql = "SELECT * FROM phieudieuchuyen ORDER BY MaPhieuDC DESC";
         return jdbcTemplate.query(sql, rowMapper);
     }
+
 }

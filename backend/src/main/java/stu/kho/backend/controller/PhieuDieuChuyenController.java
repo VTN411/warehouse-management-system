@@ -62,4 +62,26 @@ public class PhieuDieuChuyenController {
     public ResponseEntity<PhieuDieuChuyen> getById(@PathVariable Integer id) {
         return ResponseEntity.ok(service.getById(id));
     }
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('PERM_TRANSFER_CREATE')") // Người tạo thường có quyền sửa
+    public ResponseEntity<?> update(@PathVariable Integer id,
+                                    @RequestBody PhieuDieuChuyenRequest req,
+                                    Authentication auth) {
+        try {
+            return ResponseEntity.ok(service.update(id, req, auth.getName()));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('PERM_TRANSFER_CANCEL')") // Người có quyền Hủy thường có quyền Xóa
+    public ResponseEntity<?> delete(@PathVariable Integer id, Authentication auth) {
+        try {
+            service.delete(id, auth.getName());
+            return ResponseEntity.ok("Xóa phiếu điều chuyển thành công.");
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
 }
