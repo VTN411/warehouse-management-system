@@ -181,7 +181,7 @@
             }
         }
         @GetMapping("/logs")
-        @PreAuthorize("hasAuthority('PERM_REPORT_INVENTORY')") // Bảo vệ bằng quyền mới
+        @PreAuthorize("hasAuthority('PERM_SYSTEM_LOG')") // Bảo vệ bằng quyền mới
         public ResponseEntity<List<HoatDongResponse>> getSystemLogs() {
             List<HoatDongResponse> logs = hoatDongRepository.findAllLogs();
             return ResponseEntity.ok(logs);
