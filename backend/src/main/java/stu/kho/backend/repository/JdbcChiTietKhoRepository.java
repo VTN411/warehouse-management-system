@@ -4,8 +4,10 @@ import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
+import stu.kho.backend.dto.SanPhamTrongKhoResponse;
 import stu.kho.backend.entity.ChiTietKho;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -63,5 +65,23 @@ public class JdbcChiTietKhoRepository implements ChiTietKhoRepository {
                 chiTietKho.getNgayHetHan(),
                 chiTietKho.getSoLo()
         );
+    }
+    @Override
+    public List<SanPhamTrongKhoResponse> findSanPhamByMaKho(Integer maKho) {
+        String sql = "SELECT sp.MaSP, sp.TenSP, sp.DonViTinh, sp.HinhAnh, sp.GiaNhap, ctk.SoLuongTon " +
+                "FROM chitietkho ctk " +
+                "JOIN sanpham sp ON ctk.MaSP = sp.MaSP " +
+                "WHERE ctk.MaKho = ?";
+
+        return jdbcTemplate.query(sql, (rs, rowNum) -> {
+            SanPhamTrongKhoResponse dto = new SanPhamTrongKhoResponse();
+            dto.setMaSP(rs.getInt("MaSP"));
+            dto.setTenSP(rs.getString("TenSP"));
+            dto.setDonViTinh(rs.getString("DonViTinh"));
+            dto.setHinhAnh(rs.getString("HinhAnh"));
+            dto.setGiaNhap(rs.getBigDecimal("GiaNhap"));
+            dto.setSoLuongTon(rs.getInt("SoLuongTon"));
+            return dto;
+        }, maKho);
     }
 }

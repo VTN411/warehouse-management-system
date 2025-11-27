@@ -4,9 +4,11 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import stu.kho.backend.dto.KhoHangRequest;
+import stu.kho.backend.dto.SanPhamTrongKhoResponse;
 import stu.kho.backend.entity.HoatDong;
 import stu.kho.backend.entity.KhoHang;
 import stu.kho.backend.entity.NguoiDung;
+import stu.kho.backend.repository.ChiTietKhoRepository;
 import stu.kho.backend.repository.HoatDongRepository;
 import stu.kho.backend.repository.KhoHangRepository;
 import stu.kho.backend.repository.NguoiDungRepository;
@@ -16,13 +18,15 @@ import java.util.List;
 @Service
 public class KhoHangService {
 
+    private final ChiTietKhoRepository chiTietKhoRepository;
     private final KhoHangRepository khoHangRepository;
     private final HoatDongRepository hoatDongRepository;
     private final NguoiDungRepository nguoiDungRepository;
 
-    public KhoHangService(KhoHangRepository khoHangRepository,
+    public KhoHangService(ChiTietKhoRepository chiTietKhoRepository, KhoHangRepository khoHangRepository,
                           HoatDongRepository hoatDongRepository,
                           NguoiDungRepository nguoiDungRepository) {
+        this.chiTietKhoRepository = chiTietKhoRepository;
         this.khoHangRepository = khoHangRepository;
         this.hoatDongRepository = hoatDongRepository;
         this.nguoiDungRepository = nguoiDungRepository;
@@ -85,5 +89,12 @@ public class KhoHangService {
             log.setHanhDong(hanhDong);
             hoatDongRepository.save(log);
         }
+    }
+    public List<SanPhamTrongKhoResponse> getSanPhamByKho(Integer maKho) {
+        // Kiểm tra kho có tồn tại không
+        if (!khoHangRepository.findById(maKho).isPresent()) {
+            throw new RuntimeException("Kho hàng không tồn tại.");
+        }
+        return chiTietKhoRepository.findSanPhamByMaKho(maKho);
     }
 }

@@ -1,6 +1,9 @@
 package stu.kho.backend.repository;
 
+import stu.kho.backend.dto.SanPhamTrongKhoResponse;
 import stu.kho.backend.entity.ChiTietKho;
+
+import java.util.List;
 import java.util.Optional;
 
 public interface ChiTietKhoRepository {
@@ -13,4 +16,6 @@ public interface ChiTietKhoRepository {
 
     // Thêm sản phẩm mới vào kho (nếu chưa có)
     int save(ChiTietKho chiTietKho);
+    //Tim san pham theo ma kho
+    List<SanPhamTrongKhoResponse> findSanPhamByMaKho(Integer maKho);
 }

@@ -5,6 +5,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import stu.kho.backend.dto.KhoHangRequest;
+import stu.kho.backend.dto.SanPhamTrongKhoResponse;
 import stu.kho.backend.entity.KhoHang;
 import stu.kho.backend.service.KhoHangService;
 
@@ -62,6 +63,15 @@ public class KhoHangController {
             return ResponseEntity.ok("Đã xóa kho hàng thành công.");
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+    @GetMapping("/{id}/sanpham")
+    @PreAuthorize("hasAuthority('PERM_KHO_VIEW')") // Quyền xem kho
+    public ResponseEntity<List<SanPhamTrongKhoResponse>> getSanPhamByKho(@PathVariable Integer id) {
+        try {
+            return ResponseEntity.ok(khoHangService.getSanPhamByKho(id));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().build(); // Hoặc trả về lỗi chi tiết
         }
     }
 }
