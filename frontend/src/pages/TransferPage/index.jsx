@@ -6,7 +6,7 @@ import {
 } from "antd";
 import {
   PlusOutlined, DeleteOutlined, ReloadOutlined,
-  CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, MinusCircleOutlined
+  CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, MinusCircleOutlined, EditOutlined
 } from "@ant-design/icons";
 import * as transferService from "../../services/transfer.service";
 import * as warehouseService from "../../services/warehouse.service";
@@ -15,17 +15,20 @@ import * as userService from "../../services/user.service";
 
 const { Option } = Select;
 
-// [!] ID QUYỀN (SỐ)
+// [!] 1. ĐỊNH NGHĨA ID QUYỀN CHUẨN (SỐ)
 const PERM_CREATE = 111;
 const PERM_APPROVE = 112;
 const PERM_CANCEL = 113;
-// (PERM_VIEW = 110 dùng để check truy cập)
+// (ID 110 là Quyền Xem - dùng để kiểm tra truy cập nếu cần)
 
 const TransferPage = () => {
   const [listData, setListData] = useState([]);
   const [listKho, setListKho] = useState([]);
   const [listSanPham, setListSanPham] = useState([]);
   const [listUser, setListUser] = useState([]);
+
+  const [sourceInventory, setSourceInventory] = useState([]); 
+  const [selectedSourceKho, setSelectedSourceKho] = useState(null);
 
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -40,6 +43,7 @@ const TransferPage = () => {
   const [permissions, setPermissions] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // 1. Fetch Data
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -64,7 +68,7 @@ const TransferPage = () => {
     } catch (error) { console.error(error); }
   }, []);
 
-  // [!] LOGIC LẤY QUYỀN CHUẨN
+  // [!] 2. LOGIC LẤY QUYỀN AN TOÀN (Fix lỗi mất nút)
   useEffect(() => {
     fetchData();
     fetchCommonData();
@@ -72,11 +76,14 @@ const TransferPage = () => {
       const storedUser = localStorage.getItem("user_info");
       if (storedUser) {
         let user = JSON.parse(storedUser);
-        // Fix lỗi lồng
-        if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung) user = user.quyen;
         
+        // Fix lỗi dữ liệu lồng nhau
+        if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung) {
+           user = user.quyen;
+        }
+
         const role = user.vaiTro || user.tenVaiTro || "";
-        setIsAdmin(role.toUpperCase() === "ADMIN");
+        setIsAdmin(role === "ADMIN");
         
         let perms = user.dsQuyenSoHuu || user.quyen;
         if (!Array.isArray(perms)) perms = [];
@@ -85,13 +92,18 @@ const TransferPage = () => {
     } catch (e) { setPermissions([]); }
   }, [fetchData, fetchCommonData]);
 
+  // [!] 3. HÀM CHECK QUYỀN
   const checkPerm = (id) => isAdmin || permissions.includes(id);
-  const canCreate = checkPerm(PERM_CREATE);
-  const canApprove = checkPerm(PERM_APPROVE);
-  const canCancel = checkPerm(PERM_CANCEL);
+  const canCreate = checkPerm(PERM_CREATE); // ID 111
+  const canApprove = checkPerm(PERM_APPROVE); // ID 112
+  const canCancel = checkPerm(PERM_CANCEL); // ID 113
 
   // Helper
-  const getUserName = (id) => listUser.find(u => u.maNguoiDung === id)?.hoTen || `ID: ${id}`;
+  const getUserName = (id) => {
+    if (!id) return "---";
+    const user = listUser.find(u => u.maNguoiDung === id);
+    return user ? user.hoTen : `ID: ${id}`;
+  };
   const getKhoName = (id) => listKho.find(k => k.maKho === id)?.tenKho || `Mã: ${id}`;
   const getSPName = (id) => listSanPham.find(sp => sp.maSP === id)?.tenSP || `SP-${id}`;
 
@@ -102,8 +114,25 @@ const TransferPage = () => {
     return status;
   };
 
-  const handleOpenModal = () => { form.resetFields(); setIsModalVisible(true); };
+  // --- XỬ LÝ FORM ---
+  const handleOpenModal = () => { 
+    form.resetFields(); 
+    setSourceInventory([]); 
+    setSelectedSourceKho(null);
+    setIsModalVisible(true); 
+  };
   
+  const handleSourceKhoChange = async (khoId) => {
+    setSelectedSourceKho(khoId);
+    form.setFieldsValue({ maKhoNhap: null, chiTiet: [] }); 
+    try {
+      const res = await warehouseService.getInventoryByWarehouse(khoId);
+      setSourceInventory(res.data || []);
+    } catch (error) {
+      setSourceInventory([]);
+    }
+  };
+
   const handleOk = () => {
     form.validateFields().then(async (values) => {
       if (values.maKhoXuat === values.maKhoNhap) {
@@ -115,7 +144,7 @@ const TransferPage = () => {
         messageApi.success("Tạo phiếu điều chuyển thành công!");
         setIsModalVisible(false);
         fetchData();
-      } catch (error) { messageApi.error("Lỗi khi tạo phiếu!"); }
+      } catch (error) { messageApi.error(error.response?.data?.message || "Lỗi khi tạo phiếu!"); }
     });
   };
 
@@ -148,7 +177,7 @@ const TransferPage = () => {
     { title: "Trạng Thái", dataIndex: "trangThai", width: 120, render: renderStatus },
     { title: "Kho Xuất", dataIndex: "maKhoXuat", width: 150, render: getKhoName },
     { title: "Kho Nhập", dataIndex: "maKhoNhap", width: 150, render: getKhoName },
-    { title: "Người Lập", dataIndex: "nguoiLap", width: 150, render: getUserName },
+    { title: "Người Lập", dataIndex: "nguoiLap", width: 150, render: (id) => getUserName(id) },
     { 
       title: "Hành động", key: "action", width: 180,
       render: (_, record) => {
@@ -159,7 +188,6 @@ const TransferPage = () => {
             
             {isPending && canApprove && <Button icon={<CheckCircleOutlined />} onClick={() => handleApprove(record.maPhieuDC)} style={{ color: 'green', borderColor: 'green' }} />}
             {isPending && canCancel && <Button icon={<CloseCircleOutlined />} onClick={() => handleReject(record.maPhieuDC)} danger />}
-            {/* Chỉ Admin mới xóa được phiếu điều chuyển */}
             {isPending && isAdmin && <Button icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.maPhieuDC)} />}
           </Space>
         );
@@ -171,6 +199,7 @@ const TransferPage = () => {
     <div>
       {contextHolder}
       <Space style={{ marginBottom: 16 }}>
+        {/* [!] NÚT TẠO SẼ HIỆN NẾU LÀ ADMIN HOẶC CÓ QUYỀN 111 */}
         {canCreate && <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal}>Tạo Phiếu Điều Chuyển</Button>}
         <Button icon={<ReloadOutlined />} onClick={fetchData} loading={loading}>Tải lại</Button>
       </Space>
@@ -181,21 +210,22 @@ const TransferPage = () => {
       <Modal title="Tạo Phiếu Điều Chuyển" open={isModalVisible} onOk={handleOk} onCancel={() => setIsModalVisible(false)} width={900}>
         <Form form={form} layout="vertical">
           <Space style={{ display: 'flex', width: '100%' }} align="start">
-            <Form.Item name="maKhoXuat" label="Kho Xuất" rules={[{ required: true }]} style={{ flex: 1 }}>
-              <Select placeholder="Chọn kho xuất">
+            <Form.Item name="maKhoXuat" label="Kho Xuất Hàng" rules={[{ required: true }]} style={{ flex: 1 }}>
+              <Select placeholder="Chọn kho xuất" onChange={handleSourceKhoChange}>
                 {listKho.map(k => <Option key={k.maKho} value={k.maKho}>{k.tenKho}</Option>)}
               </Select>
             </Form.Item>
-            <Form.Item name="maKhoNhap" label="Kho Nhập" rules={[{ required: true }]} style={{ flex: 1 }}>
-              <Select placeholder="Chọn kho nhập">
-                {listKho.map(k => <Option key={k.maKho} value={k.maKho}>{k.tenKho}</Option>)}
+            <Form.Item name="maKhoNhap" label="Kho Nhập Hàng" rules={[{ required: true }]} style={{ flex: 1 }}>
+              <Select placeholder="Chọn kho nhập" disabled={!selectedSourceKho}>
+                {listKho.filter(k => k.maKho !== selectedSourceKho).map(k => <Option key={k.maKho} value={k.maKho}>{k.tenKho}</Option>)}
               </Select>
             </Form.Item>
             <Form.Item name="chungTu" label="Chứng từ" rules={[{ required: true }]}>
               <Input placeholder="DC-001" />
             </Form.Item>
           </Space>
-          <Form.Item name="ghiChu" label="Ghi chú"><Input.TextArea rows={2}/></Form.Item>
+          <Form.Item name="ghiChu" label="Ghi chú"><Input.TextArea rows={2} placeholder="Lý do điều chuyển..." /></Form.Item>
+
           <h3>Danh sách hàng hóa</h3>
           <Form.List name="chiTiet">
             {(fields, { add, remove }) => (
@@ -203,8 +233,8 @@ const TransferPage = () => {
                 {fields.map(({ key, name, ...restField }) => (
                   <Space key={key} style={{ display: "flex", marginBottom: 8 }} align="baseline">
                     <Form.Item {...restField} name={[name, "maSP"]} rules={[{ required: true, message: "Chọn SP" }]}>
-                       <Select style={{ width: 300 }} placeholder="Chọn Sản phẩm" showSearch optionFilterProp="children">
-                        {listSanPham.map(sp => <Option key={sp.maSP} value={sp.maSP}>{sp.tenSP} (Tồn: {sp.soLuongTon})</Option>)}
+                       <Select style={{ width: 300 }} placeholder={selectedSourceKho ? "Chọn sản phẩm" : "Chọn Kho Xuất trước"} showSearch optionFilterProp="children" disabled={!selectedSourceKho}>
+                        {sourceInventory.map(sp => <Option key={sp.maSP} value={sp.maSP}>{sp.tenSP} (Tồn: {sp.soLuongTon})</Option>)}
                       </Select>
                     </Form.Item>
                     <Form.Item {...restField} name={[name, "soLuong"]} rules={[{ required: true, message: "Nhập SL" }]}>

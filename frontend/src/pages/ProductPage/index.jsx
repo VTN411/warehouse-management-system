@@ -172,7 +172,7 @@ const ProductPage = () => {
         <Space size="middle">
           {canEdit && (
             <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-              Sửa
+              
             </Button>
           )}
           {canDelete && (
@@ -181,7 +181,7 @@ const ProductPage = () => {
               danger 
               onClick={() => handleDelete(record.maSP)}
             >
-              Xóa
+              
             </Button>
           )}
         </Space>

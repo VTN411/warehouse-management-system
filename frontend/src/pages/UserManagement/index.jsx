@@ -271,14 +271,14 @@ const UserManagementPage = () => {
       render: (_, record) => (
         <Space size="middle" wrap>
             {canEdit && (
-              <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>Sửa</Button>
+              <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}></Button>
             )}
             {canDelete && (
-              <Button icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.maNguoiDung)}>Xóa</Button>
+              <Button icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.maNguoiDung)}></Button>
             )}
             {canManagePerms && (
               <Dropdown menu={createPermissionMenu(record)} placement="bottomRight" trigger={['click']}>
-                <Button icon={<SettingOutlined />}>Phân quyền</Button>
+                <Button icon={<SettingOutlined />}></Button>
               </Dropdown>
             )}
           </Space>

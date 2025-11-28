@@ -149,7 +149,7 @@ const SupplierPage = () => {
           {/* Nút Sửa (Quyền 62) */}
           {canEdit && (
             <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-              Sửa
+              
             </Button>
           )}
           
@@ -160,7 +160,7 @@ const SupplierPage = () => {
               danger 
               onClick={() => handleDelete(record.maNCC)}
             >
-              Xóa
+              
             </Button>
           )}
         </Space>

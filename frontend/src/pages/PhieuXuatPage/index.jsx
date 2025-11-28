@@ -31,7 +31,7 @@ import * as phieuXuatService from "../../services/phieuxuat.service";
 import * as warehouseService from "../../services/warehouse.service";
 import * as productService from "../../services/product.service";
 import * as customerService from "../../services/customer.service";
-import * as userService from "../../services/user.service"; // [!] 1. IMPORT USER SERVICE
+import * as userService from "../../services/user.service";
 
 const { Option } = Select;
 
@@ -49,9 +49,13 @@ const PhieuXuatPage = () => {
   const [filterConfig, setFilterConfig] = useState(null);
 
   const [listKho, setListKho] = useState([]);
-  const [listSanPham, setListSanPham] = useState([]);
+  const [listSanPham, setListSanPham] = useState([]); // Dùng để hiển thị tên ở bảng ngoài
   const [listKhachHang, setListKhachHang] = useState([]); 
-  const [listUser, setListUser] = useState([]); // [!] 2. STATE LIST USER
+  const [listUser, setListUser] = useState([]); 
+
+  // [!] 1. STATE LƯU TỒN KHO CỦA KHO ĐANG CHỌN
+  const [currentInventory, setCurrentInventory] = useState([]);
+  const [selectedKho, setSelectedKho] = useState(null);
 
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -79,20 +83,19 @@ const PhieuXuatPage = () => {
     setLoading(false);
   }, [messageApi]);
 
-  // [!] 3. LẤY DANH SÁCH USER
   const fetchCommonData = useCallback(async () => {
     try {
       const [resKho, resSP, resKH, resUser] = await Promise.allSettled([
         warehouseService.getAllWarehouses(),
         productService.getAllProducts(),
         customerService.getAllCustomers(),
-        userService.getAllUsers(), // Gọi API user
+        userService.getAllUsers(),
       ]);
       
       if (resKho.status === 'fulfilled') setListKho(resKho.value.data || []);
       if (resSP.status === 'fulfilled') setListSanPham(resSP.value.data || []);
       if (resKH.status === 'fulfilled') setListKhachHang(resKH.value.data || []);
-      if (resUser.status === 'fulfilled') setListUser(resUser.value.data || []); // Lưu list user
+      if (resUser.status === 'fulfilled') setListUser(resUser.value.data || []);
 
     } catch (error) {
       console.error("Lỗi tải danh mục:", error);
@@ -112,7 +115,6 @@ const PhieuXuatPage = () => {
         }
         const role = user.vaiTro || user.tenVaiTro || "";
         setIsAdmin(role === "ADMIN");
-
         let perms = user.dsQuyenSoHuu || user.quyen;
         if (!Array.isArray(perms)) perms = [];
         setPermissions(perms);
@@ -146,14 +148,12 @@ const PhieuXuatPage = () => {
   }, [listData, sortConfig, filterConfig]);
 
   const checkPerm = (id) => isAdmin || permissions.includes(id);
-  
   const canCreate = checkPerm(PERM_CREATE);
   const canEdit = checkPerm(PERM_EDIT);
   const canDelete = checkPerm(PERM_DELETE);
   const canApprove = checkPerm(PERM_APPROVE);
   const canCancel = checkPerm(PERM_CANCEL);
 
-  // [!] HELPER LẤY TÊN USER
   const getUserName = (userId) => {
     if (!userId) return "---";
     const user = listUser.find(u => u.maNguoiDung === userId);
@@ -167,12 +167,34 @@ const PhieuXuatPage = () => {
     return status;
   };
 
-  // --- XỬ LÝ MODAL ---
+  // --- XỬ LÝ FORM ---
+
   const handleOpenModal = () => {
     setEditingRecord(null);
+    setSelectedKho(null);
+    setCurrentInventory([]); // Reset danh sách sản phẩm
     form.resetFields();
     setIsModalVisible(true);
     setIsDeleteModalOpen(false);
+  };
+
+  // [!] 2. HÀM XỬ LÝ KHI CHỌN KHO
+  const handleKhoChange = async (khoId) => {
+    setSelectedKho(khoId);
+    
+    // Xóa danh sách sản phẩm đã nhập để tránh lỗi không khớp kho
+    form.setFieldsValue({ chiTiet: [] });
+
+    try {
+      // Gọi API lấy tồn kho của kho này
+      const res = await warehouseService.getInventoryByWarehouse(khoId);
+      setCurrentInventory(res.data || []);
+      message.info("Đã cập nhật danh sách sản phẩm theo kho xuất");
+    } catch (error) {
+      console.error(error);
+      message.warning("Không thể lấy tồn kho.");
+      setCurrentInventory([]);
+    }
   };
 
   const handleEdit = async (record) => {
@@ -180,14 +202,21 @@ const PhieuXuatPage = () => {
       messageApi.warning("Không thể sửa phiếu đã duyệt/hủy.");
       return;
     }
+    
     try {
       const response = await phieuXuatService.getPhieuXuatById(record.maPhieuXuat);
       const fullData = response.data;
       setEditingRecord(fullData);
+      
+      // [!] Load lại tồn kho của kho trong phiếu cũ
+      if (fullData.maKho) {
+          handleKhoChange(fullData.maKho);
+      }
+
       form.setFieldsValue(fullData);
       setIsModalVisible(true);
     } catch (error) {
-      messageApi.error("Lỗi tải chi tiết phiếu xuất!");
+      messageApi.error("Lỗi tải chi tiết phiếu!");
     }
   };
 
@@ -296,13 +325,12 @@ const PhieuXuatPage = () => {
     ]
   };
 
-  // --- CẤU HÌNH CỘT ---
   const columns = [
     { 
       title: "Ngày Lập", 
       dataIndex: "ngayLapPhieu", 
       key: "ngayLapPhieu",
-      width: "12%", 
+      width: "15%", 
     },
     { 
       title: "Trạng Thái", 
@@ -332,32 +360,23 @@ const PhieuXuatPage = () => {
       title: "Kho Xuất", 
       dataIndex: "maKho", 
       key: "maKho",
-      width: "10%",
+      width: "15%",
       render: (maKho) => {
         const kho = listKho.find(k => k.maKho === maKho);
         return kho ? kho.tenKho : `Mã: ${maKho}`;
       }
     },
-    // [!] 4. CỘT NGƯỜI LẬP
-    { 
-      title: "Người Lập", 
-      dataIndex: "nguoiLap", 
-      key: "nguoiLap",
-      width: "12%",
-      render: (id) => getUserName(id)
-    },
-    // [!] 5. CỘT NGƯỜI DUYỆT
     { 
         title: "Người Duyệt", 
-        dataIndex: "nguoiDuyet", // Hoặc 'tenNguoiDuyet' nếu backend có trả về
-        key: "nguoiDuyet",
-        width: "12%",
-        render: (text, record) => getUserName(record.nguoiDuyet)
+        dataIndex: "tenNguoiDuyet", 
+        key: "tenNguoiDuyet",
+        width: "10%",
+        render: (text, record) => text || getUserName(record.nguoiDuyet)
     },
     {
       title: "Hành động",
       key: "action",
-      width: "16%",
+      width: "20%",
       render: (_, record) => {
         const isChoDuyet = record.trangThai === 1;
         return (
@@ -419,7 +438,7 @@ const PhieuXuatPage = () => {
       >
         <Form form={form} layout="vertical">
           <Space wrap>
-            <Form.Item name="maKH" label="Khách Hàng" rules={[{ required: true }]}>
+            <Form.Item name="maKH" label="Khách Hàng" rules={[{ required: true, message: "Vui lòng chọn!" }]}>
               <Select 
                 style={{ width: 200 }} 
                 placeholder="Chọn Khách Hàng" 
@@ -432,8 +451,19 @@ const PhieuXuatPage = () => {
               </Select>
             </Form.Item>
             
-            <Form.Item name="maKho" label="Kho Xuất Hàng" rules={[{ required: true, message: "Vui lòng chọn kho!" }]}>
-              <Select style={{ width: 200 }} placeholder="Chọn Kho" showSearch optionFilterProp="children">
+            {/* [!] 3. GẮN HÀM onChange CHO KHO XUẤT */}
+            <Form.Item 
+              name="maKho" 
+              label="Kho Xuất Hàng" 
+              rules={[{ required: true, message: "Vui lòng chọn kho!" }]}
+            >
+              <Select 
+                style={{ width: 200 }} 
+                placeholder="Chọn Kho"
+                showSearch
+                optionFilterProp="children"
+                onChange={handleKhoChange} // Khi đổi kho -> Load lại hàng tồn kho
+              >
                 {listKho.map(kho => (
                   <Option key={kho.maKho} value={kho.maKho}>{kho.tenKho}</Option>
                 ))}
@@ -452,15 +482,27 @@ const PhieuXuatPage = () => {
                 {fields.map(({ key, name, ...restField }) => (
                   <Space key={key} style={{ display: "flex", marginBottom: 8 }} align="baseline">
                     <Form.Item {...restField} name={[name, "maSP"]} rules={[{ required: true, message: "Nhập Mã SP" }]}>
-                      <Select style={{ width: 200 }} placeholder="Chọn SP" showSearch optionFilterProp="children">
-                        {listSanPham.map(sp => (
-                          <Option key={sp.maSP} value={sp.maSP}>{sp.tenSP}</Option>
+                       
+                       {/* [!] 4. DROPDOWN SẢN PHẨM (DÙNG currentInventory) */}
+                       <Select 
+                        style={{ width: 300 }} 
+                        placeholder={selectedKho ? "Chọn Sản phẩm" : "Vui lòng chọn Kho Xuất"} 
+                        showSearch 
+                        optionFilterProp="children"
+                        disabled={!selectedKho}
+                      >
+                        {currentInventory.map(sp => (
+                          <Option key={sp.maSP} value={sp.maSP}>
+                            {sp.tenSP} (Tồn: {sp.soLuongTon})
+                          </Option>
                         ))}
                       </Select>
                     </Form.Item>
+
                     <Form.Item {...restField} name={[name, "soLuong"]} rules={[{ required: true, message: "Nhập SL" }]}>
                       <InputNumber placeholder="Số lượng" min={1} />
                     </Form.Item>
+                    
                     <Form.Item {...restField} name={[name, "donGia"]} rules={[{ required: true, message: "Nhập Giá" }]}>
                       <InputNumber 
                         placeholder="Đơn giá" 

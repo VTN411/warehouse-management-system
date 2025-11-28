@@ -24,3 +24,7 @@ export const updateWarehouse = (id, data) => {
 export const deleteWarehouse = (id) => {
   return api.delete(`${API_ENDPOINT}/${id}`);
 };
+
+export const getInventoryByWarehouse = (id) => {
+  return api.get(`${API_ENDPOINT}/${id}/sanpham`);
+};

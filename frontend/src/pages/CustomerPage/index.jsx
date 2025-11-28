@@ -143,7 +143,7 @@ const CustomerPage = () => {
         <Space size="middle">
           {canEdit && (
             <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-              Sửa
+              
             </Button>
           )}
           {canDelete && (
@@ -152,7 +152,7 @@ const CustomerPage = () => {
               danger 
               onClick={() => handleDelete(record.maKH)}
             >
-              Xóa
+              
             </Button>
           )}
         </Space>
