@@ -4,6 +4,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import stu.kho.backend.dto.BaoCaoTonKhoDTO;
+import stu.kho.backend.dto.LichSuGiaoDichDTO;
 import stu.kho.backend.repository.JdbcBaoCaoRepository;
 
 import java.util.List;
@@ -25,5 +26,11 @@ public class BaoCaoController {
     @PreAuthorize("hasAuthority('PERM_REPORT_INVENTORY')")
     public ResponseEntity<List<BaoCaoTonKhoDTO>> getTonKho() {
         return ResponseEntity.ok(baoCaoRepository.getBaoCaoTonKho());
+    }
+    @GetMapping("/lichsu")
+    @PreAuthorize("hasAuthority('PERM_REPORT_HISTORY')")
+    public ResponseEntity<List<LichSuGiaoDichDTO>> getLichSuGiaoDich() {
+        // Gọi phương thức mới trong Repository
+        return ResponseEntity.ok(baoCaoRepository.getLichSuGiaoDich());
     }
 }

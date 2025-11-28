@@ -3,6 +3,7 @@ package stu.kho.backend.repository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import stu.kho.backend.dto.BaoCaoTonKhoDTO;
+import stu.kho.backend.dto.LichSuGiaoDichDTO;
 
 import java.util.List;
 
@@ -48,6 +49,57 @@ public class JdbcBaoCaoRepository {
                 dto.setTrangThaiCanhBao("NORMAL"); // Bình thường
             }
 
+            return dto;
+        });
+    }
+    public List<LichSuGiaoDichDTO> getLichSuGiaoDich() {
+
+        // SQL cho PHIẾU NHẬP
+        String sqlNhap =
+                "SELECT " +
+                        "  CONCAT('PN-', p.MaPhieuNhap, '-', ct.MaSP) as MaGiaoDich, " +
+                        "  p.NgayLapPhieu as Ngay, " +
+                        "  'NHAP' as LoaiGiaoDich, " +
+                        "  p.ChungTu, " +
+                        "  sp.TenSP, " +
+                        "  k.TenKho, " +
+                        "  ct.SoLuong " +
+                        "FROM phieunhaphang p " +
+                        "JOIN chitietphieunhap ct ON p.MaPhieuNhap = ct.MaPhieuNhap " +
+                        "JOIN sanpham sp ON ct.MaSP = sp.MaSP " +
+                        "JOIN khohang k ON p.MaKho = k.MaKho " +
+                        "WHERE p.TrangThai = 2 "; // Chỉ lấy phiếu ĐÃ DUYỆT (tùy chọn)
+
+        // SQL cho PHIẾU XUẤT
+        String sqlXuat =
+                "SELECT " +
+                        "  CONCAT('PX-', p.MaPhieuXuat, '-', ct.MaSP) as MaGiaoDich, " +
+                        "  p.NgayLapPhieu as Ngay, " +
+                        "  'XUAT' as LoaiGiaoDich, " +
+                        "  p.ChungTu, " +
+                        "  sp.TenSP, " +
+                        "  k.TenKho, " +
+                        "  ct.SoLuong " +
+                        "FROM phieuxuathang p " +
+                        "JOIN chitietphieuxuat ct ON p.MaPhieuXuat = ct.MaPhieuXuat " +
+                        "JOIN sanpham sp ON ct.MaSP = sp.MaSP " +
+                        "JOIN khohang k ON p.MaKho = k.MaKho " +
+                        "WHERE p.TrangThai = 2 "; // Chỉ lấy phiếu ĐÃ DUYỆT (tùy chọn)
+
+        // GỘP 2 SQL VÀ SẮP XẾP
+        String finalSql = sqlNhap + " UNION ALL " + sqlXuat + " ORDER BY Ngay DESC";
+
+        return jdbcTemplate.query(finalSql, (rs, rowNum) -> {
+            LichSuGiaoDichDTO dto = new LichSuGiaoDichDTO();
+            dto.setMaGiaoDich(rs.getString("MaGiaoDich"));
+            if (rs.getTimestamp("Ngay") != null) {
+                dto.setNgay(rs.getTimestamp("Ngay").toLocalDateTime());
+            }
+            dto.setLoaiGiaoDich(rs.getString("LoaiGiaoDich"));
+            dto.setChungTu(rs.getString("ChungTu"));
+            dto.setTenSP(rs.getString("TenSP"));
+            dto.setTenKho(rs.getString("TenKho"));
+            dto.setSoLuong(rs.getInt("SoLuong"));
             return dto;
         });
     }
