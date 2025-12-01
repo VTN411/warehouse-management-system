@@ -7,32 +7,41 @@ export const getAllProducts = () => {
   return api.get(API_ENDPOINT);
 };
 
-export const createProduct = (values, file) => {
+// Hàm đóng gói dữ liệu chuẩn
+const createFormData = (values, file) => {
   const formData = new FormData();
-  formData.append("data", JSON.stringify(values));
+  
+  // Đóng gói JSON vào Blob (để Backend Java hiểu)
+  const jsonBlob = new Blob([JSON.stringify(values)], {
+    type: 'application/json'
+  });
+  
+  formData.append("data", jsonBlob);
+
   if (file) {
     formData.append("image", file);
   }
+  
+  return formData;
+};
+
+// Tạo mới
+export const createProduct = (values, file) => {
+  const formData = createFormData(values, file);
+  
+  // [!] "Content-Type": undefined là CHÌA KHÓA để fix lỗi này
   return api.post(API_ENDPOINT, formData, {
-    headers: { "Content-Type": "multipart/form-data" },
+    headers: { "Content-Type": undefined }
   });
 };
 
-// [!] KIỂM TRA KỸ HÀM NÀY
+// Cập nhật
 export const updateProduct = (id, values, file) => {
-  const formData = new FormData();
+  const formData = createFormData(values, file);
   
-  // Backend yêu cầu dữ liệu text nằm trong field 'data'
-  formData.append("data", JSON.stringify(values));
-  
-  // Nếu có file ảnh mới thì gửi kèm, không thì thôi
-  if (file) {
-    formData.append("image", file);
-  }
-
-  // Bắt buộc header này
+  // [!] "Content-Type": undefined là CHÌA KHÓA để fix lỗi này
   return api.put(`${API_ENDPOINT}/${id}`, formData, {
-    headers: { "Content-Type": "multipart/form-data" },
+    headers: { "Content-Type": undefined }
   });
 };
 
