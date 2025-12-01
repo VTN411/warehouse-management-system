@@ -31,7 +31,6 @@ import * as phieuNhapService from "../../services/phieunhap.service";
 import * as warehouseService from "../../services/warehouse.service";
 import * as supplierService from "../../services/supplier.service";
 import * as productService from "../../services/product.service";
-// [!] 1. IMPORT USER SERVICE
 import * as userService from "../../services/user.service";
 
 const { Option } = Select;
@@ -51,7 +50,6 @@ const PhieuNhapPage = () => {
   const [listNCC, setListNCC] = useState([]);
   const [listKho, setListKho] = useState([]);
   const [listSanPham, setListSanPham] = useState([]);
-  // [!] 2. THÊM STATE LIST USER
   const [listUser, setListUser] = useState([]);
 
   const [selectedNCC, setSelectedNCC] = useState(null);
@@ -82,23 +80,18 @@ const PhieuNhapPage = () => {
     setLoading(false);
   }, [messageApi]);
 
-  // [!] 3. LẤY DANH SÁCH USER CÙNG VỚI CÁC DANH MỤC KHÁC
   const fetchCommonData = useCallback(async () => {
     try {
-      // Gọi các API song song
       const [resNCC, resKho, resSP, resUser] = await Promise.allSettled([
         supplierService.getAllSuppliers(),
         warehouseService.getAllWarehouses(),
         productService.getAllProducts(),
-        userService.getAllUsers(), // Gọi API lấy user
+        userService.getAllUsers(),
       ]);
 
-      // Xử lý kết quả (dùng allSettled để 1 cái lỗi không làm chết hết)
       if (resNCC.status === 'fulfilled') setListNCC(resNCC.value.data || []);
       if (resKho.status === 'fulfilled') setListKho(resKho.value.data || []);
       if (resSP.status === 'fulfilled') setListSanPham(resSP.value.data || []);
-      
-      // Lưu danh sách user (Nếu user không có quyền xem user thì sẽ rỗng, không sao cả)
       if (resUser.status === 'fulfilled') setListUser(resUser.value.data || []);
 
     } catch (error) {
@@ -158,14 +151,20 @@ const PhieuNhapPage = () => {
   const canApprove = checkPerm(PERM_APPROVE);
   const canCancel = checkPerm(PERM_CANCEL);
 
-  // Helper để lấy tên user từ ID
   const getUserName = (userId) => {
     if (!userId) return "---";
     const user = listUser.find(u => u.maNguoiDung === userId);
     return user ? user.hoTen : `ID: ${userId}`;
   };
 
-  // --- CÁC HÀM XỬ LÝ (Giữ nguyên) ---
+  const renderStatus = (status) => {
+    if (status === 1) return <Tag color="orange">Chờ duyệt</Tag>;
+    if (status === 2) return <Tag color="green">Đã duyệt</Tag>;
+    if (status === 3) return <Tag color="red">Không duyệt</Tag>;
+    return status;
+  };
+
+  // --- CÁC HÀM XỬ LÝ ---
   const handleOpenModal = () => {
     setEditingPhieuNhap(null);
     setSelectedNCC(null);
@@ -221,7 +220,10 @@ const PhieuNhapPage = () => {
       } catch (error) {
         messageApi.error("Có lỗi xảy ra!");
       }
-    });
+    }).catch((info) => {
+        console.log("Validate Failed:", info);
+        // Không làm gì cả, Ant Design đã tự hiện dòng chữ đỏ dưới ô input rồi
+      });;
   };
 
   const handleDelete = (id) => {
@@ -304,30 +306,24 @@ const PhieuNhapPage = () => {
     ]
   };
 
-  // --- CỘT BẢNG ---
   const columns = [
     { 
       title: "Ngày Lập", 
       dataIndex: "ngayLapPhieu", 
       key: "ngayLapPhieu",
-      width: "12%", 
+      width: "15%", 
     },
     { 
       title: "Trạng Thái", 
       dataIndex: "trangThai", 
       key: "trangThai",
       width: "10%", 
-      render: (status) => {
-        if (status === 1) return <Tag color="orange">Chờ duyệt</Tag>;
-        if (status === 2) return <Tag color="green">Đã duyệt</Tag>;
-        if (status === 3) return <Tag color="red">Không duyệt</Tag>;
-        return status;
-      },
+      render: renderStatus,
     },
     { 
       title: "Tổng Tiền", 
       dataIndex: "tongTien", 
-      key: "tongTien",
+      key: "tongTien", 
       width: "10%",
       render: (value) => `${Number(value || 0).toLocaleString()} đ`,
     },
@@ -335,7 +331,7 @@ const PhieuNhapPage = () => {
       title: "Nhà Cung Cấp", 
       dataIndex: "maNCC", 
       key: "maNCC",
-      width: "18%",
+      width: "20%",
       render: (id) => {
         const ncc = listNCC.find(item => item.maNCC === id);
         return ncc ? ncc.tenNCC : `Mã: ${id}`;
@@ -345,32 +341,23 @@ const PhieuNhapPage = () => {
       title: "Kho Nhập", 
       dataIndex: "maKho", 
       key: "maKho",
-      width: "10%",
+      width: "15%",
       render: (id) => {
         const kho = listKho.find(item => item.maKho === id);
         return kho ? kho.tenKho : `Mã: ${id}`;
       }
     },
-    // [!] 4. THÊM CỘT NGƯỜI LẬP
-    { 
-      title: "Người Lập", 
-      dataIndex: "nguoiLap", 
-      key: "nguoiLap",
-      width: "12%",
-      render: (id) => getUserName(id)
-    },
-    // [!] 5. CẬP NHẬT CỘT NGƯỜI DUYỆT (Dùng getUserName)
     { 
       title: "Người Duyệt", 
-      dataIndex: "nguoiDuyet", 
-      key: "nguoiDuyet",
-      width: "12%",
-      render: (id) => getUserName(id)
+      dataIndex: "tenNguoiDuyet", 
+      key: "tenNguoiDuyet",
+      width: "10%",
+      render: (text, record) => text || getUserName(record.nguoiDuyet)
     },
     {
       title: 'Hành động',
       key: 'action',
-      width: "16%",
+      width: "20%",
       render: (_, record) => {
         const isChoDuyet = record.trangThai === 1;
         return (
@@ -418,9 +405,9 @@ const PhieuNhapPage = () => {
         loading={loading}
         rowKey="maPhieuNhap"
         pagination={{ pageSize: 5 }}
+        scroll={{ x: 'max-content' }}
       />
 
-      {/* MODAL TẠO/SỬA */}
       <Modal
         title={editingPhieuNhap ? "Sửa Phiếu Nhập" : "Tạo Phiếu Nhập"}
         open={isModalVisible}
@@ -476,7 +463,7 @@ const PhieuNhapPage = () => {
                       rules={[{ required: true, message: "Chọn SP" }]}
                     >
                       <Select 
-                        style={{ width: 200 }} 
+                        style={{ width: 300 }} 
                         placeholder={selectedNCC ? "Chọn Sản phẩm" : "Vui lòng chọn NCC trước"} 
                         showSearch 
                         optionFilterProp="children"
@@ -485,8 +472,15 @@ const PhieuNhapPage = () => {
                         {listSanPham
                           .filter(sp => {
                             if (sp.maNCC == selectedNCC) return true;
-                            if (sp.danhSachNCC && Array.isArray(sp.danhSachNCC)) return sp.danhSachNCC.some(ncc => ncc.maNCC === selectedNCC);
-                            if (sp.danhSachMaNCC && Array.isArray(sp.danhSachMaNCC)) return sp.danhSachMaNCC.includes(selectedNCC);
+                            if (sp.danhSachNCC && Array.isArray(sp.danhSachNCC)) {
+                                return sp.danhSachNCC.some(ncc => ncc.maNCC === selectedNCC);
+                            }
+                            if (sp.danhSachMaNCC && Array.isArray(sp.danhSachMaNCC)) {
+                                return sp.danhSachMaNCC.includes(selectedNCC);
+                            }
+                            // Fallback
+                            if (sp.maNCC && String(sp.maNCC) === String(selectedNCC)) return true;
+                            
                             return false;
                           })
                           .map(sp => (
@@ -494,13 +488,30 @@ const PhieuNhapPage = () => {
                         ))}
                       </Select>
                     </Form.Item>
+                    
+                    {/* [!] CHỈ CHO NHẬP SỐ NGUYÊN DƯƠNG */}
                     <Form.Item
                       {...restField}
                       name={[name, "soLuong"]}
-                      rules={[{ required: true, message: "Nhập SL" }]}
+                      rules={[
+                        { required: true, message: "Nhập SL" },
+                        { type: 'integer', min: 1, message: '>0' }
+                      ]}
                     >
-                      <InputNumber placeholder="Số lượng" min={1} />
+                      <InputNumber 
+                        placeholder="Số lượng" 
+                        min={1} 
+                        precision={0} // Ép kiểu số nguyên
+                        style={{ width: '100%' }}
+                        onKeyPress={(event) => {
+                          if (!/[0-9]/.test(event.key)) {
+                            event.preventDefault();
+                          }
+                        }}
+                      />
                     </Form.Item>
+                    
+                    {/* [!] GIÁ TIỀN: SỐ NGUYÊN DƯƠNG LUÔN CHO ĐỒNG BỘ */}
                     <Form.Item
                       {...restField}
                       name={[name, "donGia"]}
@@ -509,9 +520,15 @@ const PhieuNhapPage = () => {
                       <InputNumber 
                         placeholder="Đơn giá" 
                         min={0}
+                        precision={0} // Ép kiểu số nguyên
                         formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                         parser={value => value.replace(/\$\s?|(,*)/g, '')}
                         style={{ width: 150 }}
+                        onKeyPress={(event) => {
+                          if (!/[0-9]/.test(event.key)) {
+                            event.preventDefault();
+                          }
+                        }}
                       />
                     </Form.Item>
                     <MinusCircleOutlined onClick={() => remove(name)} />
@@ -556,12 +573,7 @@ const PhieuNhapPage = () => {
             <Descriptions bordered column={2}>
               <Descriptions.Item label="Mã Phiếu">{viewingPhieuNhap.maPhieuNhap}</Descriptions.Item>
               <Descriptions.Item label="Ngày Lập">{viewingPhieuNhap.ngayLapPhieu}</Descriptions.Item>
-              <Descriptions.Item label="Trạng Thái">{
-                // Render trạng thái trong modal
-                viewingPhieuNhap.trangThai === 1 ? <Tag color="orange">Chờ duyệt</Tag> :
-                viewingPhieuNhap.trangThai === 2 ? <Tag color="green">Đã duyệt</Tag> :
-                <Tag color="red">Không duyệt</Tag>
-              }</Descriptions.Item>
+              <Descriptions.Item label="Trạng Thái">{renderStatus(viewingPhieuNhap.trangThai)}</Descriptions.Item>
               <Descriptions.Item label="Tổng Tiền">{Number(viewingPhieuNhap.tongTien).toLocaleString()} đ</Descriptions.Item>
               <Descriptions.Item label="Nhà Cung Cấp">
                 {listNCC.find(n => n.maNCC === viewingPhieuNhap.maNCC)?.tenNCC || viewingPhieuNhap.maNCC}
@@ -570,9 +582,7 @@ const PhieuNhapPage = () => {
                 {listKho.find(k => k.maKho === viewingPhieuNhap.maKho)?.tenKho || viewingPhieuNhap.maKho}
               </Descriptions.Item>
               <Descriptions.Item label="Chứng Từ">{viewingPhieuNhap.chungTu}</Descriptions.Item>
-              {/* Hiển thị tên người lập trong modal */}
               <Descriptions.Item label="Người Lập">{getUserName(viewingPhieuNhap.nguoiLap)}</Descriptions.Item>
-              {/* Hiển thị tên người duyệt trong modal */}
               <Descriptions.Item label="Người Duyệt">{getUserName(viewingPhieuNhap.nguoiDuyet)}</Descriptions.Item>
             </Descriptions>
 

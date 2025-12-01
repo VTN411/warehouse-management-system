@@ -35,7 +35,6 @@ import * as userService from "../../services/user.service";
 
 const { Option } = Select;
 
-// Định nghĩa tên quyền
 const PERM_CREATE = 23;
 const PERM_EDIT = 24;
 const PERM_DELETE = 25;
@@ -49,11 +48,11 @@ const PhieuXuatPage = () => {
   const [filterConfig, setFilterConfig] = useState(null);
 
   const [listKho, setListKho] = useState([]);
-  const [listSanPham, setListSanPham] = useState([]); // Dùng để hiển thị tên ở bảng ngoài
+  const [listSanPham, setListSanPham] = useState([]);
   const [listKhachHang, setListKhachHang] = useState([]); 
   const [listUser, setListUser] = useState([]); 
 
-  // [!] 1. STATE LƯU TỒN KHO CỦA KHO ĐANG CHỌN
+  // State lưu tồn kho của kho đang chọn
   const [currentInventory, setCurrentInventory] = useState([]);
   const [selectedKho, setSelectedKho] = useState(null);
 
@@ -113,8 +112,10 @@ const PhieuXuatPage = () => {
         if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung) {
              user = user.quyen;
         }
+        
         const role = user.vaiTro || user.tenVaiTro || "";
         setIsAdmin(role === "ADMIN");
+
         let perms = user.dsQuyenSoHuu || user.quyen;
         if (!Array.isArray(perms)) perms = [];
         setPermissions(perms);
@@ -172,21 +173,17 @@ const PhieuXuatPage = () => {
   const handleOpenModal = () => {
     setEditingRecord(null);
     setSelectedKho(null);
-    setCurrentInventory([]); // Reset danh sách sản phẩm
+    setCurrentInventory([]);
     form.resetFields();
     setIsModalVisible(true);
     setIsDeleteModalOpen(false);
   };
 
-  // [!] 2. HÀM XỬ LÝ KHI CHỌN KHO
   const handleKhoChange = async (khoId) => {
     setSelectedKho(khoId);
-    
-    // Xóa danh sách sản phẩm đã nhập để tránh lỗi không khớp kho
     form.setFieldsValue({ chiTiet: [] });
 
     try {
-      // Gọi API lấy tồn kho của kho này
       const res = await warehouseService.getInventoryByWarehouse(khoId);
       setCurrentInventory(res.data || []);
       message.info("Đã cập nhật danh sách sản phẩm theo kho xuất");
@@ -208,7 +205,6 @@ const PhieuXuatPage = () => {
       const fullData = response.data;
       setEditingRecord(fullData);
       
-      // [!] Load lại tồn kho của kho trong phiếu cũ
       if (fullData.maKho) {
           handleKhoChange(fullData.maKho);
       }
@@ -245,7 +241,9 @@ const PhieuXuatPage = () => {
       } catch (error) {
         messageApi.error("Có lỗi xảy ra!");
       }
-    });
+    }).catch((info) => {
+        console.log("Validate Failed:", info);
+      });
   };
 
   const handleDelete = (id) => {
@@ -344,7 +342,7 @@ const PhieuXuatPage = () => {
       dataIndex: "tongTien", 
       key: "tongTien", 
       width: "10%",
-      render: (v) => `${Number(v || 0).toLocaleString()} đ` 
+      render: (value) => `${Number(value || 0).toLocaleString()} đ` 
     },
     { 
       title: "Khách Hàng", 
@@ -438,7 +436,7 @@ const PhieuXuatPage = () => {
       >
         <Form form={form} layout="vertical">
           <Space wrap>
-            <Form.Item name="maKH" label="Khách Hàng" rules={[{ required: true, message: "Vui lòng chọn!" }]}>
+            <Form.Item name="maKH" label="Khách Hàng" rules={[{ required: true, message: "Vui lòng chọn khách hàng!" }]}>
               <Select 
                 style={{ width: 200 }} 
                 placeholder="Chọn Khách Hàng" 
@@ -451,7 +449,6 @@ const PhieuXuatPage = () => {
               </Select>
             </Form.Item>
             
-            {/* [!] 3. GẮN HÀM onChange CHO KHO XUẤT */}
             <Form.Item 
               name="maKho" 
               label="Kho Xuất Hàng" 
@@ -462,7 +459,7 @@ const PhieuXuatPage = () => {
                 placeholder="Chọn Kho"
                 showSearch
                 optionFilterProp="children"
-                onChange={handleKhoChange} // Khi đổi kho -> Load lại hàng tồn kho
+                onChange={handleKhoChange}
               >
                 {listKho.map(kho => (
                   <Option key={kho.maKho} value={kho.maKho}>{kho.tenKho}</Option>
@@ -481,12 +478,15 @@ const PhieuXuatPage = () => {
               <>
                 {fields.map(({ key, name, ...restField }) => (
                   <Space key={key} style={{ display: "flex", marginBottom: 8 }} align="baseline">
-                    <Form.Item {...restField} name={[name, "maSP"]} rules={[{ required: true, message: "Nhập Mã SP" }]}>
-                       
-                       {/* [!] 4. DROPDOWN SẢN PHẨM (DÙNG currentInventory) */}
+                    <Form.Item
+                      {...restField}
+                      name={[name, "maSP"]}
+                      dependencies={[name, 'maSP']}
+                      rules={[{ required: true, message: "Chọn SP" }]}
+                    >
                        <Select 
                         style={{ width: 300 }} 
-                        placeholder={selectedKho ? "Chọn Sản phẩm" : "Vui lòng chọn Kho Xuất"} 
+                        placeholder={selectedKho ? "Chọn sản phẩm" : "Vui lòng chọn Kho Xuất"} 
                         showSearch 
                         optionFilterProp="children"
                         disabled={!selectedKho}
@@ -499,17 +499,54 @@ const PhieuXuatPage = () => {
                       </Select>
                     </Form.Item>
 
-                    <Form.Item {...restField} name={[name, "soLuong"]} rules={[{ required: true, message: "Nhập SL" }]}>
-                      <InputNumber placeholder="Số lượng" min={1} />
+                    {/* [!] VALIDATE: SỐ LƯỢNG PHẢI <= TỒN KHO */}
+                    <Form.Item
+                      {...restField}
+                      name={[name, "soLuong"]}
+                      dependencies={[name, 'maSP']} // [!] Quan trọng: Chạy lại validate khi đổi sản phẩm
+                      rules={[
+                        { required: true, message: "Nhập SL" },
+                        { type: 'integer', min: 1, message: '>0' },
+                        ({ getFieldValue }) => ({
+                          validator(_, value) {
+                            if (!value) return Promise.resolve();
+                            const selectedSP = getFieldValue(['chiTiet', name, 'maSP']);
+                            const inStock = currentInventory.find(i => i.maSP === selectedSP);
+                            
+                            // Nếu số lượng nhập > Tồn kho -> Báo lỗi
+                            if (inStock && value > inStock.soLuongTon) {
+                               return Promise.reject(new Error(`Số lượng không đủ (${inStock.soLuongTon})`));
+                            }
+                            return Promise.resolve();
+                          },
+                        }),
+                      ]}
+                    >
+                      <InputNumber 
+                         placeholder="Số lượng" 
+                         min={1} 
+                         precision={0}
+                         style={{ width: '100%' }}
+                         onKeyPress={(event) => {
+                          if (!/[0-9]/.test(event.key)) event.preventDefault();
+                        }}
+                      />
                     </Form.Item>
                     
-                    <Form.Item {...restField} name={[name, "donGia"]} rules={[{ required: true, message: "Nhập Giá" }]}>
+                    <Form.Item
+                      {...restField}
+                      name={[name, "donGia"]}
+                      rules={[{ required: true, message: "Nhập Giá" }]}
+                    >
                       <InputNumber 
                         placeholder="Đơn giá" 
                         min={0}
                         formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                         parser={value => value.replace(/\$\s?|(,*)/g, '')}
                         style={{ width: 150 }}
+                        onKeyPress={(event) => {
+                          if (!/[0-9]/.test(event.key)) event.preventDefault();
+                        }}
                       />
                     </Form.Item>
                     <MinusCircleOutlined onClick={() => remove(name)} />
@@ -526,27 +563,11 @@ const PhieuXuatPage = () => {
         </Form>
       </Modal>
 
-      {/* MODAL XÓA */}
-      <Modal
-        title="Xác nhận xóa"
-        open={isDeleteModalOpen}
-        onOk={handleDeleteConfirm}
-        onCancel={() => setIsDeleteModalOpen(false)}
-        okText="Xóa"
-        cancelText="Hủy"
-        okType="danger"
-      >
+      {/* MODAL XÓA & XEM CHI TIẾT (GIỮ NGUYÊN) */}
+      <Modal title="Xác nhận xóa" open={isDeleteModalOpen} onOk={handleDeleteConfirm} onCancel={() => setIsDeleteModalOpen(false)} okText="Xóa" cancelText="Hủy" okType="danger">
         <p>Bạn có chắc muốn xóa phiếu xuất này?</p>
       </Modal>
-
-      {/* [!] MODAL XEM CHI TIẾT */}
-      <Modal
-        title="Chi tiết Phiếu Xuất"
-        open={isDetailModalOpen}
-        onCancel={() => setIsDetailModalOpen(false)}
-        footer={[<Button key="close" onClick={() => setIsDetailModalOpen(false)}>Đóng</Button>]}
-        width={900}
-      >
+      <Modal title="Chi tiết Phiếu Xuất" open={isDetailModalOpen} onCancel={() => setIsDetailModalOpen(false)} footer={[<Button key="close" onClick={() => setIsDetailModalOpen(false)}>Đóng</Button>]} width={900}>
         {viewingPhieuXuat && (
           <div>
             <Descriptions bordered column={2}>
@@ -554,48 +575,19 @@ const PhieuXuatPage = () => {
               <Descriptions.Item label="Ngày Lập">{viewingPhieuXuat.ngayLapPhieu}</Descriptions.Item>
               <Descriptions.Item label="Trạng Thái">{renderStatus(viewingPhieuXuat.trangThai)}</Descriptions.Item>
               <Descriptions.Item label="Tổng Tiền">{Number(viewingPhieuXuat.tongTien).toLocaleString()} đ</Descriptions.Item>
-              <Descriptions.Item label="Khách Hàng">
-                {listKhachHang.find(kh => kh.maKH === viewingPhieuXuat.maKH)?.tenKH || viewingPhieuXuat.maKH}
-              </Descriptions.Item>
-              <Descriptions.Item label="Kho Xuất">
-                {listKho.find(k => k.maKho === viewingPhieuXuat.maKho)?.tenKho || viewingPhieuXuat.maKho}
-              </Descriptions.Item>
+              <Descriptions.Item label="Khách Hàng">{listKhachHang.find(kh => kh.maKH === viewingPhieuXuat.maKH)?.tenKH || viewingPhieuXuat.maKH}</Descriptions.Item>
+              <Descriptions.Item label="Kho Xuất">{listKho.find(k => k.maKho === viewingPhieuXuat.maKho)?.tenKho || viewingPhieuXuat.maKho}</Descriptions.Item>
               <Descriptions.Item label="Chứng Từ">{viewingPhieuXuat.chungTu}</Descriptions.Item>
               <Descriptions.Item label="Người Lập">{getUserName(viewingPhieuXuat.nguoiLap)}</Descriptions.Item>
               <Descriptions.Item label="Người Duyệt">{getUserName(viewingPhieuXuat.nguoiDuyet)}</Descriptions.Item>
             </Descriptions>
-
             <Divider orientation="left">Danh sách sản phẩm</Divider>
-
-            <Table 
-              dataSource={viewingPhieuXuat.chiTiet || []}
-              rowKey="maSP"
-              pagination={false}
-              columns={[
-                {
-                  title: 'Sản Phẩm',
-                  dataIndex: 'maSP',
-                  key: 'maSP',
-                  render: (id) => listSanPham.find(sp => sp.maSP === id)?.tenSP || `SP-${id}`
-                },
-                {
-                  title: 'Số Lượng',
-                  dataIndex: 'soLuong',
-                  key: 'soLuong',
-                },
-                {
-                  title: 'Đơn Giá',
-                  dataIndex: 'donGia',
-                  key: 'donGia',
-                  render: (val) => `${Number(val).toLocaleString()} đ`
-                },
-                {
-                  title: 'Thành Tiền',
-                  key: 'thanhTien',
-                  render: (_, r) => `${(r.soLuong * r.donGia).toLocaleString()} đ`
-                }
-              ]}
-            />
+            <Table dataSource={viewingPhieuXuat.chiTiet || []} rowKey="maSP" pagination={false} columns={[
+                { title: 'Sản Phẩm', dataIndex: 'maSP', render: (id) => listSanPham.find(sp => sp.maSP === id)?.tenSP || `SP-${id}` },
+                { title: 'Số Lượng', dataIndex: 'soLuong' },
+                { title: 'Đơn Giá', dataIndex: 'donGia', render: (val) => `${Number(val).toLocaleString()} đ` },
+                { title: 'Thành Tiền', key: 'thanhTien', render: (_, r) => `${(r.soLuong * r.donGia).toLocaleString()} đ` }
+            ]}/>
           </div>
         )}
       </Modal>

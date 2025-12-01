@@ -13,26 +13,29 @@ import {
   InputNumber,
   Row,
   Col,
+  Tag,
+  Upload, // [!] 1. Import Upload
+  Image,  // [!] 1. Import Image để xem ảnh
 } from "antd";
 import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
   ReloadOutlined,
+  UploadOutlined, // [!] 1. Icon Upload
 } from "@ant-design/icons";
 import * as productService from "../../services/product.service";
-// [!] 1. IMPORT SERVICE NHÀ CUNG CẤP
 import * as supplierService from "../../services/supplier.service";
 
 const { Option } = Select;
 
+// Quyền
 const PERM_CREATE_ID = 50;
 const PERM_EDIT_ID = 51;
 const PERM_DELETE_ID = 52;
 
 const ProductPage = () => {
   const [products, setProducts] = useState([]);
-  // [!] 2. STATE LƯU DANH SÁCH NCC
   const [listNCC, setListNCC] = useState([]);
   
   const [loading, setLoading] = useState(false);
@@ -45,6 +48,9 @@ const ProductPage = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingProductId, setDeletingProductId] = useState(null);
 
+  // [!] 2. STATE LƯU FILE ẢNH ĐÃ CHỌN
+  const [fileList, setFileList] = useState([]);
+
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     try {
@@ -56,21 +62,18 @@ const ProductPage = () => {
     setLoading(false);
   }, [messageApi]);
 
-  // [!] 3. HÀM LẤY DANH SÁCH NCC
   const fetchCommonData = useCallback(async () => {
     try {
       const response = await supplierService.getAllSuppliers();
       setListNCC(response.data || []);
     } catch (error) {
       console.error("Lỗi tải danh sách NCC:", error);
-      // Không báo lỗi 403 ra màn hình để tránh làm phiền user nếu họ không có quyền xem
     }
   }, []);
 
   useEffect(() => {
     fetchProducts();
-    fetchCommonData(); // Gọi hàm lấy dữ liệu chung
-
+    fetchCommonData();
     try {
       const storedUser = localStorage.getItem("user_info");
       if (storedUser) {
@@ -93,17 +96,23 @@ const ProductPage = () => {
 
   const handleOpenModal = () => {
     setEditingProduct(null);
+    setFileList([]); // Reset ảnh
     form.resetFields();
     setIsModalVisible(true);
   };
 
   const handleEdit = (record) => {
     setEditingProduct(record);
+    setFileList([]); // Reset ảnh mới (ảnh cũ sẽ hiển thị qua URL)
+    
+    const selectedNCCIds = record.danhSachNCC 
+      ? record.danhSachNCC.map(ncc => ncc.maNCC) 
+      : [];
+
     form.setFieldsValue({
       ...record,
       maLoai: record.loaiHang?.maLoai || record.maLoai, 
-      // Đảm bảo danhSachMaNCC là mảng để Select mode="multiple" hiển thị đúng
-      danhSachMaNCC: record.danhSachMaNCC || [], 
+      danhSachMaNCC: selectedNCCIds, 
     });
     setIsModalVisible(true);
   };
@@ -116,19 +125,28 @@ const ProductPage = () => {
   const handleOk = () => {
     form.validateFields().then(async (values) => {
       try {
+        // [!] 3. LẤY FILE ẢNH TỪ STATE
+        const file = fileList.length > 0 ? fileList[0].originFileObj : null;
+
         if (editingProduct) {
-          await productService.updateProduct(editingProduct.maSP, values);
+          // Update
+          await productService.updateProduct(editingProduct.maSP, values, file);
           messageApi.success("Cập nhật sản phẩm thành công!");
         } else {
-          await productService.createProduct(values);
+          // Create
+          await productService.createProduct(values, file);
           messageApi.success("Tạo sản phẩm mới thành công!");
         }
         setIsModalVisible(false);
         fetchProducts();
       } catch (error) {
-        messageApi.error("Có lỗi xảy ra!");
+        console.error(error);
+        messageApi.error("Có lỗi xảy ra khi lưu sản phẩm!");
       }
-    });
+    }).catch((info) => {
+        console.log("Validate Failed:", info);
+        // Không làm gì cả, Ant Design đã tự hiện dòng chữ đỏ dưới ô input rồi
+      });;
   };
 
   const handleDelete = (id) => {
@@ -148,42 +166,61 @@ const ProductPage = () => {
     setDeletingProductId(null);
   };
 
+  // Xử lý khi chọn file ảnh
+  const handleUploadChange = ({ fileList: newFileList }) => {
+    setFileList(newFileList);
+  };
+
   const columns = [
-    { title: "Mã SP", dataIndex: "maSP", key: "maSP", width: 80 },
+    { title: "Mã SP", dataIndex: "maSP", key: "maSP", width: 70 },
+    
+    // [!] 4. HIỂN THỊ ẢNH TRONG BẢNG
+    { 
+        title: "Hình Ảnh", 
+        dataIndex: "hinhAnh", 
+        key: "hinhAnh", 
+        width: 100,
+        render: (url) => (
+            url ? <Image width={50} src={`http://localhost:8080/images/${url}`} fallback="https://via.placeholder.com/50" /> : <Tag>No Image</Tag>
+        )
+    },
+
     { title: "Tên Sản Phẩm", dataIndex: "tenSP", key: "tenSP", width: 200 },
     { title: "ĐVT", dataIndex: "donViTinh", key: "donViTinh", width: 80 },
     { 
       title: "Giá Nhập", 
       dataIndex: "giaNhap", 
       key: "giaNhap", 
-      render: (val) => `${val?.toLocaleString()} đ`,
-      width: 120 
+      render: (val) => `${Number(val).toLocaleString()} đ`,
+      width: 110 
     },
-    { title: "Tồn Kho", dataIndex: "soLuongTon", key: "soLuongTon", width: 100 },
+    { title: "Tồn", dataIndex: "soLuongTon", key: "soLuongTon", width: 70 },
     { 
       title: "Loại Hàng", 
-      render: (_, record) => record.loaiHang?.tenLoai || `Mã Loại: ${record.maLoai}`,
-      key: "loaiHang" 
+      render: (_, record) => record.loaiHang?.tenLoai || `Mã: ${record.maLoai}`,
+      key: "loaiHang",
+      width: 120
     },
+    // { 
+    //   title: "Nhà Cung Cấp",
+    //   key: "danhSachNCC",
+    //   width: 200,
+    //   render: (_, record) => (
+    //     <>
+    //       {record.danhSachNCC && record.danhSachNCC.map(ncc => (
+    //         <Tag key={ncc.maNCC} color="blue">{ncc.tenNCC}</Tag>
+    //       ))}
+    //     </>
+    //   )
+    // },
     {
       title: "Hành động",
       key: "action",
+      width: 150,
       render: (_, record) => (
-        <Space size="middle">
-          {canEdit && (
-            <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-              
-            </Button>
-          )}
-          {canDelete && (
-            <Button 
-              icon={<DeleteOutlined />} 
-              danger 
-              onClick={() => handleDelete(record.maSP)}
-            >
-              
-            </Button>
-          )}
+        <Space size="small">
+          {canEdit && <Button icon={<EditOutlined />} onClick={() => handleEdit(record)} />}
+          {canDelete && <Button icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.maSP)} />}
         </Space>
       ),
     },
@@ -221,6 +258,27 @@ const ProductPage = () => {
         width={800}
       >
         <Form form={form} layout="vertical">
+          
+          {/* [!] 5. FORM UPLOAD ẢNH */}
+          <Row gutter={16}>
+             <Col span={24} style={{ textAlign: 'center', marginBottom: 20 }}>
+                <Upload
+                    listType="picture-card"
+                    fileList={fileList}
+                    onChange={handleUploadChange}
+                    beforeUpload={() => false} // Chặn auto upload, để mình tự gửi
+                    maxCount={1} // Chỉ cho chọn 1 ảnh
+                >
+                    {fileList.length < 1 && (
+                        <div>
+                            <PlusOutlined />
+                            <div style={{ marginTop: 8 }}>Tải ảnh lên</div>
+                        </div>
+                    )}
+                </Upload>
+             </Col>
+          </Row>
+
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="tenSP" label="Tên Sản Phẩm" rules={[{ required: true }]}>
@@ -269,16 +327,16 @@ const ProductPage = () => {
             </Col>
           </Row>
 
-          {/* [!] 4. SỬA LẠI THÀNH SELECT CHỌN NCC TỪ API */}
           <Form.Item 
             name="danhSachMaNCC" 
             label="Nhà Cung Cấp"
           >
             <Select 
-              mode="multiple" // Cho phép chọn nhiều
+              mode="multiple" 
               style={{ width: '100%' }} 
-              placeholder="Chọn nhà cung cấp"
+              placeholder="Chọn nhà cung cấp" 
               optionFilterProp="children"
+              showSearch
             >
               {listNCC.map(ncc => (
                 <Option key={ncc.maNCC} value={ncc.maNCC}>

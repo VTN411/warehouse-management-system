@@ -111,7 +111,10 @@ const WarehousePage = () => {
       } catch (error) {
         messageApi.error("Có lỗi xảy ra!");
       }
-    });
+    }).catch((info) => {
+        console.log("Validate Failed:", info);
+        // Không làm gì cả, Ant Design đã tự hiện dòng chữ đỏ dưới ô input rồi
+      });;
   };
 
   // --- XỬ LÝ XÓA ---
