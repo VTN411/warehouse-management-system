@@ -1,5 +1,6 @@
 package stu.kho.backend.service;
 
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import stu.kho.backend.dto.ChiTietPhieuNhapRequest;
@@ -162,41 +163,39 @@ public class PhieuNhapService {
 
         PhieuNhapHang phieuNhapCu = getPhieuNhapById(maPhieuNhap);
 
-        if (phieuNhapCu.getTrangThai() != STATUS_CHO_DUYET) {
-            throw new RuntimeException("Không thể sửa phiếu đã được duyệt hoặc đã hủy.");
+        // --- LOGIC MỚI: KIỂM TRA TRẠNG THÁI ---
+
+        // 1. Nếu phiếu ĐÃ HỦY -> Không cho sửa
+        if (phieuNhapCu.getTrangThai() == STATUS_DA_HUY) {
+            throw new RuntimeException("Không thể sửa phiếu đã hủy.");
         }
 
-        // 1. Xóa chi tiết cũ
+        // 2. Nếu phiếu ĐÃ DUYỆT -> Kiểm tra quyền đặc biệt & Rollback kho
+        if (phieuNhapCu.getTrangThai() == STATUS_DA_DUYET) {
+            // Check quyền
+            boolean hasPerm = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("PERM_PHIEUNHAP_EDIT_APPROVED"));
+
+            if (!hasPerm) {
+                throw new RuntimeException("Bạn không có quyền sửa phiếu nhập đã duyệt.");
+            }
+
+            // ROLLBACK KHO (Trừ số lượng cũ ra khỏi kho)
+            for (ChiTietPhieuNhap ctCu : phieuNhapCu.getChiTiet()) {
+                // Lưu ý: Nếu hàng đã bán hết, việc trừ này sẽ gây lỗi âm kho (Exception sẽ được ném ra từ hàm capNhatTonKho)
+                capNhatTonKho(phieuNhapCu.getMaKho(), ctCu.getMaSP(), -ctCu.getSoLuong());
+            }
+        }
+        // ---------------------------------------
+
+        // Xóa chi tiết cũ
         chiTietPhieuNhapRepository.deleteByMaPhieuNhap(maPhieuNhap);
 
-        // 2. Thêm chi tiết MỚI và Tính tổng tiền
-        BigDecimal tongTienMoi = BigDecimal.ZERO;
+        // Tính toán lại thông tin phiếu
+        BigDecimal tongTienMoi = request.getChiTiet().stream()
+                .map(ct -> ct.getDonGia().multiply(new BigDecimal(ct.getSoLuong())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        for (ChiTietPhieuNhapRequest ctRequest : request.getChiTiet()) {
-            if (!sanPhamRepository.findById(ctRequest.getMaSP()).isPresent()) {
-                throw new RuntimeException("Sản phẩm với Mã SP: " + ctRequest.getMaSP() + " không tồn tại.");
-            }
-
-            // Kiểm tra liên kết NCC
-            boolean isLinked = nccSanPhamRepository.existsLink(request.getMaNCC(), ctRequest.getMaSP());
-            if (!isLinked) {
-                throw new RuntimeException("Lỗi: Nhà cung cấp không được phép cung cấp sản phẩm SP#" + ctRequest.getMaSP());
-            }
-
-            BigDecimal thanhTien = ctRequest.getDonGia().multiply(new BigDecimal(ctRequest.getSoLuong()));
-            tongTienMoi = tongTienMoi.add(thanhTien);
-
-            ChiTietPhieuNhap chiTietMoi = new ChiTietPhieuNhap();
-            chiTietMoi.setMaPhieuNhap(maPhieuNhap);
-            chiTietMoi.setMaSP(ctRequest.getMaSP());
-            chiTietMoi.setSoLuong(ctRequest.getSoLuong());
-            chiTietMoi.setDonGia(ctRequest.getDonGia());
-            chiTietMoi.setThanhTien(thanhTien);
-
-            chiTietPhieuNhapRepository.save(chiTietMoi);
-        }
-
-        // 3. Cập nhật Phiếu chính
         phieuNhapCu.setMaNCC(request.getMaNCC());
         phieuNhapCu.setMaKho(request.getMaKho());
         phieuNhapCu.setChungTu(request.getChungTu());
@@ -204,7 +203,29 @@ public class PhieuNhapService {
 
         phieuNhapRepository.update(phieuNhapCu);
 
-        logActivity(nguoiSua.getMaNguoiDung(), "Cập nhật Phiếu Nhập Hàng #" + maPhieuNhap + " (Chờ duyệt)");
+        // Thêm chi tiết MỚI
+        for (ChiTietPhieuNhapRequest ctRequest : request.getChiTiet()) {
+            if (!sanPhamRepository.findById(ctRequest.getMaSP()).isPresent()) {
+                throw new RuntimeException("Sản phẩm SP#" + ctRequest.getMaSP() + " không tồn tại.");
+            }
+
+            // Lưu chi tiết
+            ChiTietPhieuNhap chiTietMoi = new ChiTietPhieuNhap();
+            chiTietMoi.setMaPhieuNhap(maPhieuNhap);
+            chiTietMoi.setMaSP(ctRequest.getMaSP());
+            chiTietMoi.setSoLuong(ctRequest.getSoLuong());
+            chiTietMoi.setDonGia(ctRequest.getDonGia());
+            chiTietMoi.setThanhTien(ctRequest.getDonGia().multiply(new BigDecimal(ctRequest.getSoLuong())));
+            chiTietPhieuNhapRepository.save(chiTietMoi);
+
+            // --- LOGIC MỚI: ÁP DỤNG LẠI KHO (Nếu đang là Đã Duyệt) ---
+            if (phieuNhapCu.getTrangThai() == STATUS_DA_DUYET) {
+                capNhatTonKho(request.getMaKho(), ctRequest.getMaSP(), ctRequest.getSoLuong());
+            }
+            // --------------------------------------------------------
+        }
+
+        logActivity(nguoiSua.getMaNguoiDung(), "Cập nhật Phiếu Nhập Hàng #" + maPhieuNhap + " (Trạng thái: " + phieuNhapCu.getTrangThai() + ")");
         return getPhieuNhapById(maPhieuNhap);
     }
 

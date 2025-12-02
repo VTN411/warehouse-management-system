@@ -1,5 +1,6 @@
 package stu.kho.backend.service;
 
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import stu.kho.backend.dto.PhieuDieuChuyenRequest;
@@ -183,38 +184,74 @@ public class PhieuDieuChuyenService {
 
         PhieuDieuChuyen pdc = getById(id);
 
-        if (pdc.getTrangThai() != STATUS_CHO_DUYET) {
-            throw new RuntimeException("Chỉ được sửa phiếu khi đang chờ duyệt.");
+        // 1. Kiểm tra trạng thái và Quyền
+        if (pdc.getTrangThai() == STATUS_DA_HUY) {
+            throw new RuntimeException("Không thể sửa phiếu đã hủy.");
         }
 
-        if (req.getMaKhoXuat().equals(req.getMaKhoNhap())) {
-            throw new RuntimeException("Kho xuất và Kho nhập không được trùng nhau.");
+        if (pdc.getTrangThai() == STATUS_DA_DUYET) {
+            // Kiểm tra xem user hiện tại có quyền sửa phiếu đã duyệt không
+            boolean hasPermission = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("PERM_TRANSFER_EDIT_APPROVED"));
+
+            if (!hasPermission) {
+                throw new RuntimeException("Bạn không có quyền sửa phiếu đã duyệt. Vui lòng liên hệ Admin.");
+            }
+
+            // --- LOGIC HOÀN TÁC TỒN KHO (ROLLBACK) ---
+            // Vì phiếu đã duyệt, hàng đã chuyển đi. Giờ ta phải trả lại trạng thái cũ trước khi cập nhật.
+            for (var item : pdc.getChiTiet()) {
+                // Cộng lại vào kho Xuất
+                capNhatTonKho(pdc.getMaKhoXuat(), item.getMaSP(), item.getSoLuong());
+                // Trừ đi khỏi kho Nhập
+                // (Cần check xem kho nhập còn đủ hàng để trừ không)
+                checkTonKho(pdc.getMaKhoNhap(), item.getMaSP(), item.getSoLuong());
+                capNhatTonKho(pdc.getMaKhoNhap(), item.getMaSP(), -item.getSoLuong());
+            }
         }
 
-        // 1. Xóa chi tiết cũ
+        // 2. Xóa chi tiết cũ (Trong DB)
         chiTietDieuChuyenRepo.deleteByMaPhieuDC(id);
 
-        // 2. Thêm chi tiết MỚI
-        for (var item : req.getChiTiet()) {
-            // Kiểm tra tồn kho nguồn có đủ cho số lượng mới không
-            checkTonKho(req.getMaKhoXuat(), item.getMaSP(), item.getSoLuong());
-
-            ChiTietDieuChuyen ct = new ChiTietDieuChuyen();
-            ct.setMaPhieuDC(id);
-            ct.setMaSP(item.getMaSP());
-            ct.setSoLuong(item.getSoLuong());
-            chiTietDieuChuyenRepo.save(ct);
+        // 3. Cập nhật thông tin phiếu chính
+        if (!req.getMaKhoXuat().equals(pdc.getMaKhoXuat()) || !req.getMaKhoNhap().equals(pdc.getMaKhoNhap())) {
+            // Nếu đổi kho, phải kiểm tra logic phức tạp hơn.
+            // Ở đây ta cho phép cập nhật MaKho
+            if (req.getMaKhoXuat().equals(req.getMaKhoNhap())) {
+                throw new RuntimeException("Kho xuất và Kho nhập không được trùng nhau.");
+            }
+            pdc.setMaKhoXuat(req.getMaKhoXuat());
+            pdc.setMaKhoNhap(req.getMaKhoNhap());
         }
 
-        // 3. Cập nhật thông tin phiếu chính
-        pdc.setMaKhoXuat(req.getMaKhoXuat());
-        pdc.setMaKhoNhap(req.getMaKhoNhap());
         pdc.setGhiChu(req.getGhiChu());
         pdc.setChungTu(req.getChungTu());
 
         phieuDieuChuyenRepo.update(pdc);
 
-        logActivity(user.getMaNguoiDung(), "Cập nhật phiếu điều chuyển #" + id);
+        // 4. Thêm chi tiết MỚI và Áp dụng Tồn kho (Nếu đã duyệt)
+        for (var item : req.getChiTiet()) {
+            // Luôn kiểm tra tồn kho nguồn (cho dù là Chờ duyệt hay Đã duyệt)
+            // Vì nếu là Đã duyệt, ta vừa hoàn trả hàng về kho xuất ở bước Rollback, giờ check lại xem có đủ cho số lượng mới không
+            checkTonKho(pdc.getMaKhoXuat(), item.getMaSP(), item.getSoLuong());
+
+            // Lưu chi tiết mới
+            ChiTietDieuChuyen ct = new ChiTietDieuChuyen();
+            ct.setMaPhieuDC(id);
+            ct.setMaSP(item.getMaSP());
+            ct.setSoLuong(item.getSoLuong());
+            chiTietDieuChuyenRepo.save(ct);
+
+            // --- LOGIC ÁP DỤNG LẠI (RE-APPLY) ---
+            if (pdc.getTrangThai() == STATUS_DA_DUYET) {
+                // Trừ kho Xuất
+                capNhatTonKho(pdc.getMaKhoXuat(), item.getMaSP(), -item.getSoLuong());
+                // Cộng kho Nhập
+                capNhatTonKho(pdc.getMaKhoNhap(), item.getMaSP(), item.getSoLuong());
+            }
+        }
+
+        logActivity(user.getMaNguoiDung(), "Cập nhật phiếu điều chuyển #" + id + " (Trạng thái: " + pdc.getTrangThai() + ")");
         return getById(id);
     }
 

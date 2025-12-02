@@ -1,5 +1,6 @@
 package stu.kho.backend.service;
 
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import stu.kho.backend.dto.ChiTietPhieuXuatRequest;
@@ -209,20 +210,35 @@ public class PhieuXuatService {
 
         PhieuXuatHang phieuXuatCu = getPhieuXuatById(maPhieuXuat);
 
-        // LOGIC: Chỉ cho phép sửa khi phiếu đang "Chờ duyệt"
-        if (phieuXuatCu.getTrangThai() != STATUS_CHO_DUYET) {
-            throw new RuntimeException("Không thể sửa phiếu đã được duyệt hoặc đã hủy.");
+        // --- LOGIC MỚI ---
+        if (phieuXuatCu.getTrangThai() == STATUS_DA_HUY) {
+            throw new RuntimeException("Không thể sửa phiếu đã hủy.");
         }
 
-        // 1. Xóa các chi tiết cũ
+        if (phieuXuatCu.getTrangThai() == STATUS_DA_DUYET) {
+            // Check quyền
+            boolean hasPerm = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("PERM_PHIEUXUAT_EDIT_APPROVED"));
+
+            if (!hasPerm) {
+                throw new RuntimeException("Bạn không có quyền sửa phiếu xuất đã duyệt.");
+            }
+
+            // ROLLBACK KHO (Cộng lại số lượng cũ vào kho)
+            for (ChiTietPhieuXuat ctCu : phieuXuatCu.getChiTiet()) {
+                capNhatTonKho(phieuXuatCu.getMaKho(), ctCu.getMaSP(), ctCu.getSoLuong());
+            }
+        }
+        // -----------------
+
+        // Xóa chi tiết cũ
         chiTietPhieuXuatRepository.deleteByMaPhieuXuat(maPhieuXuat);
 
-        // 2. Tính toán lại Tổng tiền MỚI
+        // Tính tổng tiền mới & Update phiếu
         BigDecimal tongTienMoi = request.getChiTiet().stream()
                 .map(ct -> ct.getDonGia().multiply(new BigDecimal(ct.getSoLuong())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // 3. Cập nhật Phiếu Chính
         phieuXuatCu.setMaKH(request.getMaKH());
         phieuXuatCu.setMaKho(request.getMaKho());
         phieuXuatCu.setChungTu(request.getChungTu());
@@ -230,9 +246,10 @@ public class PhieuXuatService {
 
         phieuXuatRepository.update(phieuXuatCu);
 
-        // 4. Thêm chi tiết MỚI
+        // Thêm chi tiết MỚI
         for (ChiTietPhieuXuatRequest ctRequest : request.getChiTiet()) {
-            // Kiểm tra xem kho có đủ hàng cho số lượng mới không
+            // Kiểm tra tồn kho (Rất quan trọng với phiếu xuất)
+            // Nếu đang là Đã Duyệt, kho đã được cộng lại ở bước Rollback, giờ check xem có đủ để trừ mới không
             checkTonKhoDu(request.getMaKho(), ctRequest.getMaSP(), ctRequest.getSoLuong());
 
             ChiTietPhieuXuat chiTietMoi = new ChiTietPhieuXuat();
@@ -241,14 +258,18 @@ public class PhieuXuatService {
             chiTietMoi.setSoLuong(ctRequest.getSoLuong());
             chiTietMoi.setDonGia(ctRequest.getDonGia());
             chiTietMoi.setThanhTien(ctRequest.getDonGia().multiply(new BigDecimal(ctRequest.getSoLuong())));
-
             chiTietPhieuXuatRepository.save(chiTietMoi);
 
-            // LƯU Ý: Vẫn chưa trừ tồn kho ở đây (vì vẫn là Chờ duyệt)
+            // --- LOGIC MỚI: ÁP DỤNG LẠI KHO (Nếu đang là Đã Duyệt) ---
+            if (phieuXuatCu.getTrangThai() == STATUS_DA_DUYET) {
+                // Trừ kho (Số âm)
+                capNhatTonKho(request.getMaKho(), ctRequest.getMaSP(), -ctRequest.getSoLuong());
+            }
+            // --------------------------------------------------------
         }
 
-        logActivity(nguoiSua.getMaNguoiDung(), "Cập nhật Phiếu Xuất Hàng #" + maPhieuXuat + " (Chờ duyệt)");
-        return phieuXuatCu;
+        logActivity(nguoiSua.getMaNguoiDung(), "Cập nhật Phiếu Xuất Hàng #" + maPhieuXuat + " (Trạng thái: " + phieuXuatCu.getTrangThai() + ")");
+        return getPhieuXuatById(maPhieuXuat);
     }
 
     // =================================================================
