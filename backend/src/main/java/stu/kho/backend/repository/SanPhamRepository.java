@@ -10,5 +10,5 @@ public interface SanPhamRepository {
     int save(SanPham sanPham);
     int update(SanPham sanPham);
     int deleteById(Integer id);
-    // Bạn có thể thêm các phương thức tìm kiếm khác sau này
+    List<SanPham> search(String keyword); // <-- THÊM MỚI
 }

@@ -156,4 +156,7 @@ public class SanPhamService {
             hoatDongRepository.save(log);
         }
     }
+    public List<SanPham> searchSanPham(String keyword) {
+        return sanPhamRepository.search(keyword);
+    }
 }

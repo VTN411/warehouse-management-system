@@ -134,4 +134,12 @@ public class JdbcSanPhamRepository implements SanPhamRepository {
         String sql = "DELETE FROM sanpham WHERE MaSP = ?";
         return jdbcTemplate.update(sql, id);
     }
+
+    @Override
+    public List<SanPham> search(String keyword) {
+        // Tìm kiếm tương đối (LIKE %...%) theo tên sản phẩm
+        String sql = "SELECT * FROM sanpham WHERE TenSP LIKE ?";
+        String searchArg = "%" + keyword + "%";
+        return jdbcTemplate.query(sql, sanPhamRowMapper, searchArg);
+    }
 }
