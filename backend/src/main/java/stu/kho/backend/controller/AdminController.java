@@ -45,16 +45,10 @@
         @PostMapping("/users")
         @PreAuthorize("hasAuthority('PERM_ADMIN_CREATE_USER')")
         public ResponseEntity<String> createUser(@RequestBody UserCreateRequest request, Authentication authentication) {
-            try {
                 userService.createNewUser(request);
-
                 // 4. Ghi nhật ký HoatDong (Bây giờ đã hoạt động)
                 logActivity(authentication.getName(), "Tạo mới người dùng: " + request.getTenDangNhap());
-
                 return ResponseEntity.ok("Người dùng " + request.getTenDangNhap() + " đã được tạo và cấp quyền thành công.");
-            } catch (RuntimeException e) {
-                return ResponseEntity.badRequest().body(e.getMessage());
-            }
         }
 
 
@@ -108,49 +102,33 @@
         @PutMapping("/users/{id}")
         @PreAuthorize("hasAuthority('PERM_ADMIN_EDIT_USER')")
         public ResponseEntity<String> updateUser(@PathVariable Integer id, @RequestBody UserUpdateRequest request, Authentication authentication) {
-            try {
                 userService.updateUser(id, request);
                 logActivity(authentication.getName(), "Cập nhật người dùng ID: " + id);
                 return ResponseEntity.ok("Cập nhật người dùng thành công.");
-            } catch (RuntimeException e) {
-                return ResponseEntity.badRequest().body(e.getMessage());
-            }
         }
 
         // 4. XÓA (DELETE)
         @DeleteMapping("/users/{id}")
         @PreAuthorize("hasAuthority('PERM_ADMIN_DELETE_USER')")
         public ResponseEntity<String> deleteUser(@PathVariable Integer id, Authentication authentication) {
-            try {
                 userService.deleteUser(id);
                 logActivity(authentication.getName(), "Xóa người dùng ID: " + id);
                 return ResponseEntity.ok("Xóa người dùng thành công.");
-            } catch (RuntimeException e) {
-                return ResponseEntity.badRequest().body(e.getMessage());
-            }
         }
         @PostMapping("/users/{maND}/permissions/{maCN}")
         @PreAuthorize("hasAuthority('PERM_ADMIN_EDIT_USER')") // Hoặc quyền 'PERM_EDIT_PERMISSIONS'
         public ResponseEntity<String> assignPermissionToUser(@PathVariable Integer maND, @PathVariable Integer maCN, Authentication authentication) {
-            try {
                 nguoiDungChucNangRepository.linkUserToChucNang(maND, maCN);
                 logActivity(authentication.getName(), "Gán quyền (MaChucNang: " + maCN + ") cho user (MaNguoiDung: " + maND + ")");
                 return ResponseEntity.ok("Đã gán quyền thành công.");
-            } catch (Exception e) {
-                return ResponseEntity.badRequest().body("Gán quyền thất bại: " + e.getMessage());
-            }
         }
 
         @DeleteMapping("/users/{maND}/permissions/{maCN}")
         @PreAuthorize("hasAuthority('PERM_ADMIN_DELETE_USER')") // Hoặc quyền 'PERM_EDIT_PERMISSIONS'
         public ResponseEntity<String> revokePermissionFromUser(@PathVariable Integer maND, @PathVariable Integer maCN, Authentication authentication) {
-            try {
                 nguoiDungChucNangRepository.unlinkUserFromChucNang(maND, maCN);
                 logActivity(authentication.getName(), "Thu hồi quyền (MaChucNang: " + maCN + ") từ user (MaNguoiDung: " + maND + ")");
                 return ResponseEntity.ok("Đã thu hồi quyền thành công.");
-            } catch (Exception e) {
-                return ResponseEntity.badRequest().body("Thu hồi quyền thất bại: " + e.getMessage());
-            }
         }
 
         // =========================================================================
@@ -160,25 +138,18 @@
         @PostMapping("/products/{maSP}/suppliers/{maNCC}")
         @PreAuthorize("hasAuthority('PERM_ADMIN_EDIT_USER')") // Hoặc quyền 'PERM_EDIT_PRODUCT_LINKS'
         public ResponseEntity<String> linkSupplierToProduct(@PathVariable Integer maSP, @PathVariable Integer maNCC, Authentication authentication) {
-            try {
                 nccSanPhamRepository.linkNccToSanPham(maNCC, maSP);
                 logActivity(authentication.getName(), "Gán NCC (MaNCC: " + maNCC + ") cho Sản phẩm (MaSP: " + maSP + ")");
                 return ResponseEntity.ok("Đã gán NCC cho sản phẩm thành công.");
-            } catch (Exception e) {
-                return ResponseEntity.badRequest().body("Gán NCC thất bại: " + e.getMessage());
-            }
+
         }
 
         @DeleteMapping("/products/{maSP}/suppliers/{maNCC}")
         @PreAuthorize("hasAuthority('PERM_ADMIN_EDIT_USER')") // Hoặc quyền 'PERM_EDIT_PRODUCT_LINKS'
         public ResponseEntity<String> unlinkSupplierFromProduct(@PathVariable Integer maSP, @PathVariable Integer maNCC, Authentication authentication) {
-            try {
                 nccSanPhamRepository.unlinkNccFromSanPham(maNCC, maSP);
                 logActivity(authentication.getName(), "Xóa NCC (MaNCC: " + maNCC + ") khỏi Sản phẩm (MaSP: " + maSP + ")");
                 return ResponseEntity.ok("Đã xóa liên kết NCC khỏi sản phẩm thành công.");
-            } catch (Exception e) {
-                return ResponseEntity.badRequest().body("Xóa liên kết NCC thất bại: " + e.getMessage());
-            }
         }
         @GetMapping("/logs")
         @PreAuthorize("hasAuthority('PERM_SYSTEM_LOG')") // Bảo vệ bằng quyền mới
