@@ -3,6 +3,7 @@ package stu.kho.backend.service;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import stu.kho.backend.dto.PhieuDieuChuyenFilterRequest;
 import stu.kho.backend.dto.PhieuDieuChuyenRequest;
 import stu.kho.backend.entity.*;
 import stu.kho.backend.repository.*;
@@ -295,5 +296,9 @@ public class PhieuDieuChuyenService {
         hd.setMaNguoiDung(maUser);
         hd.setHanhDong(act);
         hoatDongRepo.save(hd);
+    }
+
+    public List<PhieuDieuChuyen> filter(PhieuDieuChuyenFilterRequest request) {
+        return phieuDieuChuyenRepo.filter(request);
     }
 }

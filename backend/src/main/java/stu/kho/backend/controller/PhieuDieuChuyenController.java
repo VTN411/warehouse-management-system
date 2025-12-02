@@ -4,6 +4,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import stu.kho.backend.dto.PhieuDieuChuyenFilterRequest;
 import stu.kho.backend.dto.PhieuDieuChuyenRequest;
 import stu.kho.backend.entity.PhieuDieuChuyen;
 import stu.kho.backend.service.PhieuDieuChuyenService;
@@ -83,5 +84,10 @@ public class PhieuDieuChuyenController {
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
+    }
+    @PostMapping("/filter")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<PhieuDieuChuyen>> filter(@RequestBody PhieuDieuChuyenFilterRequest request) {
+        return ResponseEntity.ok(service.filter(request));
     }
 }

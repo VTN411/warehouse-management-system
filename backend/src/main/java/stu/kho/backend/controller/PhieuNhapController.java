@@ -4,6 +4,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import stu.kho.backend.dto.PhieuNhapFilterRequest;
 import stu.kho.backend.dto.PhieuNhapRequest;
 import stu.kho.backend.entity.PhieuNhapHang;
 import stu.kho.backend.service.PhieuNhapService;
@@ -124,9 +125,10 @@ public class PhieuNhapController {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
-    @GetMapping("/search")
-    @PreAuthorize("isAuthenticated()") // Hoặc quyền VIEW cụ thể
-    public ResponseEntity<List<PhieuNhapHang>> search(@RequestParam String query) {
-        return ResponseEntity.ok(phieuNhapService.searchPhieuNhap(query));
+    @PostMapping("/filter")
+    @PreAuthorize("isAuthenticated()") // Hoặc quyền VIEW
+    public ResponseEntity<List<PhieuNhapHang>> filter(@RequestBody PhieuNhapFilterRequest request) {
+        // (Giả sử bạn đã thêm hàm filter vào Service gọi Repo)
+        return ResponseEntity.ok(phieuNhapService.filterPhieuNhap(request));
     }
 }

@@ -11,6 +11,5 @@ public interface SanPhamRepository {
     int save(SanPham sanPham);
     int update(SanPham sanPham);
     int deleteById(Integer id);
-    List<SanPham> search(String keyword); // <-- THÊM MỚI
     List<SanPham> filter(SanPhamFilterRequest criteria); // <-- THÊM MỚI
 }

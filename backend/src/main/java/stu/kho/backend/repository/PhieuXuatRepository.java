@@ -1,5 +1,6 @@
 package stu.kho.backend.repository;
 
+import stu.kho.backend.dto.PhieuXuatFilterRequest;
 import stu.kho.backend.entity.PhieuXuatHang;
 
 import java.util.List;
@@ -15,4 +16,6 @@ public interface PhieuXuatRepository {
     int update(PhieuXuatHang px);
 
     int deleteById(Integer id);
+
+    List<PhieuXuatHang> filter(PhieuXuatFilterRequest req);
 }

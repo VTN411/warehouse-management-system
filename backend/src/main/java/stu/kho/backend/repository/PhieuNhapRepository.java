@@ -1,5 +1,7 @@
 package stu.kho.backend.repository;
 
+import stu.kho.backend.dto.PhieuNhapFilterRequest;
+import stu.kho.backend.dto.SanPhamFilterRequest;
 import stu.kho.backend.entity.PhieuNhapHang;
 import java.util.List;
 import java.util.Optional;
@@ -17,4 +19,6 @@ public interface PhieuNhapRepository {
     int deleteById(Integer id);
 
     List<PhieuNhapHang> searchByChungTu(String chungTu);
+
+    List<PhieuNhapHang> filter(PhieuNhapFilterRequest req);
 }

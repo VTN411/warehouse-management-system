@@ -85,12 +85,7 @@ public class SanPhamController {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
-    // Tìm kiếm sản phẩm: GET /api/sanpham/search?query=Iphone
-    @GetMapping("/search")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<SanPham>> search(@RequestParam String query) {
-        return ResponseEntity.ok(sanPhamService.searchSanPham(query));
-    }
+
     @PostMapping("/filter")
     @PreAuthorize("isAuthenticated()") // Ai đăng nhập cũng tìm được
     public ResponseEntity<List<SanPham>> filter(@RequestBody SanPhamFilterRequest request) {

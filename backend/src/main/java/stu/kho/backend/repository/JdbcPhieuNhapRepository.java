@@ -6,13 +6,12 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
-import stu.kho.backend.entity.KhoHang;
-import stu.kho.backend.entity.NguoiDung;
-import stu.kho.backend.entity.NhaCungCap;
+import stu.kho.backend.dto.PhieuNhapFilterRequest;
 import stu.kho.backend.entity.PhieuNhapHang;
 
 import java.sql.PreparedStatement;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -139,5 +138,41 @@ public class JdbcPhieuNhapRepository implements PhieuNhapRepository {
         // Tìm chính xác hoặc tương đối theo mã chứng từ
         String sql = "SELECT * FROM phieunhaphang WHERE ChungTu LIKE ?";
         return jdbcTemplate.query(sql, phieuNhapRowMapper, "%" + chungTu + "%");
+    }
+    @Override
+    public List<PhieuNhapHang> filter(PhieuNhapFilterRequest req) {
+        StringBuilder sql = new StringBuilder("SELECT * FROM phieunhaphang WHERE 1=1");
+        List<Object> params = new ArrayList<>();
+
+        if (req.getChungTu() != null && !req.getChungTu().isEmpty()) {
+            sql.append(" AND ChungTu LIKE ?");
+            params.add("%" + req.getChungTu() + "%");
+        }
+        if (req.getTrangThai() != null) {
+            sql.append(" AND TrangThai = ?");
+            params.add(req.getTrangThai());
+        }
+        if (req.getMaKho() != null) {
+            sql.append(" AND MaKho = ?");
+            params.add(req.getMaKho());
+        }
+        if (req.getMaNCC() != null) {
+            sql.append(" AND MaNCC = ?");
+            params.add(req.getMaNCC());
+        }
+
+        // Xử lý ngày tháng
+        if (req.getFromDate() != null) {
+            sql.append(" AND NgayLapPhieu >= ?");
+            params.add(req.getFromDate().atStartOfDay()); // 00:00:00
+        }
+        if (req.getToDate() != null) {
+            sql.append(" AND NgayLapPhieu <= ?");
+            params.add(req.getToDate().atTime(23, 59, 59)); // 23:59:59
+        }
+
+        sql.append(" ORDER BY NgayLapPhieu DESC");
+
+        return jdbcTemplate.query(sql.toString(), phieuNhapRowMapper, params.toArray());
     }
 }

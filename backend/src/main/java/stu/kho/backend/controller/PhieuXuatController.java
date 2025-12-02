@@ -4,6 +4,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import stu.kho.backend.dto.PhieuXuatFilterRequest;
 import stu.kho.backend.dto.PhieuXuatRequest;
 import stu.kho.backend.entity.PhieuXuatHang;
 import stu.kho.backend.service.PhieuXuatService;
@@ -93,5 +94,10 @@ public class PhieuXuatController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<PhieuXuatHang> getById(@PathVariable Integer id) {
         return ResponseEntity.ok(phieuXuatService.getPhieuXuatById(id));
+    }
+    @PostMapping("/filter")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<PhieuXuatHang>> filter(@RequestBody PhieuXuatFilterRequest request) {
+        return ResponseEntity.ok(phieuXuatService.filter(request));
     }
 }

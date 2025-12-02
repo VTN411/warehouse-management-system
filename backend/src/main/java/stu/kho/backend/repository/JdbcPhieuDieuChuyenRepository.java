@@ -6,10 +6,12 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
+import stu.kho.backend.dto.PhieuDieuChuyenFilterRequest;
 import stu.kho.backend.entity.PhieuDieuChuyen;
 
 import java.sql.PreparedStatement;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -111,5 +113,37 @@ public class JdbcPhieuDieuChuyenRepository implements PhieuDieuChuyenRepository 
         String sql = "SELECT * FROM phieudieuchuyen ORDER BY MaPhieuDC DESC";
         return jdbcTemplate.query(sql, rowMapper);
     }
+    @Override
+    public List<PhieuDieuChuyen> filter(PhieuDieuChuyenFilterRequest req) {
+        StringBuilder sql = new StringBuilder("SELECT * FROM phieudieuchuyen WHERE 1=1");
+        List<Object> params = new ArrayList<>();
 
+        if (req.getChungTu() != null && !req.getChungTu().isEmpty()) {
+            sql.append(" AND ChungTu LIKE ?");
+            params.add("%" + req.getChungTu() + "%");
+        }
+        if (req.getTrangThai() != null) {
+            sql.append(" AND TrangThai = ?");
+            params.add(req.getTrangThai());
+        }
+        if (req.getMaKhoXuat() != null) {
+            sql.append(" AND MaKhoXuat = ?");
+            params.add(req.getMaKhoXuat());
+        }
+        if (req.getMaKhoNhap() != null) {
+            sql.append(" AND MaKhoNhap = ?");
+            params.add(req.getMaKhoNhap());
+        }
+        if (req.getFromDate() != null) {
+            sql.append(" AND NgayChuyen >= ?");
+            params.add(req.getFromDate().atStartOfDay());
+        }
+        if (req.getToDate() != null) {
+            sql.append(" AND NgayChuyen <= ?");
+            params.add(req.getToDate().atTime(23, 59, 59));
+        }
+
+        sql.append(" ORDER BY NgayChuyen DESC");
+        return jdbcTemplate.query(sql.toString(), rowMapper, params.toArray());
+    }
 }

@@ -4,7 +4,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import stu.kho.backend.dto.ChiTietPhieuNhapRequest;
+import stu.kho.backend.dto.PhieuNhapFilterRequest;
 import stu.kho.backend.dto.PhieuNhapRequest;
+import stu.kho.backend.dto.SanPhamFilterRequest;
 import stu.kho.backend.entity.*;
 import stu.kho.backend.repository.*;
 
@@ -311,5 +313,9 @@ public class PhieuNhapService {
     }
     public List<PhieuNhapHang> searchPhieuNhap(String chungTu) {
         return phieuNhapRepository.searchByChungTu(chungTu);
+    }
+
+    public List<PhieuNhapHang> filterPhieuNhap(PhieuNhapFilterRequest request) {
+        return phieuNhapRepository.filter(request);
     }
 }

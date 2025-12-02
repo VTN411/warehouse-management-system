@@ -4,6 +4,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import stu.kho.backend.dto.ChiTietPhieuXuatRequest;
+import stu.kho.backend.dto.PhieuXuatFilterRequest;
 import stu.kho.backend.dto.PhieuXuatRequest;
 import stu.kho.backend.entity.*;
 import stu.kho.backend.repository.*;
@@ -301,5 +302,9 @@ public class PhieuXuatService {
         phieuXuatRepository.deleteById(maPhieuXuat);
 
         logActivity(nguoiXoa.getMaNguoiDung(), "Xóa Phiếu Xuất Hàng #" + maPhieuXuat);
+    }
+
+    public List<PhieuXuatHang> filter(PhieuXuatFilterRequest request) {
+        return phieuXuatRepository.filter(request);
     }
 }

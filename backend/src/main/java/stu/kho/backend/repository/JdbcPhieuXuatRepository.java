@@ -6,10 +6,12 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
+import stu.kho.backend.dto.PhieuXuatFilterRequest;
 import stu.kho.backend.entity.PhieuXuatHang;
 
 import java.sql.PreparedStatement;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -106,5 +108,38 @@ public class JdbcPhieuXuatRepository implements PhieuXuatRepository {
     public int deleteById(Integer id) {
         String sql = "DELETE FROM phieuxuathang WHERE MaPhieuXuat = ?";
         return jdbcTemplate.update(sql, id);
+    }
+    @Override
+    public List<PhieuXuatHang> filter(PhieuXuatFilterRequest req) {
+        StringBuilder sql = new StringBuilder("SELECT * FROM phieuxuathang WHERE 1=1");
+        List<Object> params = new ArrayList<>();
+
+        if (req.getChungTu() != null && !req.getChungTu().isEmpty()) {
+            sql.append(" AND ChungTu LIKE ?");
+            params.add("%" + req.getChungTu() + "%");
+        }
+        if (req.getTrangThai() != null) {
+            sql.append(" AND TrangThai = ?");
+            params.add(req.getTrangThai());
+        }
+        if (req.getMaKho() != null) {
+            sql.append(" AND MaKho = ?");
+            params.add(req.getMaKho());
+        }
+        if (req.getMaKH() != null) {
+            sql.append(" AND MaKH = ?");
+            params.add(req.getMaKH());
+        }
+        if (req.getFromDate() != null) {
+            sql.append(" AND NgayLapPhieu >= ?");
+            params.add(req.getFromDate().atStartOfDay());
+        }
+        if (req.getToDate() != null) {
+            sql.append(" AND NgayLapPhieu <= ?");
+            params.add(req.getToDate().atTime(23, 59, 59));
+        }
+
+        sql.append(" ORDER BY NgayLapPhieu DESC");
+        return jdbcTemplate.query(sql.toString(), phieuXuatRowMapper, params.toArray());
     }
 }

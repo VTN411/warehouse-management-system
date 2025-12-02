@@ -137,14 +137,6 @@ public class JdbcSanPhamRepository implements SanPhamRepository {
     }
 
     @Override
-    public List<SanPham> search(String keyword) {
-        // Tìm kiếm tương đối (LIKE %...%) theo tên sản phẩm
-        String sql = "SELECT * FROM sanpham WHERE TenSP LIKE ?";
-        String searchArg = "%" + keyword + "%";
-        return jdbcTemplate.query(sql, sanPhamRowMapper, searchArg);
-    }
-
-    @Override
     public List<SanPham> filter(SanPhamFilterRequest criteria) {
         // 1. Khởi tạo câu SQL cơ bản (luôn đúng với 1=1)
         StringBuilder sql = new StringBuilder("SELECT * FROM sanpham WHERE 1=1");
