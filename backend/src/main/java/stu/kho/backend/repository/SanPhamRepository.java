@@ -1,5 +1,6 @@
 package stu.kho.backend.repository;
 
+import stu.kho.backend.dto.SanPhamFilterRequest;
 import stu.kho.backend.entity.SanPham;
 import java.util.List;
 import java.util.Optional;
@@ -11,4 +12,5 @@ public interface SanPhamRepository {
     int update(SanPham sanPham);
     int deleteById(Integer id);
     List<SanPham> search(String keyword); // <-- THÊM MỚI
+    List<SanPham> filter(SanPhamFilterRequest criteria); // <-- THÊM MỚI
 }

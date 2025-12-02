@@ -6,6 +6,7 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
+import stu.kho.backend.dto.SanPhamFilterRequest;
 import stu.kho.backend.entity.LoaiHang;
 import stu.kho.backend.entity.NhaCungCap;
 import stu.kho.backend.entity.SanPham;
@@ -141,5 +142,39 @@ public class JdbcSanPhamRepository implements SanPhamRepository {
         String sql = "SELECT * FROM sanpham WHERE TenSP LIKE ?";
         String searchArg = "%" + keyword + "%";
         return jdbcTemplate.query(sql, sanPhamRowMapper, searchArg);
+    }
+
+    @Override
+    public List<SanPham> filter(SanPhamFilterRequest criteria) {
+        // 1. Khởi tạo câu SQL cơ bản (luôn đúng với 1=1)
+        StringBuilder sql = new StringBuilder("SELECT * FROM sanpham WHERE 1=1");
+        List<Object> params = new ArrayList<>();
+
+        // 2. Cộng chuỗi SQL động dựa trên tiêu chí
+
+        // Tìm theo Tên (LIKE)
+        if (criteria.getKeyword() != null && !criteria.getKeyword().isEmpty()) {
+            sql.append(" AND TenSP LIKE ?");
+            params.add("%" + criteria.getKeyword() + "%");
+        }
+
+        // Tìm theo Loại (Equal)
+        if (criteria.getMaLoai() != null) {
+            sql.append(" AND MaLoai = ?");
+            params.add(criteria.getMaLoai());
+        }
+
+        // Tìm theo Giá (Range)
+        if (criteria.getMinGia() != null) {
+            sql.append(" AND GiaNhap >= ?");
+            params.add(criteria.getMinGia());
+        }
+        if (criteria.getMaxGia() != null) {
+            sql.append(" AND GiaNhap <= ?");
+            params.add(criteria.getMaxGia());
+        }
+
+        // 3. Thực thi
+        return jdbcTemplate.query(sql.toString(), sanPhamRowMapper, params.toArray());
     }
 }

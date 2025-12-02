@@ -3,6 +3,7 @@ package stu.kho.backend.service;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile; // <-- Import quan trọng
+import stu.kho.backend.dto.SanPhamFilterRequest;
 import stu.kho.backend.dto.SanPhamRequest;
 import stu.kho.backend.entity.HoatDong;
 import stu.kho.backend.entity.SanPham;
@@ -158,5 +159,8 @@ public class SanPhamService {
     }
     public List<SanPham> searchSanPham(String keyword) {
         return sanPhamRepository.search(keyword);
+    }
+    public List<SanPham> filterSanPham(SanPhamFilterRequest request) {
+        return sanPhamRepository.filter(request);
     }
 }

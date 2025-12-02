@@ -6,6 +6,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import stu.kho.backend.dto.SanPhamFilterRequest;
 import stu.kho.backend.dto.SanPhamRequest;
 import stu.kho.backend.entity.SanPham;
 import stu.kho.backend.service.SanPhamService;
@@ -89,5 +90,10 @@ public class SanPhamController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<SanPham>> search(@RequestParam String query) {
         return ResponseEntity.ok(sanPhamService.searchSanPham(query));
+    }
+    @PostMapping("/filter")
+    @PreAuthorize("isAuthenticated()") // Ai đăng nhập cũng tìm được
+    public ResponseEntity<List<SanPham>> filter(@RequestBody SanPhamFilterRequest request) {
+        return ResponseEntity.ok(sanPhamService.filterSanPham(request));
     }
 }
