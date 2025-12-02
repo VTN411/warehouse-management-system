@@ -309,4 +309,7 @@ public class PhieuNhapService {
         log.setHanhDong(hanhDong);
         hoatDongRepository.save(log);
     }
+    public List<PhieuNhapHang> searchPhieuNhap(String chungTu) {
+        return phieuNhapRepository.searchByChungTu(chungTu);
+    }
 }

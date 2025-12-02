@@ -124,4 +124,9 @@ public class PhieuNhapController {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
+    @GetMapping("/search")
+    @PreAuthorize("isAuthenticated()") // Hoặc quyền VIEW cụ thể
+    public ResponseEntity<List<PhieuNhapHang>> search(@RequestParam String query) {
+        return ResponseEntity.ok(phieuNhapService.searchPhieuNhap(query));
+    }
 }

@@ -133,4 +133,11 @@ public class JdbcPhieuNhapRepository implements PhieuNhapRepository {
         String sql = "DELETE FROM phieunhaphang WHERE MaPhieuNhap = ?";
         return jdbcTemplate.update(sql, id);
     }
+
+    @Override
+    public List<PhieuNhapHang> searchByChungTu(String chungTu) {
+        // Tìm chính xác hoặc tương đối theo mã chứng từ
+        String sql = "SELECT * FROM phieunhaphang WHERE ChungTu LIKE ?";
+        return jdbcTemplate.query(sql, phieuNhapRowMapper, "%" + chungTu + "%");
+    }
 }

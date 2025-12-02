@@ -9,7 +9,12 @@ public interface PhieuNhapRepository {
     Integer save(PhieuNhapHang phieuNhap);
 
     Optional<PhieuNhapHang> findById(Integer id);
+
     List<PhieuNhapHang> findAll();
+
     int update(PhieuNhapHang phieuNhap);
+
     int deleteById(Integer id);
+
+    List<PhieuNhapHang> searchByChungTu(String chungTu);
 }
