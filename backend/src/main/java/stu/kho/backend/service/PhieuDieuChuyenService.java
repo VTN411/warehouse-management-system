@@ -183,7 +183,11 @@ public class PhieuDieuChuyenService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         PhieuDieuChuyen pdc = getById(id);
-
+//      KIỂM TRA THỜI HẠN (MỚI): Không cho sửa phiếu quá 30 ngày
+        LocalDateTime limitDate = LocalDateTime.now().minusDays(30);
+        if (pdc.getNgayChuyen().isBefore(limitDate)) {
+            throw new RuntimeException("Không thể sửa phiếu đã được tạo quá 30 ngày.");
+        }
         // 1. Kiểm tra trạng thái và Quyền
         if (pdc.getTrangThai() == STATUS_DA_HUY) {
             throw new RuntimeException("Không thể sửa phiếu đã hủy.");
