@@ -19,7 +19,7 @@ import {
 import * as customerService from "../../services/customer.service";
 
 // [!] ĐỊNH NGHĨA ID QUYỀN (Theo SQL)
-const PERM_VIEW = 90;
+// const PERM_VIEW = 90;
 const PERM_CREATE = 91;
 const PERM_EDIT = 92;
 const PERM_DELETE = 93;
@@ -133,7 +133,7 @@ const CustomerPage = () => {
 
   // --- CẤU HÌNH CỘT ---
   const columns = [
-    { title: "Mã KH", dataIndex: "maKH", key: "maKH", width: 80 },
+    // { title: "Mã KH", dataIndex: "maKH", key: "maKH", width: 80 },
     { title: "Tên Khách Hàng", dataIndex: "tenKH", key: "tenKH", width: 200 },
     { title: "SĐT", dataIndex: "sdt", key: "sdt" },
     { title: "Email", dataIndex: "email", key: "email" },

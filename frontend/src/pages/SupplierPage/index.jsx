@@ -137,7 +137,7 @@ const SupplierPage = () => {
 
   // --- CẤU HÌNH CỘT ---
   const columns = [
-    { title: "Mã NCC", dataIndex: "maNCC", key: "maNCC", width: 80 },
+    // { title: "Mã NCC", dataIndex: "maNCC", key: "maNCC", width: 80 },
     { title: "Tên Nhà Cung Cấp", dataIndex: "tenNCC", key: "tenNCC", width: 200 },
     { title: "Người Liên Hệ", dataIndex: "nguoiLienHe", key: "nguoiLienHe" },
     { title: "SĐT", dataIndex: "sdt", key: "sdt" },

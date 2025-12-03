@@ -2,44 +2,32 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Table,
-  Button,
-  Modal,
-  Form,
-  Input,
-  Space,
-  message,
-  Select,
-  InputNumber,
-  Tag,
-  Dropdown,
-  Descriptions,
-  Divider,
+  Table, Button, Modal, Form, Input, Space, message, Select, InputNumber, Tag, 
+  Dropdown, Descriptions, Divider // [!] Import thêm DatePicker, Card, Row, Col
 } from "antd";
 import {
-  PlusOutlined,
-  DeleteOutlined,
-  MinusCircleOutlined,
-  EditOutlined,
-  ReloadOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  DownOutlined,
-  EyeOutlined,
+  PlusOutlined, DeleteOutlined, MinusCircleOutlined, EditOutlined, ReloadOutlined,
+  CheckCircleOutlined, CloseCircleOutlined, DownOutlined, EyeOutlined,
+   // [!] Import Icon tìm kiếm
 } from "@ant-design/icons";
 import * as phieuNhapService from "../../services/phieunhap.service";
 import * as warehouseService from "../../services/warehouse.service";
 import * as supplierService from "../../services/supplier.service";
 import * as productService from "../../services/product.service";
 import * as userService from "../../services/user.service";
+import dayjs from "dayjs"; // [!] Import dayjs
 
 const { Option } = Select;
 
+// [!] ID QUYỀN (Thêm quyền 120)
 const PERM_CREATE = 20;
 const PERM_EDIT = 21;
 const PERM_DELETE = 22;
 const PERM_APPROVE = 40;
 const PERM_CANCEL = 41;
+const PERM_EDIT_APPROVED = 120; // Quyền sửa phiếu nhập đã duyệt
+
+
 
 const PhieuNhapPage = () => {
   const [phieuNhapList, setPhieuNhapList] = useState([]);
@@ -56,12 +44,12 @@ const PhieuNhapPage = () => {
 
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [editingPhieuNhap, setEditingPhieuNhap] = useState(null);
   const [form] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
   
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingPhieuNhapId, setDeletingPhieuNhapId] = useState(null);
-  const [editingPhieuNhap, setEditingPhieuNhap] = useState(null);
   
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [viewingPhieuNhap, setViewingPhieuNhap] = useState(null);
@@ -150,6 +138,7 @@ const PhieuNhapPage = () => {
   const canDelete = checkPerm(PERM_DELETE);
   const canApprove = checkPerm(PERM_APPROVE);
   const canCancel = checkPerm(PERM_CANCEL);
+  const canEditApproved = checkPerm(PERM_EDIT_APPROVED); // [!] Quyền mới
 
   const getUserName = (userId) => {
     if (!userId) return "---";
@@ -164,6 +153,14 @@ const PhieuNhapPage = () => {
     return status;
   };
 
+  // [!] HÀM KIỂM TRA ĐIỀU KIỆN SỬA
+  const isEditable = (record) => {
+    if (isAdmin && record.trangThai !== 3) return true;
+    if (record.trangThai === 1) return canEdit;
+    if (record.trangThai === 2) return canEditApproved; // Chỉ check quyền, không check ngày ở đây
+    return false;
+  };
+
   // --- CÁC HÀM XỬ LÝ ---
   const handleOpenModal = () => {
     setEditingPhieuNhap(null);
@@ -174,10 +171,25 @@ const PhieuNhapPage = () => {
   };
 
   const handleEdit = async (record) => {
-    if (record.trangThai === 2 || record.trangThai === 3) {
-      messageApi.warning("Không thể sửa phiếu đã được duyệt hoặc đã hủy.");
-      return;
+    if (record.trangThai === 2) {
+        const createdDate = dayjs(record.ngayLapPhieu);
+        const diffDays = dayjs().diff(createdDate, 'day');
+        
+        // Thông báo nếu quá hạn
+        if (diffDays > 30) {
+            messageApi.error(`Không thể sửa: Phiếu đã quá hạn 30 ngày (${diffDays} ngày).`);
+            return; // Dừng lại
+        }
+        // Thông báo nếu không có quyền
+        if (!canEditApproved && !isAdmin) {
+            messageApi.warning("Bạn không có quyền sửa phiếu đã duyệt!");
+            return;
+        }
+    } else if (record.trangThai === 3) {
+        messageApi.warning("Không thể sửa phiếu đã hủy.");
+        return;
     }
+
     try {
       const response = await phieuNhapService.getPhieuNhapById(record.maPhieuNhap);
       const fullData = response.data;
@@ -209,6 +221,8 @@ const PhieuNhapPage = () => {
     form.validateFields().then(async (values) => {
       try {
         if (editingPhieuNhap) {
+          // Nếu backend có API update riêng cho phiếu đã duyệt thì dùng,
+          // không thì dùng update thường (nếu backend đã mở khóa logic)
           await phieuNhapService.updatePhieuNhap(editingPhieuNhap.maPhieuNhap, values);
           messageApi.success("Cập nhật thành công!");
         } else {
@@ -222,8 +236,7 @@ const PhieuNhapPage = () => {
       }
     }).catch((info) => {
         console.log("Validate Failed:", info);
-        // Không làm gì cả, Ant Design đã tự hiện dòng chữ đỏ dưới ô input rồi
-      });;
+    });
   };
 
   const handleDelete = (id) => {
@@ -311,27 +324,27 @@ const PhieuNhapPage = () => {
       title: "Ngày Lập", 
       dataIndex: "ngayLapPhieu", 
       key: "ngayLapPhieu",
-      width: "15%", 
+      width: 180, 
     },
     { 
       title: "Trạng Thái", 
       dataIndex: "trangThai", 
       key: "trangThai",
-      width: "10%", 
+      width: 150, 
       render: renderStatus,
     },
     { 
       title: "Tổng Tiền", 
       dataIndex: "tongTien", 
       key: "tongTien", 
-      width: "10%",
+      width: 150,
       render: (value) => `${Number(value || 0).toLocaleString()} đ`,
     },
     { 
       title: "Nhà Cung Cấp", 
       dataIndex: "maNCC", 
       key: "maNCC",
-      width: "20%",
+      width: 250,
       render: (id) => {
         const ncc = listNCC.find(item => item.maNCC === id);
         return ncc ? ncc.tenNCC : `Mã: ${id}`;
@@ -341,7 +354,7 @@ const PhieuNhapPage = () => {
       title: "Kho Nhập", 
       dataIndex: "maKho", 
       key: "maKho",
-      width: "15%",
+      width: 150,
       render: (id) => {
         const kho = listKho.find(item => item.maKho === id);
         return kho ? kho.tenKho : `Mã: ${id}`;
@@ -351,29 +364,34 @@ const PhieuNhapPage = () => {
       title: "Người Duyệt", 
       dataIndex: "tenNguoiDuyet", 
       key: "tenNguoiDuyet",
-      width: "10%",
+      width: 150,
       render: (text, record) => text || getUserName(record.nguoiDuyet)
     },
     {
       title: 'Hành động',
       key: 'action',
-      width: "20%",
+      width: 220,
       render: (_, record) => {
         const isChoDuyet = record.trangThai === 1;
+        const allowEdit = isEditable(record); // [!] Kiểm tra điều kiện sửa
+
         return (
           <Space size="small" wrap={false} style={{ display: 'flex', flexWrap: 'nowrap' }}> 
             <Button icon={<EyeOutlined />} onClick={() => handleViewDetail(record)} title="Xem chi tiết" />
-            {isChoDuyet && canEdit && (
-              <Button icon={<EditOutlined />} onClick={() => handleEdit(record)} />
+            
+            {/* [!] HIỂN THỊ NÚT SỬA NẾU THỎA ĐIỀU KIỆN */}
+            {allowEdit && (
+              <Button icon={<EditOutlined />} onClick={() => handleEdit(record)} title="Sửa" />
             )}
+
             {isChoDuyet && canDelete && (
-              <Button icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.maPhieuNhap)} />
+              <Button icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.maPhieuNhap)} title="Xóa" />
             )}
             {isChoDuyet && canApprove && (
-              <Button icon={<CheckCircleOutlined />} onClick={() => handleApprove(record.maPhieuNhap)} style={{ color: 'green', borderColor: 'green' }} />
+              <Button icon={<CheckCircleOutlined />} onClick={() => handleApprove(record.maPhieuNhap)} style={{ color: 'green', borderColor: 'green' }} title="Duyệt" />
             )}
             {isChoDuyet && canCancel && (
-              <Button icon={<CloseCircleOutlined />} onClick={() => handleReject(record.maPhieuNhap)} danger />
+              <Button icon={<CloseCircleOutlined />} onClick={() => handleReject(record.maPhieuNhap)} danger title="Hủy" />
             )}
           </Space>
         )
@@ -405,7 +423,6 @@ const PhieuNhapPage = () => {
         loading={loading}
         rowKey="maPhieuNhap"
         pagination={{ pageSize: 5 }}
-        scroll={{ x: 'max-content' }}
       />
 
       <Modal
@@ -459,11 +476,13 @@ const PhieuNhapPage = () => {
                   <Space key={key} style={{ display: "flex", marginBottom: 8 }} align="baseline">
                     <Form.Item
                       {...restField}
+                      label="Tên sản phẩm"
                       name={[name, "maSP"]}
                       rules={[{ required: true, message: "Chọn SP" }]}
                     >
                       <Select 
-                        style={{ width: 300 }} 
+                        style={{ width: 200 }} 
+                        
                         placeholder={selectedNCC ? "Chọn Sản phẩm" : "Vui lòng chọn NCC trước"} 
                         showSearch 
                         optionFilterProp="children"
@@ -471,16 +490,14 @@ const PhieuNhapPage = () => {
                       >
                         {listSanPham
                           .filter(sp => {
-                            if (sp.maNCC == selectedNCC) return true;
+                            if (sp.maNCC === selectedNCC) return true;
                             if (sp.danhSachNCC && Array.isArray(sp.danhSachNCC)) {
                                 return sp.danhSachNCC.some(ncc => ncc.maNCC === selectedNCC);
                             }
                             if (sp.danhSachMaNCC && Array.isArray(sp.danhSachMaNCC)) {
                                 return sp.danhSachMaNCC.includes(selectedNCC);
                             }
-                            // Fallback
                             if (sp.maNCC && String(sp.maNCC) === String(selectedNCC)) return true;
-                            
                             return false;
                           })
                           .map(sp => (
@@ -488,10 +505,9 @@ const PhieuNhapPage = () => {
                         ))}
                       </Select>
                     </Form.Item>
-                    
-                    {/* [!] CHỈ CHO NHẬP SỐ NGUYÊN DƯƠNG */}
                     <Form.Item
                       {...restField}
+                      label="Số lượng"
                       name={[name, "soLuong"]}
                       rules={[
                         { required: true, message: "Nhập SL" },
@@ -501,33 +517,27 @@ const PhieuNhapPage = () => {
                       <InputNumber 
                         placeholder="Số lượng" 
                         min={1} 
-                        precision={0} // Ép kiểu số nguyên
+                        precision={0} 
                         style={{ width: '100%' }}
                         onKeyPress={(event) => {
-                          if (!/[0-9]/.test(event.key)) {
-                            event.preventDefault();
-                          }
+                          if (!/[0-9]/.test(event.key)) event.preventDefault();
                         }}
                       />
                     </Form.Item>
-                    
-                    {/* [!] GIÁ TIỀN: SỐ NGUYÊN DƯƠNG LUÔN CHO ĐỒNG BỘ */}
                     <Form.Item
                       {...restField}
+                      label="Đơn giá"
                       name={[name, "donGia"]}
                       rules={[{ required: true, message: "Nhập Giá" }]}
                     >
                       <InputNumber 
                         placeholder="Đơn giá" 
                         min={0}
-                        precision={0} // Ép kiểu số nguyên
                         formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                         parser={value => value.replace(/\$\s?|(,*)/g, '')}
                         style={{ width: 150 }}
                         onKeyPress={(event) => {
-                          if (!/[0-9]/.test(event.key)) {
-                            event.preventDefault();
-                          }
+                          if (!/[0-9]/.test(event.key)) event.preventDefault();
                         }}
                       />
                     </Form.Item>

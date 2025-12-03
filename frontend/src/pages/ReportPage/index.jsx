@@ -1,7 +1,7 @@
 // src/pages/ReportPage/index.jsx
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Table, Tabs, Card, Tag, Button, Space, message, Row, Col, Statistic } from "antd";
+import { Table, Tabs, Card, Tag, Button, Space, message } from "antd";
 import { 
   BarChartOutlined, 
   HistoryOutlined, 
@@ -28,7 +28,6 @@ const ReportPage = () => {
     if (storedUser) {
       try {
         const user = JSON.parse(storedUser);
-        // Fix lỗi dữ liệu lồng
         const userData = (user.quyen && !Array.isArray(user.quyen)) ? user.quyen : user;
         
         const role = userData.vaiTro || userData.tenVaiTro || "";
@@ -54,7 +53,7 @@ const ReportPage = () => {
       const response = await reportService.getInventoryReport();
       setInventoryData(response.data || []);
     } catch (error) {
-      message.error("Lỗi tải báo cáo tồn kho!");
+      // message.error("Lỗi tải báo cáo tồn kho!");
     }
     setLoading(false);
   }, [canViewInventory]);
@@ -86,7 +85,7 @@ const ReportPage = () => {
 
   // --- CẤU HÌNH CỘT BẢNG TỒN KHO ---
   const inventoryColumns = [
-    { title: "Mã SP", dataIndex: "maSP", key: "maSP", width: 80 },
+    // { title: "Mã SP", dataIndex: "maSP", key: "maSP", width: 80 },
     { title: "Tên Sản Phẩm", dataIndex: "tenSP", key: "tenSP" },
     { title: "ĐVT", dataIndex: "donViTinh", key: "donViTinh", width: 80 },
     { title: "Kho", dataIndex: "tenKho", key: "tenKho" },
@@ -94,7 +93,7 @@ const ReportPage = () => {
       title: "Số Lượng Tồn", 
       dataIndex: "soLuongTon", 
       key: "soLuongTon",
-      sorter: (a, b) => a.soLuongTon - b.soLuongTon,
+      // [!] ĐÃ BỎ SORTER
       render: (val) => <b style={{ color: val <= 10 ? 'red' : 'inherit' }}>{val}</b>
     },
     {
@@ -113,10 +112,16 @@ const ReportPage = () => {
 
   // --- CẤU HÌNH CỘT BẢNG LỊCH SỬ ---
   const historyColumns = [
-    { title: "Ngày", dataIndex: "ngay", key: "ngay", width: 150 },
+    { 
+      title: "Ngày", 
+      dataIndex: "ngay", 
+      key: "ngay", 
+      width: 180,
+      render: (text) => new Date(text).toLocaleString('vi-VN')
+    },
     { 
       title: "Loại GD", 
-      dataIndex: "loaiGiaoDich", // Ví dụ: "NHAP" hoặc "XUAT"
+      dataIndex: "loaiGiaoDich", 
       key: "loaiGiaoDich",
       render: (type) => (
         <Tag color={type === 'NHAP' ? 'blue' : 'green'}>
@@ -127,7 +132,17 @@ const ReportPage = () => {
     { title: "Chứng Từ", dataIndex: "chungTu", key: "chungTu" },
     { title: "Sản Phẩm", dataIndex: "tenSP", key: "tenSP" },
     { title: "Kho", dataIndex: "tenKho", key: "tenKho" },
-    { title: "Số Lượng", dataIndex: "soLuong", key: "soLuong" },
+    { 
+      title: "Số Lượng", 
+      dataIndex: "soLuong", 
+      key: "soLuong",
+      render: (val, record) => {
+         const isImport = record.loaiGiaoDich === 'NHAP';
+         const color = isImport ? 'green' : 'blue';
+         const prefix = isImport ? '+' : '-';
+         return <b style={{ color }}>{prefix}{val}</b>
+      }
+    },
   ];
 
   // Cấu hình các Tabs
@@ -168,7 +183,7 @@ const ReportPage = () => {
             columns={historyColumns} 
             dataSource={historyData} 
             loading={loading}
-            rowKey={(r) => `${r.loaiGiaoDich}_${r.maPhieu}_${r.maSP}`} // Key phức hợp
+            rowKey={(r) => `${r.loaiGiaoDich}_${r.chungTu}_${r.tenSP}_${r.ngay}`} 
             pagination={{ pageSize: 10 }}
           />
         </div>
