@@ -26,3 +26,6 @@ export const approveTransfer = (id) => {
 export const rejectTransfer = (id) => {
   return api.post(`${API_ENDPOINT}/${id}/cancel`);
 };
+export const updateTransfer = (id, data) => {
+  return api.put(`${API_ENDPOINT}/${id}`, data);
+};

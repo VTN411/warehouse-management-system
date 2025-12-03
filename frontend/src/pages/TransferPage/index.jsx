@@ -6,20 +6,21 @@ import {
 } from "antd";
 import {
   PlusOutlined, DeleteOutlined, ReloadOutlined,
-  CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, MinusCircleOutlined, EditOutlined
+  CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, EditOutlined,MinusCircleOutlined
 } from "@ant-design/icons";
 import * as transferService from "../../services/transfer.service";
 import * as warehouseService from "../../services/warehouse.service";
 import * as productService from "../../services/product.service";
 import * as userService from "../../services/user.service";
+import dayjs from "dayjs"; // [!] Cần import dayjs để tính ngày
 
 const { Option } = Select;
 
-// [!] 1. ĐỊNH NGHĨA ID QUYỀN CHUẨN (SỐ)
-const PERM_CREATE = 111;
-const PERM_APPROVE = 112;
-const PERM_CANCEL = 113;
-// (ID 110 là Quyền Xem - dùng để kiểm tra truy cập nếu cần)
+// [!] ID QUYỀN ĐẦY ĐỦ
+const PERM_CREATE = 111;           
+const PERM_APPROVE = 112;          
+const PERM_CANCEL = 113;           
+const PERM_EDIT_APPROVED = 114;    // Quyền sửa phiếu đã duyệt
 
 const TransferPage = () => {
   const [listData, setListData] = useState([]);
@@ -32,6 +33,7 @@ const TransferPage = () => {
 
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null); 
   const [form] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
   
@@ -68,7 +70,6 @@ const TransferPage = () => {
     } catch (error) { console.error(error); }
   }, []);
 
-  // [!] 2. LOGIC LẤY QUYỀN AN TOÀN (Fix lỗi mất nút)
   useEffect(() => {
     fetchData();
     fetchCommonData();
@@ -76,14 +77,10 @@ const TransferPage = () => {
       const storedUser = localStorage.getItem("user_info");
       if (storedUser) {
         let user = JSON.parse(storedUser);
+        if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung) user = user.quyen;
         
-        // Fix lỗi dữ liệu lồng nhau
-        if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung) {
-           user = user.quyen;
-        }
-
         const role = user.vaiTro || user.tenVaiTro || "";
-        setIsAdmin(role === "ADMIN");
+        setIsAdmin(role.toUpperCase() === "ADMIN");
         
         let perms = user.dsQuyenSoHuu || user.quyen;
         if (!Array.isArray(perms)) perms = [];
@@ -92,18 +89,16 @@ const TransferPage = () => {
     } catch (e) { setPermissions([]); }
   }, [fetchData, fetchCommonData]);
 
-  // [!] 3. HÀM CHECK QUYỀN
+  // Hàm kiểm tra quyền
   const checkPerm = (id) => isAdmin || permissions.includes(id);
-  const canCreate = checkPerm(PERM_CREATE); // ID 111
-  const canApprove = checkPerm(PERM_APPROVE); // ID 112
-  const canCancel = checkPerm(PERM_CANCEL); // ID 113
+  
+  const canCreate = checkPerm(PERM_CREATE); 
+  const canApprove = checkPerm(PERM_APPROVE);
+  const canCancel = checkPerm(PERM_CANCEL);
+  const canEditApproved = checkPerm(PERM_EDIT_APPROVED);
 
   // Helper
-  const getUserName = (id) => {
-    if (!id) return "---";
-    const user = listUser.find(u => u.maNguoiDung === id);
-    return user ? user.hoTen : `ID: ${id}`;
-  };
+  const getUserName = (id) => listUser.find(u => u.maNguoiDung === id)?.hoTen || `ID: ${id}`;
   const getKhoName = (id) => listKho.find(k => k.maKho === id)?.tenKho || `Mã: ${id}`;
   const getSPName = (id) => listSanPham.find(sp => sp.maSP === id)?.tenSP || `SP-${id}`;
 
@@ -116,6 +111,7 @@ const TransferPage = () => {
 
   // --- XỬ LÝ FORM ---
   const handleOpenModal = () => { 
+    setEditingRecord(null);
     form.resetFields(); 
     setSourceInventory([]); 
     setSelectedSourceKho(null);
@@ -133,6 +129,56 @@ const TransferPage = () => {
     }
   };
 
+  // [!] HÀM SỬA PHIẾU VỚI LOGIC KIỂM TRA 30 NGÀY
+  const handleEdit = async (record) => {
+      // 1. Kiểm tra phiếu đã hủy
+      if (record.trangThai === 3) {
+          messageApi.warning("Không thể sửa phiếu đã hủy!");
+          return;
+      }
+
+      // 2. Kiểm tra phiếu đã duyệt
+      if (record.trangThai === 2) {
+          // a. Kiểm tra quyền
+          if (!canEditApproved && !isAdmin) {
+               messageApi.warning("Bạn không có quyền sửa phiếu đã duyệt!");
+               return;
+          }
+
+          // b. [!] KIỂM TRA THỜI GIAN 30 NGÀY
+          const createdDate = dayjs(record.ngayChuyen); // Ngày tạo phiếu
+          const currentDate = dayjs(); // Ngày hiện tại
+          const diffDays = currentDate.diff(createdDate, 'day'); // Tính khoảng cách ngày
+          
+          if (diffDays > 30) {
+              messageApi.error(`Không thể sửa: Phiếu đã được tạo quá 30 ngày (${diffDays} ngày).`);
+              return; // [!] DỪNG LẠI, KHÔNG MỞ FORM
+          }
+      }
+
+      // 3. Mở form nếu thỏa mãn điều kiện
+      try {
+          const response = await transferService.getTransferById(record.maPhieuDC);
+          const data = response.data;
+          
+          setEditingRecord(data); 
+
+          // Load tồn kho của kho xuất cũ
+          if (data.maKhoXuat) {
+            setSelectedSourceKho(data.maKhoXuat);
+            try {
+                const resInv = await warehouseService.getInventoryByWarehouse(data.maKhoXuat);
+                setSourceInventory(resInv.data || []);
+            } catch (e) { setSourceInventory([]); }
+          }
+
+          form.setFieldsValue(data);
+          setIsModalVisible(true);
+      } catch (error) {
+          messageApi.error("Lỗi tải chi tiết phiếu để sửa!");
+      }
+  };
+
   const handleOk = () => {
     form.validateFields().then(async (values) => {
       if (values.maKhoXuat === values.maKhoNhap) {
@@ -140,15 +186,23 @@ const TransferPage = () => {
         return;
       }
       try {
-        await transferService.createTransfer(values);
-        messageApi.success("Tạo phiếu điều chuyển thành công!");
+        if (editingRecord) {
+            if (transferService.updateTransfer) {
+                await transferService.updateTransfer(editingRecord.maPhieuDC, values);
+                messageApi.success("Cập nhật thành công!");
+            } else {
+                messageApi.error("Chưa hỗ trợ cập nhật (thiếu API)");
+            }
+        } else {
+            await transferService.createTransfer(values);
+            messageApi.success("Tạo phiếu thành công!");
+        }
         setIsModalVisible(false);
         fetchData();
-      } catch (error) { messageApi.error(error.response?.data?.message || "Lỗi khi tạo phiếu!"); }
-    }).catch((info) => {
-        console.log("Validate Failed:", info);
-        // Không làm gì cả, Ant Design đã tự hiện dòng chữ đỏ dưới ô input rồi
-      });;
+      } catch (error) { 
+        messageApi.error(error.response?.data?.message || "Lỗi khi lưu phiếu!"); 
+      }
+    });
   };
 
   const handleViewDetail = async (record) => {
@@ -175,7 +229,7 @@ const TransferPage = () => {
   };
 
   const columns = [
-    { title: "Mã Phiếu", dataIndex: "maPhieuDC", width: 80 },
+    // { title: "Mã Phiếu", dataIndex: "maPhieuDC", width: 80 },
     { title: "Ngày Chuyển", dataIndex: "ngayChuyen", width: 150 },
     { title: "Trạng Thái", dataIndex: "trangThai", width: 120, render: renderStatus },
     { title: "Kho Xuất", dataIndex: "maKhoXuat", width: 150, render: getKhoName },
@@ -185,13 +239,25 @@ const TransferPage = () => {
       title: "Hành động", key: "action", width: 180,
       render: (_, record) => {
         const isPending = record.trangThai === 1;
+        const isApproved = record.trangThai === 2;
+        
+        // [!] Logic hiển thị nút Sửa:
+        // - Hiện nếu là phiếu Chờ duyệt (và có quyền tạo)
+        // - HOẶC Hiện nếu là phiếu Đã duyệt (và có quyền sửa đặc biệt 114 hoặc là Admin)
+        const showEdit = (isPending && canCreate) || 
+                         (isApproved && (canEditApproved || isAdmin));
+
         return (
           <Space size="small" wrap={false}>
             <Button icon={<EyeOutlined />} onClick={() => handleViewDetail(record)} title="Xem" />
             
-            {isPending && canApprove && <Button icon={<CheckCircleOutlined />} onClick={() => handleApprove(record.maPhieuDC)} style={{ color: 'green', borderColor: 'green' }} />}
-            {isPending && canCancel && <Button icon={<CloseCircleOutlined />} onClick={() => handleReject(record.maPhieuDC)} danger />}
-            {isPending && isAdmin && <Button icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.maPhieuDC)} />}
+            {showEdit && (
+                <Button icon={<EditOutlined />} onClick={() => handleEdit(record)} title="Sửa" />
+            )}
+
+            {isPending && canApprove && <Button icon={<CheckCircleOutlined />} onClick={() => handleApprove(record.maPhieuDC)} style={{ color: 'green', borderColor: 'green' }} title="Duyệt" />}
+            {isPending && canCancel && <Button icon={<CloseCircleOutlined />} onClick={() => handleReject(record.maPhieuDC)} danger title="Hủy" />}
+            {isPending && isAdmin && <Button icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.maPhieuDC)} title="Xóa" />}
           </Space>
         );
       },
@@ -202,24 +268,29 @@ const TransferPage = () => {
     <div>
       {contextHolder}
       <Space style={{ marginBottom: 16 }}>
-        {/* [!] NÚT TẠO SẼ HIỆN NẾU LÀ ADMIN HOẶC CÓ QUYỀN 111 */}
         {canCreate && <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal}>Tạo Phiếu Điều Chuyển</Button>}
         <Button icon={<ReloadOutlined />} onClick={fetchData} loading={loading}>Tải lại</Button>
       </Space>
 
       <Table className="fixed-height-table" columns={columns} dataSource={listData} loading={loading} rowKey="maPhieuDC" pagination={{ pageSize: 5 }} scroll={{ x: 'max-content' }} />
 
-      {/* Modal Tạo */}
-      <Modal title="Tạo Phiếu Điều Chuyển" open={isModalVisible} onOk={handleOk} onCancel={() => setIsModalVisible(false)} width={900}>
+      {/* Modal Tạo/Sửa */}
+      <Modal 
+        title={editingRecord ? "Sửa Phiếu Điều Chuyển" : "Tạo Phiếu Điều Chuyển"} 
+        open={isModalVisible} 
+        onOk={handleOk} 
+        onCancel={() => setIsModalVisible(false)} 
+        width={900}
+      >
         <Form form={form} layout="vertical">
           <Space style={{ display: 'flex', width: '100%' }} align="start">
             <Form.Item name="maKhoXuat" label="Kho Xuất Hàng" rules={[{ required: true }]} style={{ flex: 1 }}>
-              <Select placeholder="Chọn kho xuất" onChange={handleSourceKhoChange}>
+              <Select placeholder="Chọn kho xuất" onChange={handleSourceKhoChange} disabled={!!editingRecord}>
                 {listKho.map(k => <Option key={k.maKho} value={k.maKho}>{k.tenKho}</Option>)}
               </Select>
             </Form.Item>
             <Form.Item name="maKhoNhap" label="Kho Nhập Hàng" rules={[{ required: true }]} style={{ flex: 1 }}>
-              <Select placeholder="Chọn kho nhập" disabled={!selectedSourceKho}>
+              <Select placeholder="Chọn kho nhập">
                 {listKho.filter(k => k.maKho !== selectedSourceKho).map(k => <Option key={k.maKho} value={k.maKho}>{k.tenKho}</Option>)}
               </Select>
             </Form.Item>
@@ -235,13 +306,21 @@ const TransferPage = () => {
               <>
                 {fields.map(({ key, name, ...restField }) => (
                   <Space key={key} style={{ display: "flex", marginBottom: 8 }} align="baseline">
-                    <Form.Item {...restField} name={[name, "maSP"]} rules={[{ required: true, message: "Chọn SP" }]}>
+                    <Form.Item {...restField} label="Tên sản phẩm" name={[name, "maSP"]} rules={[{ required: true, message: "Chọn SP" }]}>
                        <Select style={{ width: 300 }} placeholder={selectedSourceKho ? "Chọn sản phẩm" : "Chọn Kho Xuất trước"} showSearch optionFilterProp="children" disabled={!selectedSourceKho}>
                         {sourceInventory.map(sp => <Option key={sp.maSP} value={sp.maSP}>{sp.tenSP} (Tồn: {sp.soLuongTon})</Option>)}
                       </Select>
                     </Form.Item>
-                    <Form.Item {...restField} name={[name, "soLuong"]} rules={[{ required: true, message: "Nhập SL" }]}>
-                      <InputNumber placeholder="Số lượng" min={1} />
+                    <Form.Item 
+                        {...restField}
+                        label="Số lượng" 
+                        name={[name, "soLuong"]} 
+                        rules={[
+                            { required: true, message: "Nhập SL" },
+                            { type: 'integer', min: 1, message: '>0' }
+                        ]}
+                    >
+                      <InputNumber placeholder="Số lượng" min={1} precision={0} />
                     </Form.Item>
                     <MinusCircleOutlined onClick={() => remove(name)} />
                   </Space>
@@ -253,7 +332,7 @@ const TransferPage = () => {
         </Form>
       </Modal>
 
-      {/* Modal Chi Tiết */}
+      {/* Modal Chi Tiết & Xóa (Giữ nguyên) */}
       <Modal title="Chi tiết Điều Chuyển" open={isDetailModalOpen} onCancel={() => setIsDetailModalOpen(false)} footer={[<Button key="close" onClick={() => setIsDetailModalOpen(false)}>Đóng</Button>]} width={800}>
         {viewingRecord && (
           <div>
@@ -276,7 +355,6 @@ const TransferPage = () => {
         )}
       </Modal>
 
-      {/* Modal Xóa */}
       <Modal title="Xác nhận xóa" open={isDeleteModalOpen} onOk={handleDeleteConfirm} onCancel={() => setIsDeleteModalOpen(false)} okText="Xóa" cancelText="Hủy" okType="danger">
         <p>Bạn có chắc muốn xóa phiếu này không?</p>
       </Modal>

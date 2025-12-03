@@ -286,7 +286,7 @@ const ProductPage = () => {
         onOk={handleOk}
         // [!] 5. HIỂN THỊ HIỆU ỨNG LOADING Ở NÚT OK
         confirmLoading={submitLoading} 
-        onCancel={() => setIsModalVisible(false)}
+        onCancel={handleCancel}
         width={800}
       >
         <Form form={form} layout="vertical">

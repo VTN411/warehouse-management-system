@@ -150,7 +150,7 @@ const WarehousePage = () => {
 
   // Cột cho bảng chính (Danh sách kho)
   const columns = [
-    { title: "Mã Kho", dataIndex: "maKho", key: "maKho", width: 80 },
+    // { title: "Mã Kho", dataIndex: "maKho", key: "maKho", width: 80 },
     { title: "Tên Kho", dataIndex: "tenKho", key: "tenKho", width: 200 },
     { title: "Địa Chỉ", dataIndex: "diaChi", key: "diaChi" },
     { title: "Ghi Chú", dataIndex: "ghiChu", key: "ghiChu" },
