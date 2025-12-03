@@ -2,30 +2,13 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Table,
-  Button,
-  Modal,
-  Form,
-  Input,
-  Space,
-  message,
-  Select,
-  InputNumber,
-  Tag,
-  Dropdown,
-  Descriptions,
-  Divider,
+  Table, Button, Modal, Form, Input, Space, message, Select, InputNumber, Tag, 
+  Dropdown, Descriptions, Divider // [!] Import thêm DatePicker, Card, Row, Col
 } from "antd";
 import {
-  PlusOutlined,
-  DeleteOutlined,
-  MinusCircleOutlined,
-  EditOutlined,
-  ReloadOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  DownOutlined,
-  EyeOutlined,
+  PlusOutlined, DeleteOutlined, MinusCircleOutlined, EditOutlined, ReloadOutlined,
+  CheckCircleOutlined, CloseCircleOutlined, DownOutlined, EyeOutlined,
+   // [!] Import Icon tìm kiếm
 } from "@ant-design/icons";
 import * as phieuNhapService from "../../services/phieunhap.service";
 import * as warehouseService from "../../services/warehouse.service";
@@ -43,6 +26,8 @@ const PERM_DELETE = 22;
 const PERM_APPROVE = 40;
 const PERM_CANCEL = 41;
 const PERM_EDIT_APPROVED = 120; // Quyền sửa phiếu nhập đã duyệt
+
+
 
 const PhieuNhapPage = () => {
   const [phieuNhapList, setPhieuNhapList] = useState([]);

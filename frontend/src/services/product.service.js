@@ -48,3 +48,7 @@ export const updateProduct = (id, values, file) => {
 export const deleteProduct = (id) => {
   return api.delete(`${API_ENDPOINT}/${id}`);
 };
+export const filterProducts = (filterData) => {
+  // filterData gồm: { keyword, maLoai, page, size... }
+  return api.post(`${API_ENDPOINT}/filter`, filterData);
+};

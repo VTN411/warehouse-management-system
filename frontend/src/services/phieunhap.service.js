@@ -37,3 +37,6 @@ export const rejectPhieuNhap = (phieuNhapId) => {
 export const getPhieuNhapById = (id) => {
   return api.get(`${API_ENDPOINT}/${id}`);
 };
+export const filterPhieuNhap = (data) => {
+  return api.post(`${API_ENDPOINT}/filter`, data);
+};

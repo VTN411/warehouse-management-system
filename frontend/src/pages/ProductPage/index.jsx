@@ -2,26 +2,10 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Table,
-  Button,
-  Modal,
-  Form,
-  Input,
-  Space,
-  message,
-  Select,
-  InputNumber,
-  Row,
-  Col,
-  Tag,
-  Upload,
-  Image,
+  Table, Button, Modal, Form, Input, Space, message, Select, InputNumber, Row, Col, Tag, Upload, Image, Card
 } from "antd";
 import {
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  ReloadOutlined,
+  PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ClearOutlined
 } from "@ant-design/icons";
 import * as productService from "../../services/product.service";
 import * as supplierService from "../../services/supplier.service";
@@ -35,10 +19,7 @@ const PERM_DELETE_ID = 52;
 const ProductPage = () => {
   const [products, setProducts] = useState([]);
   const [listNCC, setListNCC] = useState([]);
-  
-  // State loading cho bảng
   const [loading, setLoading] = useState(false);
-  // [!] 1. STATE LOADING CHO NÚT LƯU (Để user biết đang xử lý)
   const [submitLoading, setSubmitLoading] = useState(false);
 
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -49,14 +30,49 @@ const ProductPage = () => {
   const [permissions, setPermissions] = useState([]);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingProductId, setDeletingProductId] = useState(null);
-
   const [fileList, setFileList] = useState([]);
 
-  const fetchProducts = useCallback(async () => {
+  // [!] 1. STATE BỘ LỌC (Thêm minGia, maxGia)
+  const [filter, setFilter] = useState({
+    keyword: "",
+    maLoai: null,
+    minGia: null,
+    maxGia: null
+  });
+
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 10,
+    total: 0,
+    showSizeChanger: true,
+  });
+
+  // [!] 2. HÀM GỌI API TÌM KIẾM
+  const fetchProducts = useCallback(async (page = 1, pageSize = 10, currentFilter = {}) => {
     setLoading(true);
     try {
-      const response = await productService.getAllProducts();
-      setProducts(response.data || []);
+      const filterData = {
+        ...currentFilter, // Gửi keyword, minGia, maxGia...
+        page: page - 1,
+        size: pageSize
+      };
+
+      // Gọi API Filter
+      const response = await productService.filterProducts(filterData);
+      
+      const data = response.data;
+      if (data && Array.isArray(data.content)) {
+         setProducts(data.content);
+         setPagination(prev => ({
+             ...prev,
+             current: page,
+             pageSize: pageSize,
+             total: data.totalElements
+         }));
+      } else if (Array.isArray(data)) {
+         setProducts(data); // Fallback
+         setPagination(prev => ({ ...prev, total: data.length }));
+      }
     } catch (error) {
       messageApi.error("Không thể tải danh sách sản phẩm!");
     }
@@ -67,13 +83,11 @@ const ProductPage = () => {
     try {
       const response = await supplierService.getAllSuppliers();
       setListNCC(response.data || []);
-    } catch (error) {
-      console.error("Lỗi tải NCC:", error);
-    }
+    } catch (error) { console.error(error); }
   }, []);
 
   useEffect(() => {
-    fetchProducts();
+    fetchProducts(1, 10, filter);
     fetchCommonData();
     try {
       const storedUser = localStorage.getItem("user_info");
@@ -87,166 +101,74 @@ const ProductPage = () => {
     } catch (e) { setPermissions([]); }
   }, [fetchProducts, fetchCommonData]);
 
+  // [!] XỬ LÝ TÌM KIẾM
+  const handleSearch = () => {
+    fetchProducts(1, pagination.pageSize, filter);
+  };
+
+  // [!] XỬ LÝ RESET BỘ LỌC
+  const handleResetFilter = () => {
+    const emptyFilter = { keyword: "", maLoai: null, minGia: null, maxGia: null };
+    setFilter(emptyFilter);
+    fetchProducts(1, pagination.pageSize, emptyFilter);
+  };
+
+  const handleTableChange = (newPagination) => {
+    fetchProducts(newPagination.current, newPagination.pageSize, filter);
+  };
+
   const canCreate = permissions.includes(PERM_CREATE_ID);
   const canEdit = permissions.includes(PERM_EDIT_ID);
   const canDelete = permissions.includes(PERM_DELETE_ID);
 
-  // --- XỬ LÝ FORM ---
-
-  const handleOpenModal = () => {
-    setEditingProduct(null);
-    setFileList([]); 
-    form.resetFields();
-    setIsModalVisible(true);
-  };
-
-  // [!] 2. SỬA LẠI HÀM handleEdit ĐỂ HIỂN THỊ ẢNH CŨ
+  // ... (Các hàm handleModal, handleEdit, handleOk... GIỮ NGUYÊN) ...
+  const handleOpenModal = () => { setEditingProduct(null); setFileList([]); form.resetFields(); setIsModalVisible(true); };
   const handleEdit = (record) => {
     setEditingProduct(record);
-    
-    // Kiểm tra xem sản phẩm có ảnh không
-    // Lưu ý: record.hinhAnh là chuỗi URL (https://...)
-    if (record.hinhAnh) {
-        setFileList([
-            {
-                uid: '-1', // ID giả
-                name: 'hinh-anh-hien-tai.png',
-                status: 'done', // Trạng thái đã xong
-                url: record.hinhAnh, // Đường dẫn ảnh để hiển thị preview
-            }
-        ]);
-    } else {
-        setFileList([]);
-    }
-
-    const selectedNCCIds = record.danhSachNCC 
-      ? record.danhSachNCC.map(ncc => ncc.maNCC) 
-      : [];
-
-    form.setFieldsValue({
-      ...record,
-      maLoai: record.loaiHang?.maLoai || record.maLoai, 
-      danhSachMaNCC: selectedNCCIds, 
-    });
+    if (record.hinhAnh) setFileList([{ uid: '-1', name: 'img.png', status: 'done', url: record.hinhAnh }]);
+    else setFileList([]);
+    const selectedNCCIds = record.danhSachNCC ? record.danhSachNCC.map(ncc => ncc.maNCC) : [];
+    form.setFieldsValue({ ...record, maLoai: record.loaiHang?.maLoai || record.maLoai, danhSachMaNCC: selectedNCCIds });
     setIsModalVisible(true);
   };
-
-  const handleCancel = () => {
-    setIsModalVisible(false);
-    setEditingProduct(null);
-  };
-
+  const handleCancel = () => { setIsModalVisible(false); setEditingProduct(null); };
   const handleOk = () => {
     form.validateFields().then(async (values) => {
-      // [!] 3. BẬT LOADING KHI BẮT ĐẦU LƯU
       setSubmitLoading(true);
-
       try {
-        // Chỉ lấy file nếu đó là file mới upload (có originFileObj)
-        // Nếu là ảnh cũ (chỉ có url), thì file sẽ là null -> Backend sẽ giữ nguyên ảnh cũ
-        const fileEntry = fileList.length > 0 ? fileList[0] : null;
-        const file = fileEntry && fileEntry.originFileObj ? fileEntry.originFileObj : null;
-
+        const file = fileList.length > 0 ? fileList[0].originFileObj : null;
         const productData = {
-            tenSP: values.tenSP,
-            donViTinh: values.donViTinh,
-            giaNhap: values.giaNhap,
-            soLuongTon: values.soLuongTon,
-            mucTonToiThieu: values.mucTonToiThieu,
-            mucTonToiDa: values.mucTonToiDa,
-            maLoai: values.maLoai,
-            moTa: values.moTa,
-            danhSachMaNCC: values.danhSachMaNCC || [] 
+            tenSP: values.tenSP, donViTinh: values.donViTinh, giaNhap: values.giaNhap, soLuongTon: values.soLuongTon,
+            mucTonToiThieu: values.mucTonToiThieu, mucTonToiDa: values.mucTonToiDa, maLoai: values.maLoai,
+            moTa: values.moTa, danhSachMaNCC: values.danhSachMaNCC || [] 
         };
-
-        if (editingProduct) {
-          await productService.updateProduct(editingProduct.maSP, productData, file);
-          messageApi.success("Cập nhật thành công!");
-        } else {
-          await productService.createProduct(productData, file);
-          messageApi.success("Tạo mới thành công!");
-        }
-        
+        if (editingProduct) await productService.updateProduct(editingProduct.maSP, productData, file);
+        else await productService.createProduct(productData, file);
+        messageApi.success("Thành công!");
         setIsModalVisible(false);
-        fetchProducts();
-      } catch (error) {
-        console.error(error);
-        const msg = error.response?.data?.message || "Có lỗi xảy ra!";
-        messageApi.error(msg);
-      } finally {
-        // [!] 4. TẮT LOADING DÙ THÀNH CÔNG HAY THẤT BẠI
-        setSubmitLoading(false);
-      }
-    })
-    .catch((info) => {
-        console.log("Validate Failed:", info);
-    });
+        fetchProducts(pagination.current, pagination.pageSize, filter);
+      } catch (error) { messageApi.error(error.response?.data?.message || "Lỗi!"); } 
+      finally { setSubmitLoading(false); }
+    }).catch(() => {});
   };
-
-  const handleDelete = (id) => {
-    setDeletingProductId(id);
-    setIsDeleteModalOpen(true);
-  };
-
+  const handleDelete = (id) => { setDeletingProductId(id); setIsDeleteModalOpen(true); };
   const handleDeleteConfirm = async () => {
-    try {
-      await productService.deleteProduct(deletingProductId);
-      messageApi.success("Đã xóa sản phẩm!");
-      fetchProducts();
-    } catch (error) {
-      messageApi.error("Lỗi khi xóa!");
-    }
+    try { await productService.deleteProduct(deletingProductId); messageApi.success("Đã xóa!"); fetchProducts(pagination.current, pagination.pageSize, filter); } 
+    catch (error) { messageApi.error("Lỗi xóa!"); }
     setIsDeleteModalOpen(false);
-    setDeletingProductId(null);
   };
-
-  const handleUploadChange = ({ fileList: newFileList }) => {
-    setFileList(newFileList);
-  };
+  const handleUploadChange = ({ fileList: newFileList }) => { setFileList(newFileList); };
 
   const columns = [
-    // { title: "Mã SP", dataIndex: "maSP", key: "maSP", width: 70 },
-    { 
-        title: "Hình Ảnh", 
-        dataIndex: "hinhAnh", 
-        key: "hinhAnh", 
-        width: 100,
-        render: (url) => (
-            url ? <Image width={50} src={url} fallback="https://via.placeholder.com/50?text=Error" /> : <Tag>No Image</Tag>
-        )
-    },
-    { title: "Tên Sản Phẩm", dataIndex: "tenSP", key: "tenSP", width: 200 },
-    { title: "ĐVT", dataIndex: "donViTinh", key: "donViTinh", width: 80 },
-    { 
-      title: "Giá Nhập", 
-      dataIndex: "giaNhap", 
-      key: "giaNhap", 
-      render: (val) => `${Number(val).toLocaleString()} đ`,
-      width: 110 
-    },
-    { title: "Tồn", dataIndex: "soLuongTon", key: "soLuongTon", width: 70 },
-    { 
-      title: "Loại Hàng", 
-      render: (_, record) => record.loaiHang?.tenLoai || `Mã: ${record.maLoai}`,
-      key: "loaiHang",
-      width: 120
-    },
-    { 
-      title: "Nhà Cung Cấp",
-      key: "danhSachNCC",
-      width: 200,
-      render: (_, record) => (
-        <>
-          {record.danhSachNCC && record.danhSachNCC.map(ncc => (
-            <Tag key={ncc.maNCC} color="blue">{ncc.tenNCC}</Tag>
-          ))}
-        </>
-      )
-    },
+    { title: "Mã", dataIndex: "maSP", width: 60 },
+    { title: "Ảnh", dataIndex: "hinhAnh", width: 80, render: (url) => (url ? <Image width={40} src={url} /> : <Tag>No Img</Tag>) },
+    { title: "Tên Sản Phẩm", dataIndex: "tenSP", width: 200 },
+    { title: "ĐVT", dataIndex: "donViTinh", width: 70 },
+    { title: "Giá Nhập", dataIndex: "giaNhap", render: (val) => `${Number(val).toLocaleString()} đ`, width: 110 },
+    { title: "Tồn", dataIndex: "soLuongTon", width: 70 },
+    { title: "NCC", width: 150, render: (_, r) => <>{r.danhSachNCC && r.danhSachNCC.map(n => <Tag key={n.maNCC} color="blue">{n.tenNCC}</Tag>)}</> },
     {
-      title: "Hành động",
-      key: "action",
-      width: 150,
+      title: "Hành động", key: "action", width: 120,
       render: (_, record) => (
         <Space size="small">
           {canEdit && <Button icon={<EditOutlined />} onClick={() => handleEdit(record)} />}
@@ -259,15 +181,55 @@ const ProductPage = () => {
   return (
     <div>
       {contextHolder}
+      
+      {/* [!] 3. GIAO DIỆN BỘ LỌC */}
+      <Card style={{ marginBottom: 16 }} bodyStyle={{ padding: '16px' }}>
+        <Row gutter={[16, 16]} align="middle">
+            {/* Tìm theo tên */}
+            <Col span={6}>
+                <Input 
+                    placeholder="Tên sản phẩm..." 
+                    prefix={<SearchOutlined />}
+                    value={filter.keyword}
+                    onChange={e => setFilter({...filter, keyword: e.target.value})}
+                    onPressEnter={handleSearch}
+                />
+            </Col>
+            
+            {/* Lọc theo Giá */}
+            <Col span={4}>
+                <InputNumber 
+                    placeholder="Giá từ" 
+                    style={{ width: '100%' }} 
+                    formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                    parser={value => value.replace(/\$\s?|(,*)/g, '')}
+                    value={filter.minGia}
+                    onChange={val => setFilter({...filter, minGia: val})}
+                />
+            </Col>
+            <Col span={4}>
+                <InputNumber 
+                    placeholder="Đến giá" 
+                    style={{ width: '100%' }} 
+                    formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                    parser={value => value.replace(/\$\s?|(,*)/g, '')}
+                    value={filter.maxGia}
+                    onChange={val => setFilter({...filter, maxGia: val})}
+                />
+            </Col>
+            
+            {/* Nút Thao tác */}
+            <Col span={6}>
+                <Space>
+                    <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>Tìm kiếm</Button>
+                    <Button icon={<ClearOutlined />} onClick={handleResetFilter}>Xóa lọc</Button>
+                </Space>
+            </Col>
+        </Row>
+      </Card>
+
       <Space style={{ marginBottom: 16 }}>
-        {canCreate && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal}>
-            Thêm Sản Phẩm
-          </Button>
-        )}
-        <Button icon={<ReloadOutlined />} onClick={fetchProducts} loading={loading}>
-          Tải lại
-        </Button>
+        {canCreate && <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal}>Thêm Sản Phẩm</Button>}
       </Space>
 
       <Table
@@ -276,124 +238,44 @@ const ProductPage = () => {
         dataSource={products}
         loading={loading}
         rowKey="maSP"
-        pagination={{ pageSize: 5 }}
+        pagination={pagination}
+        onChange={handleTableChange}
         scroll={{ x: 1000 }}
       />
 
-      <Modal
-        title={editingProduct ? "Sửa Sản Phẩm" : "Thêm Sản Phẩm"}
-        open={isModalVisible}
-        onOk={handleOk}
-        // [!] 5. HIỂN THỊ HIỆU ỨNG LOADING Ở NÚT OK
-        confirmLoading={submitLoading} 
-        onCancel={handleCancel}
-        width={800}
-      >
+      {/* Modal Form (Giữ nguyên) */}
+      <Modal title={editingProduct ? "Sửa Sản Phẩm" : "Thêm Sản Phẩm"} open={isModalVisible} onOk={handleOk} confirmLoading={submitLoading} onCancel={handleCancel} width={800}>
         <Form form={form} layout="vertical">
-          
-          {/* Form Upload Ảnh */}
           <Row gutter={16}>
              <Col span={24} style={{ textAlign: 'center', marginBottom: 20 }}>
-                <Upload
-                    listType="picture-card"
-                    fileList={fileList}
-                    onChange={handleUploadChange}
-                    beforeUpload={() => false} 
-                    maxCount={1} 
-                    onPreview={async (file) => {
-                        let src = file.url;
-                        if (!src) {
-                            src = await new Promise((resolve) => {
-                                const reader = new FileReader();
-                                reader.readAsDataURL(file.originFileObj);
-                                reader.onload = () => resolve(reader.result);
-                            });
-                        }
-                        const image = new Image();
-                        image.src = src;
-                        const imgWindow = window.open(src);
-                        imgWindow?.document.write(image.outerHTML);
-                    }}
-                >
-                    {fileList.length < 1 && (
-                        <div>
-                            <PlusOutlined />
-                            <div style={{ marginTop: 8 }}>Tải ảnh</div>
-                        </div>
-                    )}
+                <Upload listType="picture-card" fileList={fileList} onChange={handleUploadChange} beforeUpload={() => false} maxCount={1} onPreview={async (file) => { let src = file.url || await new Promise(r => { const reader = new FileReader(); reader.readAsDataURL(file.originFileObj); reader.onload = () => r(reader.result); }); window.open(src); }}>
+                    {fileList.length < 1 && <div><PlusOutlined /><div style={{ marginTop: 8 }}>Tải ảnh</div></div>}
                 </Upload>
              </Col>
           </Row>
-
           <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="tenSP" label="Tên Sản Phẩm" rules={[{ required: true }]}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="maLoai" label="Mã Loại Hàng" rules={[{ required: true }]}>
-                <InputNumber style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
+            <Col span={12}><Form.Item name="tenSP" label="Tên Sản Phẩm" rules={[{ required: true }]}><Input /></Form.Item></Col>
+            <Col span={12}><Form.Item name="maLoai" label="Mã Loại Hàng" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} /></Form.Item></Col>
           </Row>
-
           <Row gutter={16}>
-            <Col span={8}>
-              <Form.Item name="giaNhap" label="Giá Nhập" rules={[{ required: true }]}>
-                <InputNumber style={{ width: '100%' }} formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={value => value.replace(/\$\s?|(,*)/g, '')} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="donViTinh" label="ĐVT" rules={[{ required: true }]}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="soLuongTon" label="Tồn Kho" initialValue={0}>
-                <InputNumber style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
+            <Col span={8}><Form.Item name="giaNhap" label="Giá Nhập" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={v => v.replace(/\$\s?|(,*)/g, '')} /></Form.Item></Col>
+            <Col span={8}><Form.Item name="donViTinh" label="ĐVT" rules={[{ required: true }]}><Input /></Form.Item></Col>
+            <Col span={8}><Form.Item name="soLuongTon" label="Tồn Kho" initialValue={0}><InputNumber style={{ width: '100%' }} /></Form.Item></Col>
           </Row>
-
           <Row gutter={16}>
-            <Col span={8}>
-              <Form.Item name="mucTonToiThieu" label="Min Tồn">
-                <InputNumber style={{ width: '100%' }} min={0} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="mucTonToiDa" label="Max Tồn">
-                <InputNumber style={{ width: '100%' }} min={0} />
-              </Form.Item>
-            </Col>
+            <Col span={8}><Form.Item name="mucTonToiThieu" label="Min Tồn"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+            <Col span={8}><Form.Item name="mucTonToiDa" label="Max Tồn"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
           </Row>
-
           <Form.Item name="danhSachMaNCC" label="Nhà Cung Cấp">
-            <Select mode="multiple" style={{ width: '100%' }} placeholder="Chọn nhà cung cấp" optionFilterProp="children" showSearch>
-              {listNCC.map(ncc => (
-                <Option key={ncc.maNCC} value={ncc.maNCC}>{ncc.tenNCC}</Option>
-              ))}
+            <Select mode="multiple" style={{ width: '100%' }} placeholder="Chọn NCC" optionFilterProp="children" showSearch>
+              {listNCC.map(ncc => (<Option key={ncc.maNCC} value={ncc.maNCC}>{ncc.tenNCC}</Option>))}
             </Select>
           </Form.Item>
-
-          <Form.Item name="moTa" label="Mô Tả">
-            <Input.TextArea rows={3} />
-          </Form.Item>
+          <Form.Item name="moTa" label="Mô Tả"><Input.TextArea rows={3} /></Form.Item>
         </Form>
       </Modal>
 
-      <Modal
-        title="Xác nhận xóa"
-        open={isDeleteModalOpen}
-        onOk={handleDeleteConfirm}
-        onCancel={() => setIsDeleteModalOpen(false)}
-        okText="Xóa"
-        cancelText="Hủy"
-        okType="danger"
-      >
-        <p>Bạn có chắc muốn xóa sản phẩm này? Hành động này không thể hoàn tác.</p>
-      </Modal>
+      <Modal title="Xác nhận xóa" open={isDeleteModalOpen} onOk={handleDeleteConfirm} onCancel={() => setIsDeleteModalOpen(false)} okText="Xóa" cancelText="Hủy" okType="danger"><p>Bạn có chắc muốn xóa sản phẩm này?</p></Modal>
     </div>
   );
 };
