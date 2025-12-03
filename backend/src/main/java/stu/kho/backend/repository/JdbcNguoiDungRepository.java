@@ -75,7 +75,7 @@ import java.util.stream.Stream;
     @Override
     public List<String> getDirectAuthoritiesByUserId(Integer maNguoiDung) {
         String sql = "SELECT cn.TenChucNang " +
-                "FROM NguoiDung_ChucNang ndcn " +
+                "FROM nguoidung_chucnang ndcn " +
                 "JOIN chucnang cn ON ndcn.MaChucNang = cn.MaChucNang " +
                 "WHERE ndcn.MaNguoiDung = ?";
 

@@ -14,13 +14,13 @@ public class JdbcNguoiDungChucNangRepository implements NguoiDungChucNangReposit
 
     @Override
     public int linkUserToChucNang(Integer maNguoiDung, Integer maChucNang) {
-        String sql = "INSERT INTO NguoiDung_ChucNang (MaNguoiDung, MaChucNang) VALUES (?, ?)";
+        String sql = "INSERT INTO nguoidung_chucnang (MaNguoiDung, MaChucNang) VALUES (?, ?)";
         return jdbcTemplate.update(sql, maNguoiDung, maChucNang);
     }
 
     @Override
     public int unlinkUserFromChucNang(Integer maNguoiDung, Integer maChucNang) {
-        String sql = "DELETE FROM NguoiDung_ChucNang WHERE MaNguoiDung = ? AND MaChucNang = ?";
+        String sql = "DELETE FROM nguoidung_chucnang WHERE MaNguoiDung = ? AND MaChucNang = ?";
         return jdbcTemplate.update(sql, maNguoiDung, maChucNang);
     }
 }

@@ -22,7 +22,7 @@ public class JdbcHoatDongRepository implements HoatDongRepository {
     // Hiện thực phương thức save
     @Override
     public int save(HoatDong hoatDong) {
-        String sql = "INSERT INTO HoatDong (MaNguoiDung, HanhDong, ThoiGianThucHien) VALUES (?, ?, ?)";
+        String sql = "INSERT INTO hoatdong (MaNguoiDung, HanhDong, ThoiGianThucHien) VALUES (?, ?, ?)";
 
         // Gán thời gian hiện tại nếu nó chưa được set
         LocalDateTime thoiGian = (hoatDong.getThoiGianThucHien() != null) ? hoatDong.getThoiGianThucHien() : LocalDateTime.now();

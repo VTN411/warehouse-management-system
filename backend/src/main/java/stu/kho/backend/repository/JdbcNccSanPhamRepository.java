@@ -16,19 +16,19 @@ public class JdbcNccSanPhamRepository implements NccSanPhamRepository {
 
     @Override
     public int linkNccToSanPham(Integer maNCC, Integer maSP) {
-        String sql = "INSERT INTO NCC_SanPham (MaNCC, MaSP) VALUES (?, ?)";
+        String sql = "INSERT INTO ncc_sanpham (MaNCC, MaSP) VALUES (?, ?)";
         return jdbcTemplate.update(sql, maNCC, maSP);
     }
 
     @Override
     public int unlinkNccFromSanPham(Integer maNCC, Integer maSP) {
-        String sql = "DELETE FROM NCC_SanPham WHERE MaNCC = ? AND MaSP = ?";
+        String sql = "DELETE FROM ncc_sanpham WHERE MaNCC = ? AND MaSP = ?";
         return jdbcTemplate.update(sql, maNCC, maSP);
     }
 
     @Override
     public List<Integer> findNccIdsByMaSP(Integer maSP) {
-        String sql = "SELECT MaNCC FROM NCC_SanPham WHERE MaSP = ?";
+        String sql = "SELECT MaNCC FROM ncc_sanpham WHERE MaSP = ?";
         return jdbcTemplate.queryForList(sql, Integer.class, maSP);
     }
     @Override
