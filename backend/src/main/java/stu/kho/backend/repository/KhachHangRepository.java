@@ -12,4 +12,5 @@ public interface KhachHangRepository {
     int save(KhachHang kh);
     int update(KhachHang kh);
     int deleteById(Integer id);
+    List<KhachHang> search(String keyword);
 }

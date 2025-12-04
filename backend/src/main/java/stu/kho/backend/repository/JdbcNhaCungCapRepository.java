@@ -97,4 +97,11 @@ public class JdbcNhaCungCapRepository implements NhaCungCapRepository {
         String sql = "DELETE FROM nhacungcap WHERE MaNCC = ?";
         return jdbcTemplate.update(sql, id);
     }
+
+    @Override
+    public List<NhaCungCap> search(String keyword) {
+        String sql = "SELECT * FROM nhacungcap WHERE TenNCC LIKE ? OR NguoiLienHe LIKE ? OR SDT LIKE ?";
+        String searchArg = "%" + keyword + "%";
+        return jdbcTemplate.query(sql, nccRowMapper, searchArg, searchArg, searchArg);
+    }
 }

@@ -86,4 +86,11 @@ public class JdbcKhoHangRepository implements KhoHangRepository {
         String sql = "DELETE FROM khohang WHERE MaKho = ?";
         return jdbcTemplate.update(sql, id);
     }
+
+    @Override
+    public List<KhoHang> search(String keyword) {
+        String sql = "SELECT * FROM khohang WHERE TenKho LIKE ? OR DiaChi LIKE ?";
+        String searchArg = "%" + keyword + "%";
+        return jdbcTemplate.query(sql, khoHangRowMapper, searchArg, searchArg);
+    }
 }

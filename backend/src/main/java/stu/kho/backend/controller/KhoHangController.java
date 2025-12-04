@@ -74,4 +74,9 @@ public class KhoHangController {
             return ResponseEntity.badRequest().build(); // Hoặc trả về lỗi chi tiết
         }
     }
+    @GetMapping("/search")
+    @PreAuthorize("hasAuthority('PERM_KHO_VIEW')")
+    public ResponseEntity<List<KhoHang>> search(@RequestParam String query) {
+        return ResponseEntity.ok(khoHangService.search(query));
+    }
 }

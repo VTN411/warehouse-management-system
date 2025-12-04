@@ -11,5 +11,6 @@ public interface NhaCungCapRepository {
     // Cập nhật các dòng này:
     int save(NhaCungCap ncc);     // Đổi từ void sang int (trả về ID)
     int update(NhaCungCap ncc);   // Thêm mới
-    int deleteById(Integer id);   // Thêm mới
+    int deleteById(Integer id);
+    List<NhaCungCap> search(String keyword);
 }

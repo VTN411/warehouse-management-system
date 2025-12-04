@@ -68,4 +68,9 @@ public class KhachHangController {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
+    @GetMapping("/search")
+    @PreAuthorize("hasAuthority('PERM_CUSTOMER_VIEW')")
+    public ResponseEntity<List<KhachHang>> search(@RequestParam String query) {
+        return ResponseEntity.ok(khachHangService.search(query));
+    }
 }

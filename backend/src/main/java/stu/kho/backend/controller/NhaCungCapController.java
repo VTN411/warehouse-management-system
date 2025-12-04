@@ -69,4 +69,9 @@ public class NhaCungCapController {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
+    @GetMapping("/search")
+    @PreAuthorize("hasAuthority('PERM_SUPPLIER_VIEW')")
+    public ResponseEntity<List<NhaCungCap>> search(@RequestParam String query) {
+        return ResponseEntity.ok(nhaCungCapService.search(query));
+    }
 }

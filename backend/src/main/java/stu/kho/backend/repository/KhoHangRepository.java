@@ -12,4 +12,5 @@ public interface KhoHangRepository {
     int save(KhoHang kho);
     int update(KhoHang kho);
     int deleteById(Integer id);
+    List<KhoHang> search(String keyword);
 }

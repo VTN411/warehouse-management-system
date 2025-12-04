@@ -90,4 +90,7 @@ public class KhachHangService {
             hoatDongRepository.save(log);
         }
     }
+    public List<KhachHang> search(String keyword) {
+        return khachHangRepository.search(keyword);
+    }
 }

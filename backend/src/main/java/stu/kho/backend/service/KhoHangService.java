@@ -97,4 +97,7 @@ public class KhoHangService {
         }
         return chiTietKhoRepository.findSanPhamByMaKho(maKho);
     }
+    public List<KhoHang> search(String keyword) {
+        return khoHangRepository.search(keyword);
+    }
 }

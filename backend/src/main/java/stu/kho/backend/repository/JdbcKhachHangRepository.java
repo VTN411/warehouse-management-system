@@ -87,4 +87,11 @@ public class JdbcKhachHangRepository implements KhachHangRepository {
         String sql = "DELETE FROM khachhang WHERE MaKH = ?";
         return jdbcTemplate.update(sql, id);
     }
+
+    @Override
+    public List<KhachHang> search(String keyword) {
+        String sql = "SELECT * FROM khachhang WHERE TenKH LIKE ? OR SDT LIKE ? OR Email LIKE ?";
+        String searchArg = "%" + keyword + "%";
+        return jdbcTemplate.query(sql, khachHangRowMapper, searchArg, searchArg, searchArg);
+    }
 }

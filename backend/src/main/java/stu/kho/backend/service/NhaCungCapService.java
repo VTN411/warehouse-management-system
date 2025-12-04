@@ -98,4 +98,7 @@ public class NhaCungCapService {
             hoatDongRepository.save(log);
         }
     }
+    public List<NhaCungCap> search(String keyword) {
+        return nhaCungCapRepository.search(keyword);
+    }
 }
