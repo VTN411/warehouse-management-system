@@ -4,7 +4,7 @@ import axios from 'axios';
 import { Modal } from 'antd';
 import { getToken, removeToken } from '../utils/token';
 
-const BASE_URL = 'http://localhost:8080/api';
+const BASE_URL = 'https://quanlykho-backend.onrender.com/api';
 
 const api = axios.create({
   baseURL: BASE_URL,
