@@ -2,28 +2,50 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Table, Button, Modal, Form, Input, Space, message, Select, InputNumber, Tag, Descriptions, Divider
+  Table, Button, Modal, Form, Input, Space, message, Select, InputNumber, Tag, 
+  Descriptions, Divider, Card, Row, Col, DatePicker // [!] Import thêm
 } from "antd";
 import {
   PlusOutlined, DeleteOutlined, ReloadOutlined,
-  CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, EditOutlined,MinusCircleOutlined
+  CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, EditOutlined, 
+  SearchOutlined, ClearOutlined,MinusCircleOutlined// [!] Import Icon tìm kiếm
 } from "@ant-design/icons";
 import * as transferService from "../../services/transfer.service";
 import * as warehouseService from "../../services/warehouse.service";
 import * as productService from "../../services/product.service";
 import * as userService from "../../services/user.service";
-import dayjs from "dayjs"; // [!] Cần import dayjs để tính ngày
+import dayjs from "dayjs";
 
 const { Option } = Select;
+const { RangePicker } = DatePicker;
 
-// [!] ID QUYỀN ĐẦY ĐỦ
+// ID Quyền
 const PERM_CREATE = 111;           
 const PERM_APPROVE = 112;          
 const PERM_CANCEL = 113;           
-const PERM_EDIT_APPROVED = 114;    // Quyền sửa phiếu đã duyệt
+const PERM_EDIT_APPROVED = 114;    
 
 const TransferPage = () => {
   const [listData, setListData] = useState([]);
+
+  // [!] 1. STATE BỘ LỌC
+  const [filter, setFilter] = useState({
+    chungTu: "",
+    trangThai: null,
+    maKhoXuat: null,
+    maKhoNhap: null,
+    dateRange: null,
+  });
+
+  // Phân trang
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 5, 
+    total: 0,
+    showSizeChanger: true,
+    pageSizeOptions: ['5', '10', '20', '50']
+  });
+
   const [listKho, setListKho] = useState([]);
   const [listSanPham, setListSanPham] = useState([]);
   const [listUser, setListUser] = useState([]);
@@ -45,12 +67,45 @@ const TransferPage = () => {
   const [permissions, setPermissions] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // 1. Fetch Data
-  const fetchData = useCallback(async () => {
+  // [!] 2. HÀM TẢI DỮ LIỆU (CÓ TÌM KIẾM)
+  const fetchData = useCallback(async (page = 1, pageSize = 5, currentFilter = {}) => {
     setLoading(true);
     try {
-      const response = await transferService.getAllTransfers();
-      setListData(response.data || []);
+      const { chungTu, trangThai, maKhoXuat, maKhoNhap, dateRange } = currentFilter;
+      
+      const filterPayload = {
+        page: page - 1,
+        size: pageSize,
+        chungTu: chungTu || null,
+        trangThai: trangThai || null,
+        maKhoXuat: maKhoXuat || null,
+        maKhoNhap: maKhoNhap || null,
+        fromDate: dateRange ? dateRange[0].format('YYYY-MM-DD') : null,
+        toDate: dateRange ? dateRange[1].format('YYYY-MM-DD') : null,
+      };
+
+      const hasFilter = Object.values(filterPayload).some(val => val !== null && val !== "" && val !== undefined && val !== (page-1) && val !== pageSize);
+
+      let response;
+      if (hasFilter && transferService.filterTransfers) {
+          response = await transferService.filterTransfers(filterPayload);
+      } else {
+          response = await transferService.getAllTransfers();
+      }
+
+      const data = response.data;
+      if (data && Array.isArray(data.content)) {
+          setListData(data.content);
+          setPagination(prev => ({ ...prev, current: page, pageSize: pageSize, total: data.totalElements }));
+      } else if (Array.isArray(data)) {
+           // Fallback client-side pagination
+          const startIndex = (page - 1) * pageSize;
+          const endIndex = startIndex + pageSize;
+          setListData(data.slice(startIndex, endIndex));
+          setPagination(prev => ({ ...prev, current: page, pageSize: pageSize, total: data.length }));
+      } else {
+          setListData([]);
+      }
     } catch (error) {
       messageApi.error("Không thể tải danh sách phiếu điều chuyển!");
     }
@@ -70,8 +125,9 @@ const TransferPage = () => {
     } catch (error) { console.error(error); }
   }, []);
 
+  // [!] 3. KHỞI TẠO
   useEffect(() => {
-    fetchData();
+    fetchData(1, 5, filter);
     fetchCommonData();
     try {
       const storedUser = localStorage.getItem("user_info");
@@ -87,17 +143,31 @@ const TransferPage = () => {
         setPermissions(perms);
       }
     } catch (e) { setPermissions([]); }
-  }, [fetchData, fetchCommonData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Hàm kiểm tra quyền
+  // Xử lý tìm kiếm
+  const handleSearch = () => {
+    fetchData(1, pagination.pageSize, filter);
+  };
+
+  const handleResetFilter = () => {
+    const emptyFilter = { chungTu: "", trangThai: null, maKhoXuat: null, maKhoNhap: null, dateRange: null };
+    setFilter(emptyFilter);
+    fetchData(1, 5, emptyFilter);
+  };
+
+  const handleTableChange = (newPagination) => {
+    fetchData(newPagination.current, newPagination.pageSize, filter);
+  };
+
+  // Logic quyền & Helper
   const checkPerm = (id) => isAdmin || permissions.includes(id);
-  
   const canCreate = checkPerm(PERM_CREATE); 
   const canApprove = checkPerm(PERM_APPROVE);
   const canCancel = checkPerm(PERM_CANCEL);
   const canEditApproved = checkPerm(PERM_EDIT_APPROVED);
 
-  // Helper
   const getUserName = (id) => listUser.find(u => u.maNguoiDung === id)?.hoTen || `ID: ${id}`;
   const getKhoName = (id) => listKho.find(k => k.maKho === id)?.tenKho || `Mã: ${id}`;
   const getSPName = (id) => listSanPham.find(sp => sp.maSP === id)?.tenSP || `SP-${id}`;
@@ -109,7 +179,14 @@ const TransferPage = () => {
     return status;
   };
 
-  // --- XỬ LÝ FORM ---
+  const isEditable = (record) => {
+    if (isAdmin && record.trangThai !== 3) return true;
+    if (record.trangThai === 1 && canCreate) return true;
+    if (record.trangThai === 2) return canEditApproved; 
+    return false;
+  };
+
+  // --- HANDLERS FORM ---
   const handleOpenModal = () => { 
     setEditingRecord(null);
     form.resetFields(); 
@@ -129,41 +206,31 @@ const TransferPage = () => {
     }
   };
 
-  // [!] HÀM SỬA PHIẾU VỚI LOGIC KIỂM TRA 30 NGÀY
   const handleEdit = async (record) => {
-      // 1. Kiểm tra phiếu đã hủy
       if (record.trangThai === 3) {
           messageApi.warning("Không thể sửa phiếu đã hủy!");
           return;
       }
 
-      // 2. Kiểm tra phiếu đã duyệt
       if (record.trangThai === 2) {
-          // a. Kiểm tra quyền
-          if (!canEditApproved && !isAdmin) {
-               messageApi.warning("Bạn không có quyền sửa phiếu đã duyệt!");
-               return;
-          }
-
-          // b. [!] KIỂM TRA THỜI GIAN 30 NGÀY
-          const createdDate = dayjs(record.ngayChuyen); // Ngày tạo phiếu
-          const currentDate = dayjs(); // Ngày hiện tại
-          const diffDays = currentDate.diff(createdDate, 'day'); // Tính khoảng cách ngày
+          const createdDate = dayjs(record.ngayChuyen);
+          const diffDays = dayjs().diff(createdDate, 'day');
           
           if (diffDays > 30) {
-              messageApi.error(`Không thể sửa: Phiếu đã được tạo quá 30 ngày (${diffDays} ngày).`);
-              return; // [!] DỪNG LẠI, KHÔNG MỞ FORM
+              messageApi.error(`Không thể sửa: Phiếu đã quá hạn 30 ngày.`);
+              return; 
+          }
+          if (!canEditApproved && !isAdmin) {
+              messageApi.warning("Không có quyền sửa phiếu đã duyệt!");
+              return;
           }
       }
 
-      // 3. Mở form nếu thỏa mãn điều kiện
       try {
           const response = await transferService.getTransferById(record.maPhieuDC);
           const data = response.data;
-          
           setEditingRecord(data); 
 
-          // Load tồn kho của kho xuất cũ
           if (data.maKhoXuat) {
             setSelectedSourceKho(data.maKhoXuat);
             try {
@@ -191,18 +258,18 @@ const TransferPage = () => {
                 await transferService.updateTransfer(editingRecord.maPhieuDC, values);
                 messageApi.success("Cập nhật thành công!");
             } else {
-                messageApi.error("Chưa hỗ trợ cập nhật (thiếu API)");
+                messageApi.error("Chưa hỗ trợ cập nhật API");
             }
         } else {
             await transferService.createTransfer(values);
             messageApi.success("Tạo phiếu thành công!");
         }
         setIsModalVisible(false);
-        fetchData();
+        fetchData(pagination.current, pagination.pageSize, filter);
       } catch (error) { 
         messageApi.error(error.response?.data?.message || "Lỗi khi lưu phiếu!"); 
       }
-    });
+    }).catch(() => {});
   };
 
   const handleViewDetail = async (record) => {
@@ -214,44 +281,37 @@ const TransferPage = () => {
   };
 
   const handleApprove = async (id) => {
-    try { await transferService.approveTransfer(id); messageApi.success("Đã duyệt!"); fetchData(); } 
+    try { await transferService.approveTransfer(id); messageApi.success("Đã duyệt!"); fetchData(pagination.current, pagination.pageSize, filter); } 
     catch (e) { messageApi.error("Lỗi khi duyệt!"); }
   };
   const handleReject = async (id) => {
-    try { await transferService.rejectTransfer(id); messageApi.success("Đã hủy!"); fetchData(); } 
+    try { await transferService.rejectTransfer(id); messageApi.success("Đã hủy!"); fetchData(pagination.current, pagination.pageSize, filter); } 
     catch (e) { messageApi.error("Lỗi khi hủy!"); }
   };
   const handleDelete = (id) => { setDeletingId(id); setIsDeleteModalOpen(true); };
   const handleDeleteConfirm = async () => {
-    try { await transferService.deleteTransfer(deletingId); messageApi.success("Đã xóa!"); fetchData(); } 
+    try { await transferService.deleteTransfer(deletingId); messageApi.success("Đã xóa!"); fetchData(pagination.current, pagination.pageSize, filter); } 
     catch (e) { messageApi.error("Lỗi xóa!"); }
     setIsDeleteModalOpen(false);
   };
 
   const columns = [
-    // { title: "Mã Phiếu", dataIndex: "maPhieuDC", width: 80 },
-    { title: "Ngày Chuyển", dataIndex: "ngayChuyen", width: 150 },
-    { title: "Trạng Thái", dataIndex: "trangThai", width: 120, render: renderStatus },
-    { title: "Kho Xuất", dataIndex: "maKhoXuat", width: 150, render: getKhoName },
-    { title: "Kho Nhập", dataIndex: "maKhoNhap", width: 150, render: getKhoName },
-    { title: "Người Lập", dataIndex: "nguoiLap", width: 150, render: (id) => getUserName(id) },
+    { title: "Ngày Chuyển", dataIndex: "ngayChuyen", width: "15%", render: (val) => dayjs(val).format('DD/MM/YYYY HH:mm') },
+    { title: "Trạng Thái", dataIndex: "trangThai", width: "10%", render: renderStatus },
+    { title: "Kho Xuất", dataIndex: "maKhoXuat", width: "15%", render: getKhoName },
+    { title: "Kho Nhập", dataIndex: "maKhoNhap", width: "15%", render: getKhoName },
+    { title: "Người Lập", dataIndex: "nguoiLap", width: "15%", render: (id) => getUserName(id) },
     { 
-      title: "Hành động", key: "action", width: 180,
+      title: "Hành động", key: "action", width: "20%",
       render: (_, record) => {
         const isPending = record.trangThai === 1;
-        const isApproved = record.trangThai === 2;
-        
-        // [!] Logic hiển thị nút Sửa:
-        // - Hiện nếu là phiếu Chờ duyệt (và có quyền tạo)
-        // - HOẶC Hiện nếu là phiếu Đã duyệt (và có quyền sửa đặc biệt 114 hoặc là Admin)
-        const showEdit = (isPending && canCreate) || 
-                         (isApproved && (canEditApproved || isAdmin));
+        const allowEdit = isEditable(record);
 
         return (
           <Space size="small" wrap={false}>
             <Button icon={<EyeOutlined />} onClick={() => handleViewDetail(record)} title="Xem" />
             
-            {showEdit && (
+            {allowEdit && (
                 <Button icon={<EditOutlined />} onClick={() => handleEdit(record)} title="Sửa" />
             )}
 
@@ -267,12 +327,52 @@ const TransferPage = () => {
   return (
     <div>
       {contextHolder}
+
+      {/* [!] 4. THANH TÌM KIẾM ĐIỀU CHUYỂN */}
+      <Card style={{ marginBottom: 16 }} bodyStyle={{ padding: '16px' }}>
+        <Row gutter={[16, 16]}>
+            <Col span={4}>
+                <div style={{ fontWeight: 500, marginBottom: 5 }}>Mã chứng từ</div>
+                <Input placeholder="DC-001..." prefix={<SearchOutlined />} value={filter.chungTu} onChange={e => setFilter({...filter, chungTu: e.target.value})} />
+            </Col>
+            <Col span={4}>
+                <div style={{ fontWeight: 500, marginBottom: 5 }}>Trạng thái</div>
+                <Select style={{ width: '100%' }} placeholder="Chọn trạng thái" allowClear value={filter.trangThai} onChange={v => setFilter({...filter, trangThai: v})}>
+                    <Option value={1}>Chờ duyệt</Option><Option value={2}>Đã duyệt</Option><Option value={3}>Đã hủy</Option>
+                </Select>
+            </Col>
+            <Col span={4}>
+                <div style={{ fontWeight: 500, marginBottom: 5 }}>Kho Xuất</div>
+                <Select style={{ width: '100%' }} placeholder="Kho xuất" allowClear value={filter.maKhoXuat} onChange={v => setFilter({...filter, maKhoXuat: v})}>
+                    {listKho.map(k => <Option key={k.maKho} value={k.maKho}>{k.tenKho}</Option>)}
+                </Select>
+            </Col>
+            <Col span={4}>
+                <div style={{ fontWeight: 500, marginBottom: 5 }}>Kho Nhập</div>
+                <Select style={{ width: '100%' }} placeholder="Kho nhập" allowClear value={filter.maKhoNhap} onChange={v => setFilter({...filter, maKhoNhap: v})}>
+                    {listKho.map(k => <Option key={k.maKho} value={k.maKho}>{k.tenKho}</Option>)}
+                </Select>
+            </Col>
+            <Col span={5}>
+                <div style={{ fontWeight: 500, marginBottom: 5 }}>Ngày chuyển</div>
+                <RangePicker style={{ width: '100%' }} format="DD/MM/YYYY" placeholder={['Từ ngày', 'Đến ngày']} value={filter.dateRange} onChange={dates => setFilter({...filter, dateRange: dates})} />
+            </Col>
+            <Col span={3} style={{ textAlign: 'right', display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end' }}>
+                <Space>
+                    <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>Tìm</Button>
+                    <Button icon={<ClearOutlined />} onClick={handleResetFilter} title="Xóa lọc" />
+                </Space>
+            </Col>
+        </Row>
+      </Card>
+
       <Space style={{ marginBottom: 16 }}>
         {canCreate && <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal}>Tạo Phiếu Điều Chuyển</Button>}
-        <Button icon={<ReloadOutlined />} onClick={fetchData} loading={loading}>Tải lại</Button>
+        <Button icon={<ReloadOutlined />} onClick={() => fetchData(pagination.current, pagination.pageSize, filter)}>Tải lại</Button>
       </Space>
 
-      <Table className="fixed-height-table" columns={columns} dataSource={listData} loading={loading} rowKey="maPhieuDC" pagination={{ pageSize: 5 }} scroll={{ x: 'max-content' }} />
+      <Table className="fixed-height-table" columns={columns} dataSource={listData} loading={loading} rowKey="maPhieuDC" 
+             pagination={pagination} onChange={handleTableChange} scroll={{ x: "max-content" }} />
 
       {/* Modal Tạo/Sửa */}
       <Modal 
@@ -284,39 +384,41 @@ const TransferPage = () => {
       >
         <Form form={form} layout="vertical">
           <Space style={{ display: 'flex', width: '100%' }} align="start">
-            <Form.Item name="maKhoXuat" label="Kho Xuất Hàng" rules={[{ required: true }]} style={{ flex: 1 }}>
+            <Form.Item name="maKhoXuat" label="Kho Xuất Hàng" rules={[{ required: true, message: "Vui lòng chọn Kho Xuất" }]} style={{ flex: 1 }}>
               <Select placeholder="Chọn kho xuất" onChange={handleSourceKhoChange} disabled={!!editingRecord}>
                 {listKho.map(k => <Option key={k.maKho} value={k.maKho}>{k.tenKho}</Option>)}
               </Select>
             </Form.Item>
-            <Form.Item name="maKhoNhap" label="Kho Nhập Hàng" rules={[{ required: true }]} style={{ flex: 1 }}>
+            <Form.Item name="maKhoNhap" label="Kho Nhập Hàng" rules={[{ required: true, message: "Vui lòng chọn Kho Nhập" }]} style={{ flex: 1 }}>
               <Select placeholder="Chọn kho nhập">
                 {listKho.filter(k => k.maKho !== selectedSourceKho).map(k => <Option key={k.maKho} value={k.maKho}>{k.tenKho}</Option>)}
               </Select>
             </Form.Item>
-            <Form.Item name="chungTu" label="Chứng từ" rules={[{ required: true }]}>
+            <Form.Item name="chungTu" label="Chứng từ" rules={[{ required: true, message: "Vui lòng nhập Chứng Từ" }]}>
               <Input placeholder="DC-001" />
             </Form.Item>
           </Space>
           <Form.Item name="ghiChu" label="Ghi chú"><Input.TextArea rows={2} placeholder="Lý do điều chuyển..." /></Form.Item>
 
-          <h3>Danh sách hàng hóa</h3>
+          <Divider orientation="left" style={{ borderColor: '#faad14', color: '#faad14', fontSize: '16px' }}>
+             DANH SÁCH HÀNG HÓA
+          </Divider>
+          
           <Form.List name="chiTiet">
             {(fields, { add, remove }) => (
               <>
                 {fields.map(({ key, name, ...restField }) => (
                   <Space key={key} style={{ display: "flex", marginBottom: 8 }} align="baseline">
-                    <Form.Item {...restField} label="Tên sản phẩm" name={[name, "maSP"]} rules={[{ required: true, message: "Chọn SP" }]}>
+                    <Form.Item {...restField} name={[name, "maSP"]} rules={[{ required: true, message: "Vui lòng chọn Sản Phẩm" }]}>
                        <Select style={{ width: 300 }} placeholder={selectedSourceKho ? "Chọn sản phẩm" : "Chọn Kho Xuất trước"} showSearch optionFilterProp="children" disabled={!selectedSourceKho}>
                         {sourceInventory.map(sp => <Option key={sp.maSP} value={sp.maSP}>{sp.tenSP} (Tồn: {sp.soLuongTon})</Option>)}
                       </Select>
                     </Form.Item>
                     <Form.Item 
-                        {...restField}
-                        label="Số lượng" 
+                        {...restField} 
                         name={[name, "soLuong"]} 
                         rules={[
-                            { required: true, message: "Nhập SL" },
+                            { required: true, message: "Vui lòng nhập Số Lượng" },
                             { type: 'integer', min: 1, message: '>0' }
                         ]}
                     >
@@ -332,8 +434,8 @@ const TransferPage = () => {
         </Form>
       </Modal>
 
-      {/* Modal Chi Tiết & Xóa (Giữ nguyên) */}
-      <Modal title="Chi tiết Điều Chuyển" open={isDetailModalOpen} onCancel={() => setIsDetailModalOpen(false)} footer={[<Button key="close" onClick={() => setIsDetailModalOpen(false)}>Đóng</Button>]} width={800}>
+      {/* Modal Chi Tiết */}
+      <Modal title="Chi tiết Điều Chuyển" open={isDetailModalOpen} onCancel={() => setIsDetailModalOpen(false)} footer={[<Button key="close" onClick={() => setIsDetailModalOpen(false)}>Đóng</Button>]} width={900}>
         {viewingRecord && (
           <div>
             <Descriptions bordered column={2}>
@@ -346,10 +448,12 @@ const TransferPage = () => {
               <Descriptions.Item label="Ghi Chú" span={2}>{viewingRecord.ghiChu}</Descriptions.Item>
               <Descriptions.Item label="Chứng Từ" span={2}>{viewingRecord.chungTu}</Descriptions.Item>
             </Descriptions>
-            <Divider orientation="left">Hàng hóa</Divider>
-            <Table dataSource={viewingRecord.chiTiet || []} rowKey="maSP" pagination={false} columns={[
+            <Divider orientation="left" style={{ borderColor: '#faad14', color: '#faad14', fontSize: '16px' }}>
+               DANH SÁCH HÀNG HÓA ĐIỀU CHUYỂN
+            </Divider>
+            <Table dataSource={viewingRecord.chiTiet || []} rowKey="maSP" pagination={false} bordered columns={[
                 { title: 'Sản Phẩm', dataIndex: 'maSP', render: (id) => getSPName(id) },
-                { title: 'Số Lượng', dataIndex: 'soLuong' }
+                { title: 'Số Lượng', dataIndex: 'soLuong', align: 'center', render: (val) => <b>{val}</b> }
             ]}/>
           </div>
         )}

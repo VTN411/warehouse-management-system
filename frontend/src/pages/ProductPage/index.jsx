@@ -5,10 +5,11 @@ import {
   Table, Button, Modal, Form, Input, Space, message, Select, InputNumber, Row, Col, Tag, Upload, Image, Card
 } from "antd";
 import {
-  PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ClearOutlined
+  PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined, ClearOutlined
 } from "@ant-design/icons";
 import * as productService from "../../services/product.service";
 import * as supplierService from "../../services/supplier.service";
+// [!] Đã bỏ import category.service gây lỗi
 
 const { Option } = Select;
 
@@ -19,9 +20,26 @@ const PERM_DELETE_ID = 52;
 const ProductPage = () => {
   const [products, setProducts] = useState([]);
   const [listNCC, setListNCC] = useState([]);
+  
+  // State Bộ lọc
+  const [filter, setFilter] = useState({
+    keyword: "",
+    maLoai: null,
+    minGia: null,
+    maxGia: null
+  });
+
+  // [!] 1. STATE PHÂN TRANG: MẶC ĐỊNH 5
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 5, // <--- Sửa thành 5
+    total: 0,
+    showSizeChanger: true,
+    pageSizeOptions: ['5', '10', '20', '50']
+  });
+
   const [loading, setLoading] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
-
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [form] = Form.useForm();
@@ -32,32 +50,16 @@ const ProductPage = () => {
   const [deletingProductId, setDeletingProductId] = useState(null);
   const [fileList, setFileList] = useState([]);
 
-  // [!] 1. STATE BỘ LỌC (Thêm minGia, maxGia)
-  const [filter, setFilter] = useState({
-    keyword: "",
-    maLoai: null,
-    minGia: null,
-    maxGia: null
-  });
-
-  const [pagination, setPagination] = useState({
-    current: 1,
-    pageSize: 10,
-    total: 0,
-    showSizeChanger: true,
-  });
-
-  // [!] 2. HÀM GỌI API TÌM KIẾM
-  const fetchProducts = useCallback(async (page = 1, pageSize = 10, currentFilter = {}) => {
+  // [!] 2. HÀM TẢI DỮ LIỆU: MẶC ĐỊNH 5
+  const fetchProducts = useCallback(async (page = 1, pageSize = 5, currentFilter = {}) => {
     setLoading(true);
     try {
       const filterData = {
-        ...currentFilter, // Gửi keyword, minGia, maxGia...
+        ...currentFilter,
         page: page - 1,
         size: pageSize
       };
 
-      // Gọi API Filter
       const response = await productService.filterProducts(filterData);
       
       const data = response.data;
@@ -70,8 +72,8 @@ const ProductPage = () => {
              total: data.totalElements
          }));
       } else if (Array.isArray(data)) {
-         setProducts(data); // Fallback
-         setPagination(prev => ({ ...prev, total: data.length }));
+         setProducts(data);
+         setPagination(prev => ({ ...prev, current: page, pageSize: pageSize, total: data.length }));
       }
     } catch (error) {
       messageApi.error("Không thể tải danh sách sản phẩm!");
@@ -81,14 +83,19 @@ const ProductPage = () => {
 
   const fetchCommonData = useCallback(async () => {
     try {
+      // Chỉ lấy NCC vì chưa có API loại hàng
       const response = await supplierService.getAllSuppliers();
       setListNCC(response.data || []);
-    } catch (error) { console.error(error); }
+    } catch (error) {
+      console.error("Lỗi tải danh sách NCC:", error);
+    }
   }, []);
 
+  // [!] 3. USE EFFECT: GỌI HÀM VỚI SỐ 5
   useEffect(() => {
-    fetchProducts(1, 10, filter);
+    fetchProducts(1, 5, {}); // <--- Sửa thành 5 ở đây
     fetchCommonData();
+    
     try {
       const storedUser = localStorage.getItem("user_info");
       if (storedUser) {
@@ -101,16 +108,16 @@ const ProductPage = () => {
     } catch (e) { setPermissions([]); }
   }, [fetchProducts, fetchCommonData]);
 
-  // [!] XỬ LÝ TÌM KIẾM
+  // Xử lý tìm kiếm
   const handleSearch = () => {
     fetchProducts(1, pagination.pageSize, filter);
   };
 
-  // [!] XỬ LÝ RESET BỘ LỌC
+  // Reset về trang 1, size 5
   const handleResetFilter = () => {
     const emptyFilter = { keyword: "", maLoai: null, minGia: null, maxGia: null };
     setFilter(emptyFilter);
-    fetchProducts(1, pagination.pageSize, emptyFilter);
+    fetchProducts(1, 5, emptyFilter);
   };
 
   const handleTableChange = (newPagination) => {
@@ -121,17 +128,24 @@ const ProductPage = () => {
   const canEdit = permissions.includes(PERM_EDIT_ID);
   const canDelete = permissions.includes(PERM_DELETE_ID);
 
-  // ... (Các hàm handleModal, handleEdit, handleOk... GIỮ NGUYÊN) ...
   const handleOpenModal = () => { setEditingProduct(null); setFileList([]); form.resetFields(); setIsModalVisible(true); };
+  
   const handleEdit = (record) => {
     setEditingProduct(record);
-    if (record.hinhAnh) setFileList([{ uid: '-1', name: 'img.png', status: 'done', url: record.hinhAnh }]);
-    else setFileList([]);
-    const selectedNCCIds = record.danhSachNCC ? record.danhSachNCC.map(ncc => ncc.maNCC) : [];
+    if (record.hinhAnh) {
+        setFileList([{ uid: '-1', name: 'image.png', status: 'done', url: record.hinhAnh }]);
+    } else { setFileList([]); }
+    // Chuyển đổi NCC object -> ID
+    const selectedNCCIds = record.danhSachNCC && Array.isArray(record.danhSachNCC)
+      ? record.danhSachNCC.map(item => (typeof item === 'object' ? item.maNCC : item))
+      : (record.danhSachMaNCC || []);
+
     form.setFieldsValue({ ...record, maLoai: record.loaiHang?.maLoai || record.maLoai, danhSachMaNCC: selectedNCCIds });
     setIsModalVisible(true);
   };
+
   const handleCancel = () => { setIsModalVisible(false); setEditingProduct(null); };
+
   const handleOk = () => {
     form.validateFields().then(async (values) => {
       setSubmitLoading(true);
@@ -147,10 +161,12 @@ const ProductPage = () => {
         messageApi.success("Thành công!");
         setIsModalVisible(false);
         fetchProducts(pagination.current, pagination.pageSize, filter);
-      } catch (error) { messageApi.error(error.response?.data?.message || "Lỗi!"); } 
-      finally { setSubmitLoading(false); }
+      } catch (error) {
+        messageApi.error(error.response?.data?.message || "Có lỗi xảy ra!");
+      } finally { setSubmitLoading(false); }
     }).catch(() => {});
   };
+
   const handleDelete = (id) => { setDeletingProductId(id); setIsDeleteModalOpen(true); };
   const handleDeleteConfirm = async () => {
     try { await productService.deleteProduct(deletingProductId); messageApi.success("Đã xóa!"); fetchProducts(pagination.current, pagination.pageSize, filter); } 
@@ -161,12 +177,13 @@ const ProductPage = () => {
 
   const columns = [
     { title: "Mã", dataIndex: "maSP", width: 60 },
-    { title: "Ảnh", dataIndex: "hinhAnh", width: 80, render: (url) => (url ? <Image width={40} src={url} /> : <Tag>No Img</Tag>) },
+    { title: "Ảnh", dataIndex: "hinhAnh", width: 80, render: (url) => (url ? <Image width={40} src={url} fallback="https://via.placeholder.com/40" /> : <Tag>No Img</Tag>) },
     { title: "Tên Sản Phẩm", dataIndex: "tenSP", width: 200 },
     { title: "ĐVT", dataIndex: "donViTinh", width: 70 },
     { title: "Giá Nhập", dataIndex: "giaNhap", render: (val) => `${Number(val).toLocaleString()} đ`, width: 110 },
     { title: "Tồn", dataIndex: "soLuongTon", width: 70 },
-    { title: "NCC", width: 150, render: (_, r) => <>{r.danhSachNCC && r.danhSachNCC.map(n => <Tag key={n.maNCC} color="blue">{n.tenNCC}</Tag>)}</> },
+    { title: "Loại", width: 120, render: (_, r) => r.loaiHang?.tenLoai || `Mã: ${r.maLoai}` },
+    { title: "NCC", width: 150, render: (_, r) => <>{r.danhSachNCC && r.danhSachNCC.map((n, idx) => <Tag key={idx} color="blue">{n.tenNCC || n.maNCC || n}</Tag>)}</> },
     {
       title: "Hành động", key: "action", width: 120,
       render: (_, record) => (
@@ -182,44 +199,22 @@ const ProductPage = () => {
     <div>
       {contextHolder}
       
-      {/* [!] 3. GIAO DIỆN BỘ LỌC */}
       <Card style={{ marginBottom: 16 }} bodyStyle={{ padding: '16px' }}>
         <Row gutter={[16, 16]} align="middle">
-            {/* Tìm theo tên */}
             <Col span={6}>
-                <Input 
-                    placeholder="Tên sản phẩm..." 
-                    prefix={<SearchOutlined />}
-                    value={filter.keyword}
-                    onChange={e => setFilter({...filter, keyword: e.target.value})}
-                    onPressEnter={handleSearch}
-                />
+                <Input placeholder="Tên sản phẩm..." prefix={<SearchOutlined />} value={filter.keyword} onChange={e => setFilter({...filter, keyword: e.target.value})} onPressEnter={handleSearch} />
             </Col>
-            
-            {/* Lọc theo Giá */}
+            {/* Nhập mã loại thủ công */}
             <Col span={4}>
-                <InputNumber 
-                    placeholder="Giá từ" 
-                    style={{ width: '100%' }} 
-                    formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                    parser={value => value.replace(/\$\s?|(,*)/g, '')}
-                    value={filter.minGia}
-                    onChange={val => setFilter({...filter, minGia: val})}
-                />
+                <InputNumber style={{ width: '100%' }} placeholder="Mã loại" value={filter.maLoai} onChange={val => setFilter({...filter, maLoai: val})} />
             </Col>
             <Col span={4}>
-                <InputNumber 
-                    placeholder="Đến giá" 
-                    style={{ width: '100%' }} 
-                    formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                    parser={value => value.replace(/\$\s?|(,*)/g, '')}
-                    value={filter.maxGia}
-                    onChange={val => setFilter({...filter, maxGia: val})}
-                />
+                <InputNumber style={{ width: '100%' }} placeholder="Giá từ" formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={v => v.replace(/\$\s?|(,*)/g, '')} value={filter.minGia} onChange={val => setFilter({...filter, minGia: val})} />
             </Col>
-            
-            {/* Nút Thao tác */}
-            <Col span={6}>
+            <Col span={4}>
+                <InputNumber style={{ width: '100%' }} placeholder="Đến giá" formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={v => v.replace(/\$\s?|(,*)/g, '')} value={filter.maxGia} onChange={val => setFilter({...filter, maxGia: val})} />
+            </Col>
+            <Col span={6} style={{ textAlign: 'right' }}>
                 <Space>
                     <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>Tìm kiếm</Button>
                     <Button icon={<ClearOutlined />} onClick={handleResetFilter}>Xóa lọc</Button>
@@ -230,6 +225,7 @@ const ProductPage = () => {
 
       <Space style={{ marginBottom: 16 }}>
         {canCreate && <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal}>Thêm Sản Phẩm</Button>}
+        <Button icon={<ReloadOutlined />} onClick={() => fetchProducts(pagination.current, pagination.pageSize, filter)} loading={loading}>Tải lại</Button>
       </Space>
 
       <Table
@@ -243,7 +239,6 @@ const ProductPage = () => {
         scroll={{ x: 1000 }}
       />
 
-      {/* Modal Form (Giữ nguyên) */}
       <Modal title={editingProduct ? "Sửa Sản Phẩm" : "Thêm Sản Phẩm"} open={isModalVisible} onOk={handleOk} confirmLoading={submitLoading} onCancel={handleCancel} width={800}>
         <Form form={form} layout="vertical">
           <Row gutter={16}>
@@ -254,12 +249,12 @@ const ProductPage = () => {
              </Col>
           </Row>
           <Row gutter={16}>
-            <Col span={12}><Form.Item name="tenSP" label="Tên Sản Phẩm" rules={[{ required: true }]}><Input /></Form.Item></Col>
-            <Col span={12}><Form.Item name="maLoai" label="Mã Loại Hàng" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} /></Form.Item></Col>
+            <Col span={12}><Form.Item name="tenSP" label="Tên Sản Phẩm" rules={[{ required: true, message: "Vui lòng nhập tên sản phẩm " }]}><Input /></Form.Item></Col>
+            <Col span={12}><Form.Item name="maLoai" label="Mã Loại Hàng" rules={[{ required: true, message: "Vui lòng nhập Mã Loại " }]}><InputNumber style={{ width: '100%' }} placeholder="Nhập ID" /></Form.Item></Col>
           </Row>
           <Row gutter={16}>
-            <Col span={8}><Form.Item name="giaNhap" label="Giá Nhập" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={v => v.replace(/\$\s?|(,*)/g, '')} /></Form.Item></Col>
-            <Col span={8}><Form.Item name="donViTinh" label="ĐVT" rules={[{ required: true }]}><Input /></Form.Item></Col>
+            <Col span={8}><Form.Item name="giaNhap" label="Giá Nhập" rules={[{ required: true, message: "Vui lòng nhập Giá " }]}><InputNumber style={{ width: '100%' }} formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={v => v.replace(/\$\s?|(,*)/g, '')} /></Form.Item></Col>
+            <Col span={8}><Form.Item name="donViTinh" label="ĐVT" rules={[{ required: true, message: "Vui lòng nhập Đơn Vị Tính " }]}><Input /></Form.Item></Col>
             <Col span={8}><Form.Item name="soLuongTon" label="Tồn Kho" initialValue={0}><InputNumber style={{ width: '100%' }} /></Form.Item></Col>
           </Row>
           <Row gutter={16}>

@@ -300,24 +300,24 @@ const UserManagementPage = () => {
       <Table className="fixed-height-table" columns={columns} dataSource={users} loading={loading} rowKey="maNguoiDung" pagination={{ pageSize: 5 }} />
       <Modal title={editingUser ? "Sửa người dùng" : "Tạo người dùng mới"} open={isModalVisible} onOk={handleOk} onCancel={handleCancel}>
         <Form form={form} layout="vertical" name="userForm">
-          <Form.Item name="tenDangNhap" label="Tên Đăng Nhập" rules={[{ required: true }]}>
+          <Form.Item name="tenDangNhap" label="Tên Đăng Nhập" rules={[{ required: true, message: "Vui lòng nhập Tên Đăng Nhập" }]}>
             <Input disabled={!!editingUser} />
           </Form.Item>
-          <Form.Item name="hoTen" label="Họ Tên" rules={[{ required: true }]}>
+          <Form.Item name="hoTen" label="Họ Tên" rules={[{ required: true, message: "Vui lòng nhập Họ Tên" }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="email" label="Email" rules={[{ required: true, type: "email" }]}>
+          <Form.Item name="email" label="Email" rules={[{ required: true,message: "Vui lòng nhập Email", type: "email" }]}>
             <Input />
           </Form.Item>
           {!editingUser && (
-            <Form.Item name="matKhau" label="Mật Khẩu" rules={[{ required: true }]}>
+            <Form.Item name="matKhau" label="Mật Khẩu" rules={[{ required: true, message: "Vui lòng nhập Mật Khẩu" }]}>
               <Input.Password />
             </Form.Item>
           )}
-          <Form.Item name="sdt" label="Số Điện Thoại" rules={[{ required: true }]}>
+          <Form.Item name="sdt" label="Số Điện Thoại" rules={[{ required: true, message: "Vui lòng nhập Số Điện Thoại" }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="maVaiTro" label="Vai Trò" rules={[{ required: true }]}>
+          <Form.Item name="maVaiTro" label="Vai Trò" rules={[{ required: true, message: "Vui lòng chọn Vai Trò" }]}>
             <Select placeholder="Chọn một vai trò">
               {danhSachVaiTro.map((vt) => (
                 <Option key={vt.MaVaiTro} value={vt.MaVaiTro}>{vt.TenVaiTro}</Option>

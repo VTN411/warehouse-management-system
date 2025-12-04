@@ -37,3 +37,7 @@ export const rejectPhieuXuat = (id) => {
 export const getPhieuXuatById = (id) => {
   return api.get(`${API_ENDPOINT}/${id}`);
 };
+
+export const filterPhieuXuat = (data) => {
+  return api.post(`${API_ENDPOINT}/filter`, data);
+};
