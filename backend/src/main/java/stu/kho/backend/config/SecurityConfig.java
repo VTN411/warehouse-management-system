@@ -58,6 +58,7 @@ public class SecurityConfig {
                         .accessDeniedHandler(accessDeniedHandler) // Xử lý lỗi 403
                 )
                 .authorizeHttpRequests(authz -> authz
+                        .requestMatchers("/ping").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
