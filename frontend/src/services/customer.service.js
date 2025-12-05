@@ -23,3 +23,9 @@ export const updateCustomer = (id, data) => {
 export const deleteCustomer = (id) => {
   return api.delete(`${API_ENDPOINT}/${id}`);
 };
+
+export const searchCustomers = (keyword) => {
+  return api.get(`${API_ENDPOINT}/search`, {
+    params: { query: keyword } // API này tìm được cả Tên và SĐT
+  });
+};

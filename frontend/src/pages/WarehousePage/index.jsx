@@ -10,13 +10,17 @@ import {
   Space,
   message,
   Tag,
+  Card,
+  Row,
+  Col,
 } from "antd";
 import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
   ReloadOutlined,
-  EyeOutlined, // [!] Import icon xem
+  EyeOutlined,
+  SearchOutlined, // [!] Import icon tìm kiếm
 } from "@ant-design/icons";
 import * as warehouseService from "../../services/warehouse.service";
 
@@ -28,36 +32,50 @@ const PERM_KHO_DELETE = 73;
 const WarehousePage = () => {
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(false);
-  
+
   // State cho Modal Thêm/Sửa
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingWarehouse, setEditingWarehouse] = useState(null);
-  
+
   // State cho Modal Xóa
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
-  // [!] STATE CHO MODAL CHI TIẾT TỒN KHO
+  // State cho Modal Chi tiết tồn kho
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [inventoryList, setInventoryList] = useState([]); // Danh sách SP trong kho
-  const [currentWarehouseName, setCurrentWarehouseName] = useState(""); // Tên kho đang xem
+  const [inventoryList, setInventoryList] = useState([]);
+  const [currentWarehouseName, setCurrentWarehouseName] = useState("");
+
+  // [!] State tìm kiếm
+  const [keyword, setKeyword] = useState("");
 
   const [form] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
-  
+
   const [permissions, setPermissions] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  const fetchWarehouses = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await warehouseService.getAllWarehouses();
-      setWarehouses(response.data || []);
-    } catch (error) {
-      messageApi.error("Không thể tải danh sách kho!");
-    }
-    setLoading(false);
-  }, [messageApi]);
+  // [!] 1. HÀM LẤY DỮ LIỆU (HỖ TRỢ TÌM KIẾM)
+  const fetchWarehouses = useCallback(
+    async (searchKey = "") => {
+      setLoading(true);
+      try {
+        let response;
+        if (searchKey) {
+          // Gọi API tìm kiếm
+          response = await warehouseService.searchWarehouses(searchKey);
+        } else {
+          // Gọi API lấy tất cả
+          response = await warehouseService.getAllWarehouses();
+        }
+        setWarehouses(response.data || []);
+      } catch (error) {
+        messageApi.error("Không thể tải danh sách kho!");
+      }
+      setLoading(false);
+    },
+    [messageApi]
+  );
 
   useEffect(() => {
     fetchWarehouses();
@@ -65,8 +83,9 @@ const WarehousePage = () => {
       const storedUser = localStorage.getItem("user_info");
       if (storedUser) {
         let user = JSON.parse(storedUser);
-        if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung) user = user.quyen;
-        
+        if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung)
+          user = user.quyen;
+
         const role = user.vaiTro || user.tenVaiTro || "";
         setIsAdmin(role === "ADMIN");
 
@@ -78,6 +97,17 @@ const WarehousePage = () => {
       setPermissions([]);
     }
   }, [fetchWarehouses]);
+
+  // [!] Xử lý tìm kiếm
+  const handleSearch = () => {
+    fetchWarehouses(keyword);
+  };
+
+  // [!] Xử lý reset
+  const handleReset = () => {
+    setKeyword("");
+    fetchWarehouses("");
+  };
 
   const canCreate = isAdmin || permissions.includes(PERM_KHO_CREATE);
   const canEdit = isAdmin || permissions.includes(PERM_KHO_EDIT);
@@ -97,24 +127,29 @@ const WarehousePage = () => {
   };
 
   const handleOk = () => {
-    form.validateFields().then(async (values) => {
-      try {
-        if (editingWarehouse) {
-          await warehouseService.updateWarehouse(editingWarehouse.maKho, values);
-          messageApi.success("Cập nhật kho thành công!");
-        } else {
-          await warehouseService.createWarehouse(values);
-          messageApi.success("Tạo kho mới thành công!");
+    form
+      .validateFields()
+      .then(async (values) => {
+        try {
+          if (editingWarehouse) {
+            await warehouseService.updateWarehouse(
+              editingWarehouse.maKho,
+              values
+            );
+            messageApi.success("Cập nhật kho thành công!");
+          } else {
+            await warehouseService.createWarehouse(values);
+            messageApi.success("Tạo kho mới thành công!");
+          }
+          setIsModalVisible(false);
+          fetchWarehouses(keyword); // Load lại theo từ khóa
+        } catch (error) {
+          messageApi.error("Có lỗi xảy ra!");
         }
-        setIsModalVisible(false);
-        fetchWarehouses();
-      } catch (error) {
-        messageApi.error("Có lỗi xảy ra!");
-      }
-    }).catch((info) => {
+      })
+      .catch((info) => {
         console.log("Validate Failed:", info);
-        // Không làm gì cả, Ant Design đã tự hiện dòng chữ đỏ dưới ô input rồi
-      });;
+      });
   };
 
   // --- XỬ LÝ XÓA ---
@@ -127,7 +162,7 @@ const WarehousePage = () => {
     try {
       await warehouseService.deleteWarehouse(deletingId);
       messageApi.success("Xóa kho thành công!");
-      fetchWarehouses();
+      fetchWarehouses(keyword); // Load lại theo từ khóa
     } catch (error) {
       messageApi.error("Lỗi khi xóa kho!");
     }
@@ -135,12 +170,13 @@ const WarehousePage = () => {
     setDeletingId(null);
   };
 
-  // [!] HÀM XỬ LÝ XEM CHI TIẾT
+  // HÀM XỬ LÝ XEM CHI TIẾT
   const handleViewDetail = async (record) => {
     try {
       setCurrentWarehouseName(record.tenKho);
-      // Gọi API lấy danh sách sản phẩm trong kho
-      const response = await warehouseService.getInventoryByWarehouse(record.maKho);
+      const response = await warehouseService.getInventoryByWarehouse(
+        record.maKho
+      );
       setInventoryList(response.data || []);
       setIsDetailModalOpen(true);
     } catch (error) {
@@ -148,9 +184,7 @@ const WarehousePage = () => {
     }
   };
 
-  // Cột cho bảng chính (Danh sách kho)
   const columns = [
-    // { title: "Mã Kho", dataIndex: "maKho", key: "maKho", width: 80 },
     { title: "Tên Kho", dataIndex: "tenKho", key: "tenKho", width: 200 },
     { title: "Địa Chỉ", dataIndex: "diaChi", key: "diaChi" },
     { title: "Ghi Chú", dataIndex: "ghiChu", key: "ghiChu" },
@@ -160,18 +194,21 @@ const WarehousePage = () => {
       width: 200,
       render: (_, record) => (
         <Space size="middle">
-          {/* [!] Nút Xem Chi Tiết */}
-          <Button icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
-          
-          </Button>
+          <Button
+            icon={<EyeOutlined />}
+            onClick={() => handleViewDetail(record)}
+          ></Button>
 
           {canEdit && (
-            <Button icon={<EditOutlined />} onClick={() => handleEdit(record)} />
+            <Button
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
+            />
           )}
           {canDelete && (
-            <Button 
-              icon={<DeleteOutlined />} 
-              danger 
+            <Button
+              icon={<DeleteOutlined />}
+              danger
               onClick={() => handleDelete(record.maKho)}
             />
           )}
@@ -180,37 +217,76 @@ const WarehousePage = () => {
     },
   ];
 
-  // [!] Cột cho bảng chi tiết tồn kho (Trong Modal)
   const inventoryColumns = [
     { title: "Mã SP", dataIndex: "maSP", key: "maSP", width: 80 },
     { title: "Tên Sản Phẩm", dataIndex: "tenSP", key: "tenSP" },
     { title: "ĐVT", dataIndex: "donViTinh", key: "donViTinh", width: 80 },
-    { 
-      title: "Giá Nhập", 
-      dataIndex: "giaNhap", 
+    {
+      title: "Giá Nhập",
+      dataIndex: "giaNhap",
       key: "giaNhap",
-      render: (val) => `${Number(val).toLocaleString()} đ`
+      render: (val) => `${Number(val).toLocaleString()} đ`,
     },
-    { 
-      title: "Số Lượng Tồn", 
-      dataIndex: "soLuongTon", 
+    {
+      title: "Số Lượng Tồn",
+      dataIndex: "soLuongTon",
       key: "soLuongTon",
-      render: (val) => <Tag color={val > 0 ? "blue" : "red"}>{val}</Tag>
+      render: (val) => <Tag color={val > 0 ? "blue" : "red"}>{val}</Tag>,
     },
   ];
 
   return (
     <div>
       {contextHolder}
+
+      {/* [!] THANH TÌM KIẾM */}
+      <Card
+        style={{ marginBottom: 16 }}
+        bodyStyle={{ padding: "16px" }}
+      >
+        <Row
+          gutter={[16, 16]}
+          align="middle"
+        >
+          <Col span={12}>
+            <Input
+              placeholder="Tìm kiếm tên kho..."
+              prefix={<SearchOutlined />}
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              onPressEnter={handleSearch}
+            />
+          </Col>
+          <Col span={12}>
+            <Space>
+              <Button
+                type="primary"
+                icon={<SearchOutlined />}
+                onClick={handleSearch}
+              >
+                Tìm kiếm
+              </Button>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={handleReset}
+              >
+                Tải lại
+              </Button>
+            </Space>
+          </Col>
+        </Row>
+      </Card>
+
       <Space style={{ marginBottom: 16 }}>
         {canCreate && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleOpenModal}
+          >
             Thêm Kho Mới
           </Button>
         )}
-        <Button icon={<ReloadOutlined />} onClick={fetchWarehouses} loading={loading}>
-          Tải lại
-        </Button>
       </Space>
 
       <Table
@@ -229,22 +305,28 @@ const WarehousePage = () => {
         onOk={handleOk}
         onCancel={() => setIsModalVisible(false)}
       >
-        <Form form={form} layout="vertical">
-          <Form.Item 
-            name="tenKho" 
-            label="Tên Kho" 
+        <Form
+          form={form}
+          layout="vertical"
+        >
+          <Form.Item
+            name="tenKho"
+            label="Tên Kho"
             rules={[{ required: true, message: "Vui lòng nhập tên kho!" }]}
           >
             <Input placeholder="Ví dụ: Kho Chính" />
           </Form.Item>
-          <Form.Item 
-            name="diaChi" 
-            label="Địa Chỉ" 
+          <Form.Item
+            name="diaChi"
+            label="Địa Chỉ"
             rules={[{ required: true, message: "Vui lòng nhập địa chỉ!" }]}
           >
             <Input placeholder="Ví dụ: 123 Đường ABC..." />
           </Form.Item>
-          <Form.Item name="ghiChu" label="Ghi Chú">
+          <Form.Item
+            name="ghiChu"
+            label="Ghi Chú"
+          >
             <Input.TextArea rows={3} />
           </Form.Item>
         </Form>
@@ -260,22 +342,27 @@ const WarehousePage = () => {
         cancelText="Hủy"
         okType="danger"
       >
-        <p>Bạn có chắc muốn xóa kho này không? Hành động này không thể hoàn tác.</p>
+        <p>
+          Bạn có chắc muốn xóa kho này không? Hành động này không thể hoàn tác.
+        </p>
       </Modal>
 
-      {/* [!] MODAL CHI TIẾT TỒN KHO (MỚI) */}
+      {/* MODAL CHI TIẾT TỒN KHO */}
       <Modal
         title={`Chi tiết tồn kho: ${currentWarehouseName}`}
         open={isDetailModalOpen}
         onCancel={() => setIsDetailModalOpen(false)}
         footer={[
-          <Button key="close" onClick={() => setIsDetailModalOpen(false)}>
+          <Button
+            key="close"
+            onClick={() => setIsDetailModalOpen(false)}
+          >
             Đóng
-          </Button>
+          </Button>,
         ]}
         width={800}
       >
-        <Table 
+        <Table
           dataSource={inventoryList}
           columns={inventoryColumns}
           rowKey="maSP"

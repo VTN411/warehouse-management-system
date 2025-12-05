@@ -3,10 +3,21 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Table, Button, Modal, Form, Input, Space, message, Select, Dropdown,
+  Table,
+  Button,
+  Modal,
+  Form,
+  Input,
+  Space,
+  message,
+  Select,
+  Dropdown,
 } from "antd";
 import {
-  PlusOutlined, EditOutlined, DeleteOutlined, SettingOutlined,
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 import * as userService from "../../services/user.service";
 
@@ -115,8 +126,12 @@ const UserManagementPage = () => {
       const storedUser = localStorage.getItem("user_info");
       if (storedUser) {
         let user = JSON.parse(storedUser);
-        if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung) {
-           user = user.quyen;
+        if (
+          user.quyen &&
+          !Array.isArray(user.quyen) &&
+          user.quyen.maNguoiDung
+        ) {
+          user = user.quyen;
         }
         const roleName = user.vaiTro || user.tenVaiTro || "";
         setCurrentUserRole(roleName);
@@ -133,7 +148,7 @@ const UserManagementPage = () => {
   const canEdit = isMyRoleAdmin || currentUserPermissions.includes(11);
   const canDelete = isMyRoleAdmin || currentUserPermissions.includes(12);
   const canCreate = isMyRoleAdmin || currentUserPermissions.includes(10);
-  const canManagePerms = isMyRoleAdmin; 
+  const canManagePerms = isMyRoleAdmin;
 
   const handleOpenModal = () => {
     setEditingUser(null);
@@ -191,34 +206,39 @@ const UserManagementPage = () => {
   };
 
   const handleOk = () => {
-    form.validateFields().then(async (values) => {
-      try {
-        if (editingUser) {
-          await userService.updateUser(editingUser.maNguoiDung, values);
-          messageApi.success("Cập nhật người dùng thành công!");
-        } else {
-          await userService.createUser(values);
-          messageApi.success("Tạo người dùng mới thành công!");
+    form
+      .validateFields()
+      .then(async (values) => {
+        try {
+          if (editingUser) {
+            await userService.updateUser(editingUser.maNguoiDung, values);
+            messageApi.success("Cập nhật người dùng thành công!");
+          } else {
+            await userService.createUser(values);
+            messageApi.success("Tạo người dùng mới thành công!");
+          }
+          setIsModalVisible(false);
+          setEditingUser(null);
+          fetchUsers();
+        } catch (error) {
+          messageApi.error("Có lỗi xảy ra!");
         }
-        setIsModalVisible(false);
-        setEditingUser(null);
-        fetchUsers();
-      } catch (error) {
-        messageApi.error("Có lỗi xảy ra!");
-      }
-    }).catch((info) => {
+      })
+      .catch((info) => {
         console.log("Validate Failed:", info);
         // Không làm gì cả, Ant Design đã tự hiện dòng chữ đỏ dưới ô input rồi
-      });;
+      });
   };
-  
+
   const handleGrantPermission = async (userId, permId, permName) => {
     try {
       await userService.grantPermission(userId, permId);
       messageApi.success(`Đã cấp quyền '${permName}'`);
       fetchUsers();
     } catch (error) {
-      messageApi.error(`Lỗi: ${error.response?.data?.message || 'Không thể cấp quyền'}`);
+      messageApi.error(
+        `Lỗi: ${error.response?.data?.message || "Không thể cấp quyền"}`
+      );
     }
   };
 
@@ -228,35 +248,43 @@ const UserManagementPage = () => {
       messageApi.success(`Đã thu hồi quyền '${permName}'`);
       fetchUsers();
     } catch (error) {
-      messageApi.error(`Lỗi: ${error.response?.data?.message || 'Không thể thu hồi quyền'}`);
+      messageApi.error(
+        `Lỗi: ${error.response?.data?.message || "Không thể thu hồi quyền"}`
+      );
     }
   };
 
   const createPermissionMenu = (userRecord) => {
-    const userPerms = userRecord.dsQuyenSoHuu || []; 
-    
+    const userPerms = userRecord.dsQuyenSoHuu || [];
+
     const items = permissionGroups.map((group, index) => {
-      const subItems = group.perms.flatMap(perm => {
+      const subItems = group.perms.flatMap((perm) => {
         const hasPermission = userPerms.includes(perm.id);
         if (hasPermission) {
           return {
             key: `revoke-${perm.id}`,
             label: `Thu hồi: ${perm.name}`,
             danger: true,
-            onClick: () => handleRevokePermission(userRecord.maNguoiDung, perm.id, perm.name)
+            onClick: () =>
+              handleRevokePermission(
+                userRecord.maNguoiDung,
+                perm.id,
+                perm.name
+              ),
           };
         } else {
           return {
             key: `grant-${perm.id}`,
             label: `Cấp: ${perm.name}`,
-            onClick: () => handleGrantPermission(userRecord.maNguoiDung, perm.id, perm.name)
+            onClick: () =>
+              handleGrantPermission(userRecord.maNguoiDung, perm.id, perm.name),
           };
         }
       });
       return {
         key: `group-${index}`,
         label: group.label,
-        children: subItems
+        children: subItems,
       };
     });
     return { items };
@@ -272,20 +300,34 @@ const UserManagementPage = () => {
       title: "Hành động",
       key: "action",
       render: (_, record) => (
-        <Space size="middle" wrap>
-            {canEdit && (
-              <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}></Button>
-            )}
-            {canDelete && (
-              <Button icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.maNguoiDung)}></Button>
-            )}
-            {canManagePerms && (
-              <Dropdown menu={createPermissionMenu(record)} placement="bottomRight" trigger={['click']}>
-                <Button icon={<SettingOutlined />}></Button>
-              </Dropdown>
-            )}
-          </Space>
-        )
+        <Space
+          size="middle"
+          wrap
+        >
+          {canEdit && (
+            <Button
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
+            ></Button>
+          )}
+          {canDelete && (
+            <Button
+              icon={<DeleteOutlined />}
+              danger
+              onClick={() => handleDelete(record.maNguoiDung)}
+            ></Button>
+          )}
+          {canManagePerms && (
+            <Dropdown
+              menu={createPermissionMenu(record)}
+              placement="bottomRight"
+              trigger={["click"]}
+            >
+              <Button icon={<SettingOutlined />}></Button>
+            </Dropdown>
+          )}
+        </Space>
+      ),
     },
   ];
 
@@ -293,41 +335,103 @@ const UserManagementPage = () => {
     <div>
       {contextHolder}
       {canCreate && (
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal} style={{ marginBottom: 16 }}>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={handleOpenModal}
+          style={{ marginBottom: 16 }}
+        >
           Thêm người dùng mới
         </Button>
       )}
-      <Table className="fixed-height-table" columns={columns} dataSource={users} loading={loading} rowKey="maNguoiDung" pagination={{ pageSize: 5 }} />
-      <Modal title={editingUser ? "Sửa người dùng" : "Tạo người dùng mới"} open={isModalVisible} onOk={handleOk} onCancel={handleCancel}>
-        <Form form={form} layout="vertical" name="userForm">
-          <Form.Item name="tenDangNhap" label="Tên Đăng Nhập" rules={[{ required: true, message: "Vui lòng nhập Tên Đăng Nhập" }]}>
+      <Table
+        className="fixed-height-table"
+        columns={columns}
+        dataSource={users}
+        loading={loading}
+        rowKey="maNguoiDung"
+        pagination={{ pageSize: 5 }}
+      />
+      <Modal
+        title={editingUser ? "Sửa người dùng" : "Tạo người dùng mới"}
+        open={isModalVisible}
+        onOk={handleOk}
+        onCancel={handleCancel}
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          name="userForm"
+        >
+          <Form.Item
+            name="tenDangNhap"
+            label="Tên Đăng Nhập"
+            rules={[{ required: true, message: "Vui lòng nhập Tên Đăng Nhập" }]}
+          >
             <Input disabled={!!editingUser} />
           </Form.Item>
-          <Form.Item name="hoTen" label="Họ Tên" rules={[{ required: true, message: "Vui lòng nhập Họ Tên" }]}>
+          <Form.Item
+            name="hoTen"
+            label="Họ Tên"
+            rules={[{ required: true, message: "Vui lòng nhập Họ Tên" }]}
+          >
             <Input />
           </Form.Item>
-          <Form.Item name="email" label="Email" rules={[{ required: true,message: "Vui lòng nhập Email", type: "email" }]}>
+          <Form.Item
+            name="email"
+            label="Email"
+            rules={[
+              { required: true, message: "Vui lòng nhập Email", type: "email" },
+            ]}
+          >
             <Input />
           </Form.Item>
           {!editingUser && (
-            <Form.Item name="matKhau" label="Mật Khẩu" rules={[{ required: true, message: "Vui lòng nhập Mật Khẩu" }]}>
+            <Form.Item
+              name="matKhau"
+              label="Mật Khẩu"
+              rules={[{ required: true, message: "Vui lòng nhập Mật Khẩu" }]}
+            >
               <Input.Password />
             </Form.Item>
           )}
-          <Form.Item name="sdt" label="Số Điện Thoại" rules={[{ required: true, message: "Vui lòng nhập Số Điện Thoại" }]}>
+          <Form.Item
+            name="sdt"
+            label="Số Điện Thoại"
+            rules={[{ required: true, message: "Vui lòng nhập Số Điện Thoại" }]}
+          >
             <Input />
           </Form.Item>
-          <Form.Item name="maVaiTro" label="Vai Trò" rules={[{ required: true, message: "Vui lòng chọn Vai Trò" }]}>
+          <Form.Item
+            name="maVaiTro"
+            label="Vai Trò"
+            rules={[{ required: true, message: "Vui lòng chọn Vai Trò" }]}
+          >
             <Select placeholder="Chọn một vai trò">
               {danhSachVaiTro.map((vt) => (
-                <Option key={vt.MaVaiTro} value={vt.MaVaiTro}>{vt.TenVaiTro}</Option>
+                <Option
+                  key={vt.MaVaiTro}
+                  value={vt.MaVaiTro}
+                >
+                  {vt.TenVaiTro}
+                </Option>
               ))}
             </Select>
           </Form.Item>
         </Form>
       </Modal>
-      <Modal title="Xác nhận xóa" open={isDeleteModalOpen} onOk={handleDeleteConfirm} onCancel={handleDeleteCancel} okText="Xóa" cancelText="Hủy" okType="danger">
-        <p>Bạn có chắc muốn xóa người dùng này? Hành động này không thể hoàn tác.</p>
+      <Modal
+        title="Xác nhận xóa"
+        open={isDeleteModalOpen}
+        onOk={handleDeleteConfirm}
+        onCancel={handleDeleteCancel}
+        okText="Xóa"
+        cancelText="Hủy"
+        okType="danger"
+      >
+        <p>
+          Bạn có chắc muốn xóa người dùng này? Hành động này không thể hoàn tác.
+        </p>
       </Modal>
     </div>
   );

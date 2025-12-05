@@ -23,3 +23,11 @@ export const updateSupplier = (id, data) => {
 export const deleteSupplier = (id) => {
   return api.delete(`${API_ENDPOINT}/${id}`);
 };
+
+export const searchSuppliers = (keyword) => {
+  return api.get(`${API_ENDPOINT}/search`, {
+    params: {
+      query: keyword 
+    }
+  });
+};

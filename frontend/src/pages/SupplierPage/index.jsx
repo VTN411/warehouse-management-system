@@ -9,16 +9,19 @@ import {
   Input,
   Space,
   message,
+  Card,
+  Row,
+  Col,
 } from "antd";
 import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
   ReloadOutlined,
+  SearchOutlined, // [!] Import icon tìm kiếm
 } from "@ant-design/icons";
 import * as supplierService from "../../services/supplier.service";
 
-// [!] 1. CẬP NHẬT ID QUYỀN (Theo SQL)
 const PERM_SUPPLIER_CREATE = 61;
 const PERM_SUPPLIER_EDIT = 62;
 const PERM_SUPPLIER_DELETE = 63;
@@ -30,7 +33,7 @@ const SupplierPage = () => {
   const [editingSupplier, setEditingSupplier] = useState(null);
   const [form] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
-  
+
   const [permissions, setPermissions] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -38,38 +41,50 @@ const SupplierPage = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
-  const fetchSuppliers = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await supplierService.getAllSuppliers();
-      setSuppliers(response.data || []);
-    } catch (error) {
-      messageApi.error("Không thể tải danh sách nhà cung cấp!");
-    }
-    setLoading(false);
-  }, [messageApi]);
+  // [!] State cho tìm kiếm
+  const [keyword, setKeyword] = useState("");
 
-  // [!] 2. CẬP NHẬT LOGIC LẤY QUYỀN (Chuẩn hóa)
+  // 1. LẤY DỮ LIỆU (Hỗ trợ tìm kiếm)
+  const fetchSuppliers = useCallback(
+    async (searchKey = "") => {
+      setLoading(true);
+      try {
+        let response;
+        if (searchKey) {
+          // Gọi API tìm kiếm nếu có từ khóa
+          response = await supplierService.searchSuppliers(searchKey);
+        } else {
+          // Gọi API lấy tất cả nếu không có từ khóa
+          response = await supplierService.getAllSuppliers();
+        }
+        setSuppliers(response.data || []);
+      } catch (error) {
+        messageApi.error("Không thể tải danh sách nhà cung cấp!");
+      }
+      setLoading(false);
+    },
+    [messageApi]
+  );
+
+  // 2. CHECK QUYỀN & LOAD DATA
   useEffect(() => {
-    fetchSuppliers();
+    fetchSuppliers(); // Load mặc định (không từ khóa)
+
     try {
       const storedUser = localStorage.getItem("user_info");
       if (storedUser) {
         let user = JSON.parse(storedUser);
-        
-        // Fix lỗi dữ liệu lồng nhau
-        if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung) {
-             user = user.quyen;
+        if (
+          user.quyen &&
+          !Array.isArray(user.quyen) &&
+          user.quyen.maNguoiDung
+        ) {
+          user = user.quyen;
         }
-
-        // Kiểm tra Admin
         const role = user.vaiTro || user.tenVaiTro || "";
         setIsAdmin(role === "ADMIN");
-
-        // Lấy mảng ID quyền
         let perms = user.dsQuyenSoHuu || user.quyen;
         if (!Array.isArray(perms)) perms = [];
-        
         setPermissions(perms);
       }
     } catch (e) {
@@ -78,12 +93,22 @@ const SupplierPage = () => {
     }
   }, [fetchSuppliers]);
 
-  // [!] 3. KIỂM TRA QUYỀN: Có ID quyền HOẶC là Admin
-  const canCreate = isAdmin || permissions.includes(PERM_SUPPLIER_CREATE); // ID 61
-  const canEdit = isAdmin || permissions.includes(PERM_SUPPLIER_EDIT);     // ID 62
-  const canDelete = isAdmin || permissions.includes(PERM_SUPPLIER_DELETE); // ID 63
+  // [!] Xử lý khi bấm nút Tìm
+  const handleSearch = () => {
+    fetchSuppliers(keyword);
+  };
 
-  // --- XỬ LÝ MODAL THÊM / SỬA ---
+  // [!] Xử lý khi bấm nút Reset (Tải lại)
+  const handleReset = () => {
+    setKeyword("");
+    fetchSuppliers("");
+  };
+
+  const canCreate = isAdmin || permissions.includes(PERM_SUPPLIER_CREATE);
+  const canEdit = isAdmin || permissions.includes(PERM_SUPPLIER_EDIT);
+  const canDelete = isAdmin || permissions.includes(PERM_SUPPLIER_DELETE);
+
+  // --- XỬ LÝ MODAL ---
   const handleOpenModal = () => {
     setEditingSupplier(null);
     form.resetFields();
@@ -97,27 +122,28 @@ const SupplierPage = () => {
   };
 
   const handleOk = () => {
-    form.validateFields().then(async (values) => {
-      try {
-        if (editingSupplier) {
-          await supplierService.updateSupplier(editingSupplier.maNCC, values);
-          messageApi.success("Cập nhật nhà cung cấp thành công!");
-        } else {
-          await supplierService.createSupplier(values);
-          messageApi.success("Thêm nhà cung cấp thành công!");
+    form
+      .validateFields()
+      .then(async (values) => {
+        try {
+          if (editingSupplier) {
+            await supplierService.updateSupplier(editingSupplier.maNCC, values);
+            messageApi.success("Cập nhật nhà cung cấp thành công!");
+          } else {
+            await supplierService.createSupplier(values);
+            messageApi.success("Thêm nhà cung cấp thành công!");
+          }
+          setIsModalVisible(false);
+          fetchSuppliers(keyword); // Load lại theo từ khóa hiện tại
+        } catch (error) {
+          messageApi.error("Có lỗi xảy ra!");
         }
-        setIsModalVisible(false);
-        fetchSuppliers();
-      } catch (error) {
-        messageApi.error("Có lỗi xảy ra!");
-      }
-    }).catch((info) => {
+      })
+      .catch((info) => {
         console.log("Validate Failed:", info);
-        // Không làm gì cả, Ant Design đã tự hiện dòng chữ đỏ dưới ô input rồi
-      });;
+      });
   };
 
-  // --- XỬ LÝ XÓA ---
   const handleDelete = (id) => {
     setDeletingId(id);
     setIsDeleteModalOpen(true);
@@ -127,7 +153,7 @@ const SupplierPage = () => {
     try {
       await supplierService.deleteSupplier(deletingId);
       messageApi.success("Xóa nhà cung cấp thành công!");
-      fetchSuppliers();
+      fetchSuppliers(keyword); // Load lại theo từ khóa
     } catch (error) {
       messageApi.error("Lỗi khi xóa nhà cung cấp!");
     }
@@ -135,10 +161,13 @@ const SupplierPage = () => {
     setDeletingId(null);
   };
 
-  // --- CẤU HÌNH CỘT ---
   const columns = [
-    // { title: "Mã NCC", dataIndex: "maNCC", key: "maNCC", width: 80 },
-    { title: "Tên Nhà Cung Cấp", dataIndex: "tenNCC", key: "tenNCC", width: 200 },
+    {
+      title: "Tên Nhà Cung Cấp",
+      dataIndex: "tenNCC",
+      key: "tenNCC",
+      width: 200,
+    },
     { title: "Người Liên Hệ", dataIndex: "nguoiLienHe", key: "nguoiLienHe" },
     { title: "SĐT", dataIndex: "sdt", key: "sdt" },
     { title: "Email", dataIndex: "email", key: "email" },
@@ -149,22 +178,18 @@ const SupplierPage = () => {
       width: 150,
       render: (_, record) => (
         <Space size="middle">
-          {/* Nút Sửa (Quyền 62) */}
           {canEdit && (
-            <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-              
-            </Button>
+            <Button
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
+            />
           )}
-          
-          {/* Nút Xóa (Quyền 63) */}
           {canDelete && (
-            <Button 
-              icon={<DeleteOutlined />} 
-              danger 
+            <Button
+              icon={<DeleteOutlined />}
+              danger
               onClick={() => handleDelete(record.maNCC)}
-            >
-              
-            </Button>
+            />
           )}
         </Space>
       ),
@@ -174,16 +199,56 @@ const SupplierPage = () => {
   return (
     <div>
       {contextHolder}
+
+      {/* [!] THANH TÌM KIẾM */}
+      <Card
+        style={{ marginBottom: 16 }}
+        bodyStyle={{ padding: "16px" }}
+      >
+        <Row
+          gutter={[16, 16]}
+          align="middle"
+        >
+          <Col span={12}>
+            <Input
+              placeholder="Tìm kiếm theo tên hoặc SĐT..."
+              prefix={<SearchOutlined />}
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              onPressEnter={handleSearch}
+            />
+          </Col>
+          <Col span={12}>
+            <Space>
+              <Button
+                type="primary"
+                icon={<SearchOutlined />}
+                onClick={handleSearch}
+              >
+                Tìm kiếm
+              </Button>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={handleReset}
+              >
+                Tải lại
+              </Button>
+              {/* Nút Thêm chuyển xuống đây hoặc để ở dưới tùy bạn */}
+            </Space>
+          </Col>
+        </Row>
+      </Card>
+
       <Space style={{ marginBottom: 16 }}>
-        {/* Nút Thêm (Quyền 61) */}
         {canCreate && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleOpenModal}
+          >
             Thêm Nhà Cung Cấp
           </Button>
         )}
-        <Button icon={<ReloadOutlined />} onClick={fetchSuppliers} loading={loading}>
-          Tải lại
-        </Button>
       </Space>
 
       <Table
@@ -202,29 +267,44 @@ const SupplierPage = () => {
         onOk={handleOk}
         onCancel={() => setIsModalVisible(false)}
       >
-        <Form form={form} layout="vertical">
-          <Form.Item 
-            name="tenNCC" 
-            label="Tên Nhà Cung Cấp" 
+        <Form
+          form={form}
+          layout="vertical"
+        >
+          <Form.Item
+            name="tenNCC"
+            label="Tên Nhà Cung Cấp"
             rules={[{ required: true, message: "Vui lòng nhập tên!" }]}
           >
             <Input placeholder="Ví dụ: Samsung Vina" />
           </Form.Item>
-
-          <Form.Item name="nguoiLienHe" label="Người Liên Hệ">
+          <Form.Item
+            name="nguoiLienHe"
+            label="Người Liên Hệ"
+          >
             <Input placeholder="Ví dụ: Mr. Kim" />
           </Form.Item>
-
-          <Form.Item name="sdt" label="Số Điện Thoại">
+          <Form.Item
+            name="sdt"
+            label="Số Điện Thoại"
+          >
             <Input placeholder="Ví dụ: 0909..." />
           </Form.Item>
-
-          <Form.Item name="email" label="Email" rules={[{ type: 'email' }]}>
+          <Form.Item
+            name="email"
+            label="Email"
+            rules={[{ type: "email" }]}
+          >
             <Input placeholder="Ví dụ: contact@samsung.com" />
           </Form.Item>
-
-          <Form.Item name="diaChi" label="Địa Chỉ">
-            <Input.TextArea rows={2} placeholder="Ví dụ: Khu công nghệ cao..." />
+          <Form.Item
+            name="diaChi"
+            label="Địa Chỉ"
+          >
+            <Input.TextArea
+              rows={2}
+              placeholder="Ví dụ: Khu công nghệ cao..."
+            />
           </Form.Item>
         </Form>
       </Modal>

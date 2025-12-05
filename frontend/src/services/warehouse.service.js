@@ -28,3 +28,9 @@ export const deleteWarehouse = (id) => {
 export const getInventoryByWarehouse = (id) => {
   return api.get(`${API_ENDPOINT}/${id}/sanpham`);
 };
+
+export const searchWarehouses = (keyword) => {
+  return api.get(`${API_ENDPOINT}/search`, {
+    params: { query: keyword }
+  });
+};

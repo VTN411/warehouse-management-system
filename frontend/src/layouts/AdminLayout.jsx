@@ -40,14 +40,18 @@ const AdminLayout = () => {
 
   useEffect(() => {
     let user = null;
-    let perms = []; 
-    
+    let perms = [];
+
     const storedUser = localStorage.getItem("user_info");
     if (storedUser) {
       try {
         user = JSON.parse(storedUser);
-        if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung) {
-             user = user.quyen;
+        if (
+          user.quyen &&
+          !Array.isArray(user.quyen) &&
+          user.quyen.maNguoiDung
+        ) {
+          user = user.quyen;
         }
         setCurrentUser(user);
         const p1 = Array.isArray(user.quyen) ? user.quyen : [];
@@ -62,48 +66,66 @@ const AdminLayout = () => {
     const isAdmin = roleName.toUpperCase() === "ADMIN";
 
     const hasPerm = (idCode, stringCode) => {
-      if (isAdmin) return true; 
+      if (isAdmin) return true;
       return perms.includes(idCode) || perms.includes(stringCode);
     };
 
     // 1. Danh mục
     const danhMucChildren = [
-      getItem("Sản phẩm", "/products"), 
-      ...(hasPerm(70, "PERM_KHO_VIEW") ? [getItem("Kho hàng", "/warehouses")] : []),
-      ...(hasPerm(60, "PERM_SUPPLIER_VIEW") ? [getItem("Nhà cung cấp", "/suppliers")] : []),
-      ...(hasPerm(90, "PERM_CUSTOMER_VIEW") ? [getItem("Khách hàng", "/customers")] : []),
+      getItem("Sản phẩm", "/products"),
+      ...(hasPerm(70, "PERM_KHO_VIEW")
+        ? [getItem("Kho hàng", "/warehouses")]
+        : []),
+      ...(hasPerm(60, "PERM_SUPPLIER_VIEW")
+        ? [getItem("Nhà cung cấp", "/suppliers")]
+        : []),
+      ...(hasPerm(90, "PERM_CUSTOMER_VIEW")
+        ? [getItem("Khách hàng", "/customers")]
+        : []),
     ];
 
     // 2. Nhập xuất (Chỉ còn Nhập và Xuất)
     const nhapXuatChildren = [
-      ...(hasPerm(20, "PERM_PHIEUNHAP_CREATE") || hasPerm(null, "PERM_PHIEUNHAP_VIEW") ? [getItem("Nhập kho", "/stock-in")] : []),
-      ...(hasPerm(23, "PERM_PHIEUXUAT_CREATE") || hasPerm(null, "PERM_PHIEUXUAT_VIEW") ? [getItem("Xuất kho", "/stock-out")] : []),
+      ...(hasPerm(20, "PERM_PHIEUNHAP_CREATE") ||
+      hasPerm(null, "PERM_PHIEUNHAP_VIEW")
+        ? [getItem("Nhập kho", "/stock-in")]
+        : []),
+      ...(hasPerm(23, "PERM_PHIEUXUAT_CREATE") ||
+      hasPerm(null, "PERM_PHIEUXUAT_VIEW")
+        ? [getItem("Xuất kho", "/stock-out")]
+        : []),
     ];
 
     // 3. Tổng hợp Menu
     const dynamicMenu = [
       getItem("Dashboard", "/dashboard", <PieChartOutlined />),
-      
-      ...(danhMucChildren.length > 0 ? [getItem("Danh mục", "sub1", <DesktopOutlined />, danhMucChildren)] : []),
-      
-      ...(nhapXuatChildren.length > 0 ? [getItem("Nhập xuất", "sub2", <TeamOutlined />, nhapXuatChildren)] : []),
+
+      ...(danhMucChildren.length > 0
+        ? [getItem("Danh mục", "sub1", <DesktopOutlined />, danhMucChildren)]
+        : []),
+
+      ...(nhapXuatChildren.length > 0
+        ? [getItem("Nhập xuất", "sub2", <TeamOutlined />, nhapXuatChildren)]
+        : []),
 
       // [!] ĐƯA ĐIỀU CHUYỂN RA NGOÀI (Ngang hàng)
       // Kiểm tra quyền ID 110 (Xem) hoặc 111 (Tạo)
-      ...(hasPerm(110, "PERM_TRANSFER_VIEW") || hasPerm(111, "PERM_TRANSFER_CREATE")
-        ? [getItem("Điều chuyển", "/stock-transfer", <SwapOutlined />)] 
-        : []
-      ),
-      
-      ...(hasPerm(30, "PERM_VIEW_REPORT") ? [getItem("Báo cáo", "/reports", <FileOutlined />)] : []),
+      ...(hasPerm(110, "PERM_TRANSFER_VIEW") ||
+      hasPerm(111, "PERM_TRANSFER_CREATE")
+        ? [getItem("Điều chuyển", "/stock-transfer", <SwapOutlined />)]
+        : []),
+
+      ...(hasPerm(30, "PERM_VIEW_REPORT")
+        ? [getItem("Báo cáo", "/reports", <FileOutlined />)]
+        : []),
     ];
 
-    if (hasPerm(10, "PERM_ADMIN_CREATE_USER")) { 
+    if (hasPerm(10, "PERM_ADMIN_CREATE_USER")) {
       dynamicMenu.push(...adminMenuItems);
     }
 
     setMenuItems(dynamicMenu);
-  }, []); 
+  }, []);
 
   const onClickMenu = (e) => {
     navigate(e.key);
@@ -117,44 +139,116 @@ const AdminLayout = () => {
   };
 
   const userMenu = [
-    { key: "profile", label: "Thông tin tài khoản", icon: <UserOutlined />, onClick: () => navigate('/profile') },
+    {
+      key: "profile",
+      label: "Thông tin tài khoản",
+      icon: <UserOutlined />,
+      onClick: () => navigate("/profile"),
+    },
     { type: "divider" },
-    { key: "logout", label: "Đăng xuất", icon: <LogoutOutlined />, danger: true, onClick: handleLogout },
+    {
+      key: "logout",
+      label: "Đăng xuất",
+      icon: <LogoutOutlined />,
+      danger: true,
+      onClick: handleLogout,
+    },
   ];
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
-      <Sider collapsible collapsed={collapsed} onCollapse={(value) => setCollapsed(value)}>
-        <div style={{ margin: 16, textAlign: 'center' }}>
-            <div style={{ height: 32, background: "rgba(255, 255, 255, 0.2)", color: "white", textAlign: "center", lineHeight: "32px", fontWeight: "bold", borderRadius: "6px" }}>
+      <Sider
+        collapsible
+        collapsed={collapsed}
+        onCollapse={(value) => setCollapsed(value)}
+      >
+        <div style={{ margin: 16, textAlign: "center" }}>
+          <div
+            style={{
+              height: 32,
+              background: "rgba(255, 255, 255, 0.2)",
+              color: "white",
+              textAlign: "center",
+              lineHeight: "32px",
+              fontWeight: "bold",
+              borderRadius: "6px",
+            }}
+          >
             {collapsed ? "KHO" : "QUẢN LÝ KHO"}
-            </div>
+          </div>
         </div>
-        <Menu theme="dark" defaultSelectedKeys={[location.pathname]} mode="inline" items={menuItems} onClick={onClickMenu} />
+        <Menu
+          theme="dark"
+          defaultSelectedKeys={[location.pathname]}
+          mode="inline"
+          items={menuItems}
+          onClick={onClickMenu}
+        />
       </Sider>
       <Layout>
-        <Header style={{ padding: "0 24px", background: colorBgContainer, display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
-          <Dropdown menu={{ items: userMenu }} placement="bottomRight">
+        <Header
+          style={{
+            padding: "0 24px",
+            background: colorBgContainer,
+            display: "flex",
+            justifyContent: "flex-end",
+            alignItems: "center",
+          }}
+        >
+          <Dropdown
+            menu={{ items: userMenu }}
+            placement="bottomRight"
+          >
             <Space style={{ cursor: "pointer" }}>
-              <Avatar icon={<UserOutlined />} style={{ backgroundColor: "#87d068" }} />
+              <Avatar
+                icon={<UserOutlined />}
+                style={{ backgroundColor: "#87d068" }}
+              />
               {currentUser ? (
-                <Space direction="vertical" size={0} style={{ lineHeight: 1.2 }}>
-                  <strong style={{ fontSize: "14px" }}>{currentUser.hoTen}</strong>
-                  <span style={{ fontSize: "12px", color: "#8c8c8c" }}>{currentUser.vaiTro || currentUser.tenVaiTro}</span>
+                <Space
+                  direction="vertical"
+                  size={0}
+                  style={{ lineHeight: 1.2 }}
+                >
+                  <strong style={{ fontSize: "14px" }}>
+                    {currentUser.hoTen}
+                  </strong>
+                  <span style={{ fontSize: "12px", color: "#8c8c8c" }}>
+                    {currentUser.vaiTro || currentUser.tenVaiTro}
+                  </span>
                 </Space>
-              ) : (<strong>Loading...</strong>)}
+              ) : (
+                <strong>Loading...</strong>
+              )}
             </Space>
           </Dropdown>
         </Header>
         <Content style={{ margin: "16px" }}>
-          <div style={{ padding: 24, minHeight: 360, background: colorBgContainer, borderRadius: borderRadiusLG }}>
-             <Outlet />
+          <div
+            style={{
+              padding: 24,
+              minHeight: 360,
+              background: colorBgContainer,
+              borderRadius: borderRadiusLG,
+            }}
+          >
+            <Outlet />
           </div>
         </Content>
         <Footer style={{ textAlign: "center" }}>
-          <Space direction="vertical" align="center" size="small">
-            <img src="/images/Logo_STU.png" alt="STU Logo" style={{ height: 50 }} />
-            <span>Đồ án tốt nghiệp ©{new Date().getFullYear()} - Quản lý kho hàng</span>
+          <Space
+            direction="vertical"
+            align="center"
+            size="small"
+          >
+            <img
+              src="/images/Logo_STU.png"
+              alt="STU Logo"
+              style={{ height: 50 }}
+            />
+            <span>
+              Đồ án tốt nghiệp ©{new Date().getFullYear()} - Quản lý kho hàng
+            </span>
           </Space>
         </Footer>
       </Layout>
