@@ -8,6 +8,7 @@ import {
   FileExcelOutlined,
   WarningOutlined,
   SafetyCertificateOutlined,
+  SwapRightOutlined, // Icon cho điều chuyển
 } from "@ant-design/icons";
 import * as reportService from "../../services/report.service";
 
@@ -46,6 +47,14 @@ const ReportPage = () => {
   const canViewInventory = isAdmin || permissions.includes(PERM_INVENTORY);
   const canViewHistory = isAdmin || permissions.includes(PERM_HISTORY);
 
+  // [!] CẤU HÌNH PHÂN TRANG CHUNG
+  const paginationConfig = {
+    pageSize: 5, 
+    showSizeChanger: true, 
+    pageSizeOptions: ['5', '10', '20', '50'], 
+    showTotal: (total) => `Tổng ${total} dòng`
+  };
+
   // Hàm tải dữ liệu tồn kho
   const fetchInventory = useCallback(async () => {
     if (!canViewInventory) return;
@@ -78,7 +87,6 @@ const ReportPage = () => {
     if (key === "history") fetchHistory();
   };
 
-  // Load tab mặc định ban đầu
   useEffect(() => {
     if (canViewInventory) fetchInventory();
     else if (canViewHistory) fetchHistory();
@@ -86,7 +94,6 @@ const ReportPage = () => {
 
   // --- CẤU HÌNH CỘT BẢNG TỒN KHO ---
   const inventoryColumns = [
-    // { title: "Mã SP", dataIndex: "maSP", key: "maSP", width: 80 },
     { title: "Tên Sản Phẩm", dataIndex: "tenSP", key: "tenSP" },
     { title: "ĐVT", dataIndex: "donViTinh", key: "donViTinh", width: 80 },
     { title: "Kho", dataIndex: "tenKho", key: "tenKho" },
@@ -94,7 +101,6 @@ const ReportPage = () => {
       title: "Số Lượng Tồn",
       dataIndex: "soLuongTon",
       key: "soLuongTon",
-      // [!] ĐÃ BỎ SORTER
       render: (val) => (
         <b style={{ color: val <= 10 ? "red" : "inherit" }}>{val}</b>
       ),
@@ -107,53 +113,36 @@ const ReportPage = () => {
         const current = record.soLuongTon || 0;
 
         if (current <= 0)
-          return (
-            <Tag
-              icon={<WarningOutlined />}
-              color="red"
-            >
-              Hết hàng
-            </Tag>
-          );
+          return <Tag icon={<WarningOutlined />} color="red">Hết hàng</Tag>;
         if (current <= min)
-          return (
-            <Tag
-              icon={<WarningOutlined />}
-              color="orange"
-            >
-              Sắp hết
-            </Tag>
-          );
-        return (
-          <Tag
-            icon={<SafetyCertificateOutlined />}
-            color="green"
-          >
-            Bình thường
-          </Tag>
-        );
+          return <Tag icon={<WarningOutlined />} color="orange">Sắp hết</Tag>;
+        return <Tag icon={<SafetyCertificateOutlined />} color="green">Bình thường</Tag>;
       },
     },
   ];
 
-  // --- CẤU HÌNH CỘT BẢNG LỊCH SỬ ---
+  // --- [!] CẬP NHẬT CẤU HÌNH CỘT BẢNG LỊCH SỬ ---
   const historyColumns = [
     {
       title: "Ngày",
       dataIndex: "ngay",
       key: "ngay",
-      width: 180,
+      width: 160,
       render: (text) => new Date(text).toLocaleString("vi-VN"),
     },
     {
       title: "Loại GD",
       dataIndex: "loaiGiaoDich",
       key: "loaiGiaoDich",
-      render: (type) => (
-        <Tag color={type === "NHAP" ? "blue" : "green"}>
-          {type === "NHAP" ? "Nhập Kho" : "Xuất Kho"}
-        </Tag>
-      ),
+      width: 140,
+      render: (type) => {
+        // Xử lý hiển thị thẻ màu cho từng loại
+        if (type === 'NHAP') return <Tag color="green">NHẬP KHO</Tag>;
+        if (type === 'XUAT') return <Tag color="blue">XUẤT KHO</Tag>;
+        if (type === 'CHUYEN_DI') return <Tag color="orange"><SwapRightOutlined /> CHUYỂN ĐI</Tag>;
+        if (type === 'CHUYEN_DEN') return <Tag color="cyan"><SwapRightOutlined /> CHUYỂN ĐẾN</Tag>;
+        return <Tag>{type}</Tag>;
+      },
     },
     { title: "Chứng Từ", dataIndex: "chungTu", key: "chungTu" },
     { title: "Sản Phẩm", dataIndex: "tenSP", key: "tenSP" },
@@ -163,15 +152,20 @@ const ReportPage = () => {
       dataIndex: "soLuong",
       key: "soLuong",
       render: (val, record) => {
-        const isImport = record.loaiGiaoDich === "NHAP";
-        const color = isImport ? "green" : "blue";
-        const prefix = isImport ? "+" : "-";
-        return (
-          <b style={{ color }}>
-            {prefix}
-            {val}
-          </b>
-        );
+        // [!] Xử lý dấu +/- cho số lượng
+        const type = record.loaiGiaoDich;
+        let color = 'black';
+        let prefix = '';
+
+        if (type === 'NHAP' || type === 'CHUYEN_DEN') {
+            color = 'green';
+            prefix = '+';
+        } else if (type === 'XUAT' || type === 'CHUYEN_DI') {
+            color = 'red';
+            prefix = '-';
+        }
+        
+        return <b style={{ color }}>{prefix}{val}</b>;
       },
     },
   ];
@@ -181,11 +175,7 @@ const ReportPage = () => {
   if (canViewInventory) {
     items.push({
       key: "inventory",
-      label: (
-        <span>
-          <BarChartOutlined /> Báo cáo Tồn kho
-        </span>
-      ),
+      label: <span><BarChartOutlined /> Báo cáo Tồn kho</span>,
       children: (
         <div>
           <Space style={{ marginBottom: 16, float: "right" }}>
@@ -197,7 +187,7 @@ const ReportPage = () => {
             dataSource={inventoryData}
             loading={loading}
             rowKey="maSP"
-            pagination={{ pageSize: 10 }}
+            pagination={paginationConfig}
           />
         </div>
       ),
@@ -207,11 +197,7 @@ const ReportPage = () => {
   if (canViewHistory) {
     items.push({
       key: "history",
-      label: (
-        <span>
-          <HistoryOutlined /> Lịch sử Giao dịch
-        </span>
-      ),
+      label: <span><HistoryOutlined /> Lịch sử Giao dịch</span>,
       children: (
         <div>
           <Space style={{ marginBottom: 16, float: "right" }}>
@@ -222,10 +208,9 @@ const ReportPage = () => {
             columns={historyColumns}
             dataSource={historyData}
             loading={loading}
-            rowKey={(r) =>
-              `${r.loaiGiaoDich}_${r.chungTu}_${r.tenSP}_${r.ngay}`
-            }
-            pagination={{ pageSize: 10 }}
+            // Dùng index làm key để tránh lỗi trùng lặp
+            rowKey={(record, index) => index}
+            pagination={paginationConfig}
           />
         </div>
       ),
