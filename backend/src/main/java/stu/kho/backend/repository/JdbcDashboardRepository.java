@@ -101,11 +101,10 @@ public class JdbcDashboardRepository implements DashboardRepository {
         }, from, to, limit);
     }
 
-    // 4. API Cảnh báo
     public DashboardAlertsDTO getAlerts() {
         DashboardAlertsDTO alerts = new DashboardAlertsDTO();
 
-        // Sắp hết hàng
+        // 1. Sắp hết hàng
         String sqlLow = "SELECT MaSP, TenSP, SoLuongTon, MucTonToiThieu FROM sanpham WHERE SoLuongTon <= MucTonToiThieu";
         alerts.setSapHetHang(jdbcTemplate.query(sqlLow, (rs, rowNum) -> {
             DashboardAlertsDTO.SapHetHang item = new DashboardAlertsDTO.SapHetHang();
@@ -116,11 +115,17 @@ public class JdbcDashboardRepository implements DashboardRepository {
             return item;
         }));
 
-        // Hết hạn sử dụng (Nếu có dùng bảng ChiTietKho và cột NgayHetHan)
-        // Giả sử lấy những lô hết hạn trong 7 ngày tới
-        String sqlExpire = "SELECT ctk.MaSP, sp.TenSP, ctk.SoLo, ctk.NgayHetHan, ctk.MaKho " +
-                "FROM chitietkho ctk JOIN sanpham sp ON ctk.MaSP = sp.MaSP " +
-                "WHERE ctk.NgayHetHan IS NOT NULL AND ctk.NgayHetHan <= DATE_ADD(CURDATE(), INTERVAL 7 DAY)";
+        // 2. HẾT HẠN SỬ DỤNG (CẬP NHẬT PHẦN NÀY)
+        String sqlExpire =
+                "SELECT ctk.MaSP, sp.TenSP, ctk.SoLo, ctk.NgayHetHan, ctk.SoLuongTon, ctk.MaKho, kh.TenKho " +
+                        "FROM chitietkho ctk " +
+                        "JOIN sanpham sp ON ctk.MaSP = sp.MaSP " +
+                        "JOIN khohang kh ON ctk.MaKho = kh.MaKho " +
+                        "WHERE ctk.NgayHetHan IS NOT NULL " +
+                        "AND ctk.NgayHetHan <= DATE_ADD(CURDATE(), INTERVAL 7 DAY) " +
+                        "AND ctk.SoLuongTon > 0 " +
+                        "ORDER BY ctk.NgayHetHan ASC";
+
         alerts.setHetHanSuDung(jdbcTemplate.query(sqlExpire, (rs, rowNum) -> {
             DashboardAlertsDTO.HetHanSuDung item = new DashboardAlertsDTO.HetHanSuDung();
             item.setMaSP(rs.getInt("MaSP"));
@@ -128,6 +133,19 @@ public class JdbcDashboardRepository implements DashboardRepository {
             item.setSoLo(rs.getString("SoLo"));
             item.setNgayHetHan(rs.getDate("NgayHetHan").toLocalDate());
             item.setMaKho(rs.getInt("MaKho"));
+
+            // --- CÁC DÒNG BỊ THIẾU CẦN BỔ SUNG ---
+            item.setSoLuongTon(rs.getInt("SoLuongTon")); // Lấy số lượng
+            item.setTenKho(rs.getString("TenKho"));     // Lấy tên kho
+
+            // Logic tính trạng thái
+            if (item.getNgayHetHan().isBefore(java.time.LocalDate.now())) {
+                item.setTrangThai("ĐÃ HẾT HẠN");
+            } else {
+                item.setTrangThai("Sắp hết hạn");
+            }
+            // --------------------------------------
+
             return item;
         }));
 
