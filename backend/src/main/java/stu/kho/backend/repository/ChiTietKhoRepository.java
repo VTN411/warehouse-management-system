@@ -18,4 +18,6 @@ public interface ChiTietKhoRepository {
     int save(ChiTietKho chiTietKho);
     //Tim san pham theo ma kho
     List<SanPhamTrongKhoResponse> findSanPhamByMaKho(Integer maKho);
-}
+    Optional<ChiTietKho> findByIdForUpdate(Integer maSP, Integer maKho);
+
+    }

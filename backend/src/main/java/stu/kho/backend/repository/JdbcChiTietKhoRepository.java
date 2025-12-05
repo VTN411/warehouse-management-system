@@ -14,8 +14,6 @@ import java.util.Optional;
 public class JdbcChiTietKhoRepository implements ChiTietKhoRepository {
 
     private final JdbcTemplate jdbcTemplate;
-    // Inject các repo khác nếu cần JOIN (ví dụ: SanPhamRepository)
-    // ...
 
     private final RowMapper<ChiTietKho> chiTietKhoRowMapper;
 
@@ -83,5 +81,15 @@ public class JdbcChiTietKhoRepository implements ChiTietKhoRepository {
             dto.setSoLuongTon(rs.getInt("SoLuongTon"));
             return dto;
         }, maKho);
+    }
+    public Optional<ChiTietKho> findByIdForUpdate(Integer maSP, Integer maKho) {
+        String sql = "SELECT * FROM chitietkho WHERE MaSP = ? AND MaKho = ? FOR UPDATE";
+
+        try {
+            ChiTietKho ctk = jdbcTemplate.queryForObject(sql, chiTietKhoRowMapper, maSP, maKho);
+            return Optional.ofNullable(ctk);
+        } catch (EmptyResultDataAccessException e) {
+            return Optional.empty();
+        }
     }
 }

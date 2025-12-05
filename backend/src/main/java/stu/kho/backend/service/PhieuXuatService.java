@@ -173,8 +173,7 @@ public class PhieuXuatService {
 
     private void capNhatTonKho(Integer maKho, Integer maSP, Integer soLuongThayDoi) {
         // 1. Cập nhật ChiTietKho (Tồn kho chi tiết)
-        Optional<ChiTietKho> tonKhoOpt = chiTietKhoRepository.findById(maSP, maKho);
-
+        Optional<ChiTietKho> tonKhoOpt = chiTietKhoRepository.findByIdForUpdate(maSP, maKho);
         if (tonKhoOpt.isPresent()) {
             ChiTietKho tonKho = tonKhoOpt.get();
             int moi = tonKho.getSoLuongTon() + soLuongThayDoi;
