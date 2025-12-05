@@ -7,5 +7,6 @@ import java.util.Optional;
 public interface LoaiHangRepository {
     Optional<LoaiHang> findById(Integer id);
     List<LoaiHang> findAll();
-    // (Thêm save, update, delete nếu Admin có quyền quản lý danh mục này)
-}
+    int save(LoaiHang loaiHang);
+    int update(LoaiHang loaiHang);
+    int deleteById(Integer id);}
