@@ -131,17 +131,6 @@ public class JdbcDashboardRepository implements DashboardRepository {
             return item;
         }));
 
-        // Tồn âm
-        String sqlAm = "SELECT ctk.MaSP, sp.TenSP, ctk.MaKho, ctk.SoLuongTon FROM chitietkho ctk JOIN sanpham sp ON ctk.MaSP = sp.MaSP WHERE ctk.SoLuongTon < 0";
-        alerts.setTonAm(jdbcTemplate.query(sqlAm, (rs, rn) -> {
-            DashboardAlertsDTO.TonAm item = new DashboardAlertsDTO.TonAm();
-            item.setMaSP(rs.getInt("MaSP"));
-            item.setTenSP(rs.getString("TenSP"));
-            item.setMaKho(rs.getInt("MaKho"));
-            item.setTonHienTai(rs.getInt("SoLuongTon"));
-            return item;
-        }));
-
         return alerts;
     }
 

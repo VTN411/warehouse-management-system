@@ -7,8 +7,6 @@ import java.util.List;
 public class DashboardAlertsDTO {
     private List<SapHetHang> sapHetHang;
     private List<HetHanSuDung> hetHanSuDung;
-    private List<TonAm> tonAm;
-
     @Data
     public static class SapHetHang {
         private Integer maSP;
@@ -23,14 +21,10 @@ public class DashboardAlertsDTO {
         private String tenSP;
         private String soLo;
         private LocalDate ngayHetHan;
+        private Integer soLuongTon; // Thêm số lượng để biết lô này còn bao nhiêu
         private Integer maKho;
+        private String tenKho;      // Thêm tên kho cho rõ ràng
+        private String trangThai;   // "Đã hết hạn" hoặc "Sắp hết hạn"
     }
 
-    @Data
-    public static class TonAm {
-        private Integer maSP;
-        private String tenSP;
-        private Integer maKho;
-        private Integer tonHienTai;
-    }
 }
