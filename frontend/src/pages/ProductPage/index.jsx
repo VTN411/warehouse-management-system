@@ -571,7 +571,26 @@ const ProductPage = () => {
               </Form.Item>
             </Col>
           </Row>
+          <Row gutter={16}>
 
+            <Col span={8}>
+              <Form.Item
+                name="giaNhap"
+                label="Giá "
+                rules={[{ required: true, message:"Vui lòng nhập giá" }]}
+              >
+                <InputNumber
+                  style={{ width: "100%" }}
+                  formatter={(v) =>
+                    `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                  }
+                  parser={(v) => v.replace(/\$\s?|(,*)/g, "")}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          
           <Form.Item
             name="danhSachMaNCC"
             label="Nhà Cung Cấp"
