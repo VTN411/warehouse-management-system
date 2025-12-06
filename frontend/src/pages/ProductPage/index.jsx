@@ -28,7 +28,7 @@ import {
 } from "@ant-design/icons";
 import * as productService from "../../services/product.service";
 import * as supplierService from "../../services/supplier.service";
-import * as categoryService from "../../services/category.service"; // [!] 1. IMPORT SERVICE LOẠI HÀNG
+import * as categoryService from "../../services/category.service";
 
 const { Option } = Select;
 
@@ -39,7 +39,7 @@ const PERM_DELETE_ID = 52;
 const ProductPage = () => {
   const [products, setProducts] = useState([]);
   const [listNCC, setListNCC] = useState([]);
-  const [listLoaiHang, setListLoaiHang] = useState([]); // [!] 2. STATE LƯU DS LOẠI HÀNG
+  const [listLoaiHang, setListLoaiHang] = useState([]);
 
   // State Bộ lọc
   const [filter, setFilter] = useState({
@@ -70,9 +70,9 @@ const ProductPage = () => {
   const [deletingProductId, setDeletingProductId] = useState(null);
   const [fileList, setFileList] = useState([]);
 
-  // Hàm tìm kiếm & phân trang
+  // 1. Hàm tải dữ liệu
   const fetchProducts = useCallback(
-    async (page = 1, pageSize = 5, currentFilter = {}) => {
+    async (page, pageSize, currentFilter) => {
       setLoading(true);
       try {
         const filterData = {
@@ -88,13 +88,18 @@ const ProductPage = () => {
           setProducts(data.content);
           setPagination((prev) => ({
             ...prev,
-            current: page,
+            current: page, // Cập nhật trang hiện tại từ tham số truyền vào
             pageSize: pageSize,
             total: data.totalElements,
           }));
         } else if (Array.isArray(data)) {
           setProducts(data);
-          setPagination((prev) => ({ ...prev, total: data.length }));
+          setPagination((prev) => ({
+            ...prev,
+            current: page,
+            pageSize: pageSize,
+            total: data.length,
+          }));
         }
       } catch (error) {
         messageApi.error("Không thể tải danh sách sản phẩm!");
@@ -104,7 +109,6 @@ const ProductPage = () => {
     [messageApi]
   );
 
-  // [!] 3. LẤY DỮ LIỆU CHUNG (NCC + LOẠI HÀNG)
   const fetchCommonData = useCallback(async () => {
     try {
       const [resNCC, resLoai] = await Promise.allSettled([
@@ -120,9 +124,13 @@ const ProductPage = () => {
     }
   }, []);
 
+  // [!] 2. SỬA LỖI QUAN TRỌNG TẠI ĐÂY:
+  // useEffect chỉ chạy 1 lần duy nhất khi mount (mảng phụ thuộc rỗng [])
+  // Để tránh việc nó tự động reset về trang 1 khi component re-render.
   useEffect(() => {
-    fetchProducts(1, 5, filter);
+    fetchProducts(1, 5, {}); // Load trang 1, 5 dòng, không lọc
     fetchCommonData();
+
     try {
       const storedUser = localStorage.getItem("user_info");
       if (storedUser) {
@@ -139,10 +147,12 @@ const ProductPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Xử lý tìm kiếm (Reset về trang 1)
   const handleSearch = () => {
     fetchProducts(1, pagination.pageSize, filter);
   };
 
+  // Xử lý reset (Reset về trang 1)
   const handleResetFilter = () => {
     const emptyFilter = {
       keyword: "",
@@ -151,10 +161,12 @@ const ProductPage = () => {
       maxGia: null,
     };
     setFilter(emptyFilter);
-    fetchProducts(1, 5, emptyFilter);
+    fetchProducts(1, pagination.pageSize, emptyFilter);
   };
 
+  // [!] 3. HÀM CHUYỂN TRANG
   const handleTableChange = (newPagination) => {
+    // Gọi API với trang mới và filter hiện tại
     fetchProducts(newPagination.current, newPagination.pageSize, filter);
   };
 
@@ -178,7 +190,6 @@ const ProductPage = () => {
     } else {
       setFileList([]);
     }
-
     const selectedNCCIds =
       record.danhSachNCC && Array.isArray(record.danhSachNCC)
         ? record.danhSachNCC.map((item) =>
@@ -226,6 +237,7 @@ const ProductPage = () => {
           else await productService.createProduct(productData, file);
           messageApi.success("Thành công!");
           setIsModalVisible(false);
+          // Load lại trang hiện tại sau khi lưu
           fetchProducts(pagination.current, pagination.pageSize, filter);
         } catch (error) {
           messageApi.error(error.response?.data?.message || "Có lỗi xảy ra!");
@@ -244,6 +256,7 @@ const ProductPage = () => {
     try {
       await productService.deleteProduct(deletingProductId);
       messageApi.success("Đã xóa!");
+      // Load lại trang hiện tại sau khi xóa
       fetchProducts(pagination.current, pagination.pageSize, filter);
     } catch (error) {
       messageApi.error("Lỗi xóa!");
@@ -280,7 +293,6 @@ const ProductPage = () => {
       width: 110,
     },
     { title: "Tồn", dataIndex: "soLuongTon", width: 70 },
-    // [!] 4. HIỂN THỊ TÊN LOẠI HÀNG TỪ DANH SÁCH API
     {
       title: "Loại",
       width: 120,
@@ -354,8 +366,6 @@ const ProductPage = () => {
               onPressEnter={handleSearch}
             />
           </Col>
-
-          {/* [!] 5. BỘ LỌC: CHỌN LOẠI HÀNG TỪ API */}
           <Col span={4}>
             <Select
               style={{ width: "100%" }}
@@ -427,6 +437,7 @@ const ProductPage = () => {
             Thêm Sản Phẩm
           </Button>
         )}
+        {/* Nút Reload tải lại trang hiện tại chứ không reset về 1 */}
         <Button
           icon={<ReloadOutlined />}
           onClick={() =>
@@ -444,12 +455,13 @@ const ProductPage = () => {
         dataSource={products}
         loading={loading}
         rowKey="maSP"
+        // [!] Gắn state phân trang vào bảng
         pagination={pagination}
+        // [!] Gắn hàm xử lý chuyển trang
         onChange={handleTableChange}
         scroll={{ x: 1000 }}
       />
 
-      {/* Modal Form */}
       <Modal
         title={editingProduct ? "Sửa Sản Phẩm" : "Thêm Sản Phẩm"}
         open={isModalVisible}
@@ -498,18 +510,18 @@ const ProductPage = () => {
               <Form.Item
                 name="tenSP"
                 label="Tên Sản Phẩm"
-                rules={[{ required: true }]}
+                rules={[
+                  { required: true, message: "Vui lòng nhập tên sản phẩm" },
+                ]}
               >
                 <Input />
               </Form.Item>
             </Col>
-
-            {/* [!] 6. FORM NHẬP: SELECT LOẠI HÀNG */}
             <Col span={12}>
               <Form.Item
                 name="maLoai"
                 label="Loại Hàng"
-                rules={[{ required: true, message: "Vui lòng chọn loại!" }]}
+                rules={[{ required: true, message: "Vui lòng chọn loại hàng" }]}
               >
                 <Select placeholder="Chọn loại hàng">
                   {listLoaiHang.map((l) => (
@@ -527,43 +539,18 @@ const ProductPage = () => {
           <Row gutter={16}>
             <Col span={8}>
               <Form.Item
-                name="giaNhap"
-                label="Giá Nhập"
-                rules={[{ required: true }]}
-              >
-                <InputNumber
-                  style={{ width: "100%" }}
-                  formatter={(v) =>
-                    `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                  }
-                  parser={(v) => v.replace(/\$\s?|(,*)/g, "")}
-                />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item
                 name="donViTinh"
-                label="ĐVT"
-                rules={[{ required: true }]}
+                label="Đơn vị tính"
+                rules={[{ required: true, message: "Vui lòng nhập đơn vị tính" }]}
               >
                 <Input />
               </Form.Item>
             </Col>
             <Col span={8}>
               <Form.Item
-                name="soLuongTon"
-                label="Tồn Kho"
-                initialValue={0}
-              >
-                <InputNumber style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col span={8}>
-              <Form.Item
                 name="mucTonToiThieu"
-                label="Min Tồn"
+                label="Mức tồn tối thiểu"
+                rules={[{ required: true, message: "Vui lòng nhập mức tồn tối thiểu" }]}
               >
                 <InputNumber
                   style={{ width: "100%" }}
@@ -574,7 +561,8 @@ const ProductPage = () => {
             <Col span={8}>
               <Form.Item
                 name="mucTonToiDa"
-                label="Max Tồn"
+                label="Mức tồn tối đa"
+                rules={[{ required: true, message: "Vui lòng nhập mức tồn tối đa" }]}
               >
                 <InputNumber
                   style={{ width: "100%" }}
@@ -583,9 +571,11 @@ const ProductPage = () => {
               </Form.Item>
             </Col>
           </Row>
+
           <Form.Item
             name="danhSachMaNCC"
             label="Nhà Cung Cấp"
+            rules={[{ required: true , message: "Vui lòng chọn nhà cung cấp"}]}
           >
             <Select
               mode="multiple"
