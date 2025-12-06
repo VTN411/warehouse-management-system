@@ -25,12 +25,35 @@ const { Option } = Select;
 
 // [!] CẬP NHẬT DANH SÁCH QUYỀN
 const permissionGroups = [
+  // 1. NHÓM QUẢN TRỊ (Dành cho Admin/Quản lý cấp cao)
+  {
+    label: "Quản trị Hệ thống",
+    perms: [
+      { id: 10, name: "Tạo Người dùng" },
+      { id: 11, name: "Sửa Người dùng" },
+      { id: 12, name: "Xóa Người dùng" },
+      { id: 14, name: "Xem Danh sách Người dùng" },
+      // Nếu có nhật ký hệ thống
+      // { id: 100, name: "Xem Nhật ký hệ thống" }, 
+    ],
+  },
+
+  // 2. NHÓM DANH MỤC
   {
     label: "Quản lý Sản phẩm",
     perms: [
       { id: 50, name: "Tạo Sản phẩm" },
       { id: 51, name: "Sửa Sản phẩm" },
       { id: 52, name: "Xóa Sản phẩm" },
+    ],
+  },
+  {
+    label: "Quản lý Loại hàng", // [!] MỚI THÊM
+    perms: [
+      { id: 140, name: "Xem Loại hàng" },
+      { id: 141, name: "Tạo Loại hàng" },
+      { id: 142, name: "Sửa Loại hàng" },
+      { id: 143, name: "Xóa Loại hàng" },
     ],
   },
   {
@@ -52,7 +75,7 @@ const permissionGroups = [
     ],
   },
   {
-    label: "Khách Hàng", // [!] MỚI THÊM NHÓM NÀY
+    label: "Khách Hàng",
     perms: [
       { id: 90, name: "Xem Khách Hàng" },
       { id: 91, name: "Tạo Khách Hàng" },
@@ -60,33 +83,50 @@ const permissionGroups = [
       { id: 93, name: "Xóa Khách Hàng" },
     ],
   },
+
+  // 3. NHÓM NGHIỆP VỤ KHO
   {
     label: "Phiếu Nhập",
     perms: [
       { id: 20, name: "Tạo Phiếu Nhập" },
-      { id: 21, name: "Sửa Phiếu Nhập" },
+      { id: 21, name: "Sửa Phiếu Nhập (Chờ duyệt)" },
       { id: 22, name: "Xóa Phiếu Nhập" },
       { id: 40, name: "Duyệt Phiếu Nhập" },
       { id: 41, name: "Hủy Phiếu Nhập" },
+      { id: 120, name: "Sửa Phiếu Nhập Đã Duyệt (30 ngày)" }, // [!] MỚI
     ],
   },
   {
     label: "Phiếu Xuất",
     perms: [
       { id: 23, name: "Tạo Phiếu Xuất" },
-      { id: 24, name: "Sửa Phiếu Xuất" },
+      { id: 24, name: "Sửa Phiếu Xuất (Chờ duyệt)" },
       { id: 25, name: "Xóa Phiếu Xuất" },
       { id: 42, name: "Duyệt Phiếu Xuất" },
       { id: 43, name: "Hủy Phiếu Xuất" },
+      { id: 121, name: "Sửa Phiếu Xuất Đã Duyệt (30 ngày)" }, // [!] MỚI
     ],
   },
-  // {
-  //   label: "Hệ thống & Báo cáo",
-  //   perms: [
-  //     { id: 10, name: "Quản lý User (Admin)" },
-  //     { id: 30, name: "Xem Báo cáo" },
-  //   ],
-  // },
+  {
+    label: "Điều Chuyển Kho", // [!] MỚI
+    perms: [
+      { id: 110, name: "Xem Điều chuyển" },
+      { id: 111, name: "Tạo Điều chuyển" },
+      { id: 112, name: "Duyệt Điều chuyển" },
+      { id: 113, name: "Hủy Điều chuyển" },
+      { id: 114, name: "Sửa Điều chuyển Đã Duyệt" },
+    ],
+  },
+
+  // 4. NHÓM BÁO CÁO
+  {
+    label: "Báo cáo & Thống kê", // [!] MỚI
+    perms: [
+      { id: 100, name: "Xem Báo cáo Tồn kho" },
+      { id: 101, name: "Xem Lịch sử Giao dịch" },
+      // { id: 30, name: "Xem Dashboard" }, // Nếu muốn phân quyền xem Dashboard
+    ],
+  },
 ];
 
 const UserManagementPage = () => {

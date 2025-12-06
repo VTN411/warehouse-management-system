@@ -72,6 +72,9 @@ const AdminLayout = () => {
 
     // 1. Danh mục
     const danhMucChildren = [
+      ...(hasPerm(140, "PERM_CATEGORY_VIEW")
+        ? [getItem("Loại hàng", "/categories")]
+        : []),
       getItem("Sản phẩm", "/products"),
       ...(hasPerm(70, "PERM_KHO_VIEW")
         ? [getItem("Kho hàng", "/warehouses")]

@@ -11,3 +11,7 @@ export const getInventoryReport = () => {
 export const getHistoryReport = () => {
   return api.get("/baocao/lichsu");
 };
+
+export const getNXTReport = (params) => {
+  return api.get("/baocao/nxt-chitiet", { params });
+};

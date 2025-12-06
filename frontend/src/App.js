@@ -19,6 +19,7 @@ import CustomerPage from './pages/CustomerPage';
 import SystemLogPage from './pages/SystemLogPage';
 import ReportPage from './pages/ReportPage';
 import TransferPage from './pages/TransferPage';
+import CategoryPage from './pages/CategoryPage';
 
 import 'antd/dist/reset.css';
 import './App.css';
@@ -47,6 +48,7 @@ function App() {
               <Route path="/system-logs" element={<SystemLogPage />} />
               <Route path="/reports" element={<ReportPage />} />
               <Route path="/stock-transfer" element={<TransferPage />} />
+              <Route path="/categories" element={<CategoryPage />} />
             </Route>
           </Route>
 
