@@ -100,4 +100,16 @@ public class PhieuXuatController {
     public ResponseEntity<List<PhieuXuatHang>> filter(@RequestBody PhieuXuatFilterRequest request) {
         return ResponseEntity.ok(phieuXuatService.filter(request));
     }
+    @PostMapping("/giangvien/create")
+    @PreAuthorize("hasAuthority('PERM_PHIEUXUAT_CREATE')")
+    // (Lưu ý: Giảng viên cần có quyền này, như đã config ở bước trước)
+    public ResponseEntity<?> createForGiangVien(@RequestBody PhieuXuatRequest request,
+                                                Authentication authentication) {
+        try {
+            // Không cần gửi maKH trong body, backend sẽ tự xử lý
+            return ResponseEntity.ok(phieuXuatService.createPhieuXuatForGiangVien(request, authentication.getName()));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
 }

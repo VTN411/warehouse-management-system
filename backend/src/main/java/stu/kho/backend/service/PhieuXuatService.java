@@ -27,19 +27,22 @@ public class PhieuXuatService {
     private final HoatDongRepository hoatDongRepository;
     private final NguoiDungRepository nguoiDungRepository;
     private final SanPhamRepository sanPhamRepository;
+    private final KhachHangRepository khachHangRepository;
+
 
     public PhieuXuatService(PhieuXuatRepository phieuXuatRepository,
                             ChiTietPhieuXuatRepository chiTietPhieuXuatRepository,
                             ChiTietKhoRepository chiTietKhoRepository,
                             HoatDongRepository hoatDongRepository,
                             NguoiDungRepository nguoiDungRepository,
-                            SanPhamRepository sanPhamRepository) {
+                            SanPhamRepository sanPhamRepository, KhachHangRepository khachHangRepository) {
         this.phieuXuatRepository = phieuXuatRepository;
         this.chiTietPhieuXuatRepository = chiTietPhieuXuatRepository;
         this.chiTietKhoRepository = chiTietKhoRepository;
         this.hoatDongRepository = hoatDongRepository;
         this.nguoiDungRepository = nguoiDungRepository;
         this.sanPhamRepository = sanPhamRepository;
+        this.khachHangRepository = khachHangRepository;
     }
 
     // =================================================================
@@ -305,5 +308,41 @@ public class PhieuXuatService {
 
     public List<PhieuXuatHang> filter(PhieuXuatFilterRequest request) {
         return phieuXuatRepository.filter(request);
+    }
+    @Transactional
+    public PhieuXuatHang createPhieuXuatForGiangVien(PhieuXuatRequest request, String username) {
+        // 1. Lấy thông tin Giảng viên (User)
+        NguoiDung giangVienUser = nguoiDungRepository.findByTenDangNhap(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // 2. Tìm hoặc Tạo Khách Hàng tương ứng với Giảng viên này
+        // (Tìm theo email hoặc tên để tránh trùng lặp)
+        Integer maKhachHang = findOrCreateCustomerFromUser(giangVienUser);
+
+        // 3. Gán MaKH vào request và gọi hàm tạo phiếu chuẩn
+        request.setMaKH(maKhachHang);
+
+        // Gọi lại hàm create chuẩn
+        return createPhieuXuat(request, username);
+    }
+
+    // Hàm tiện ích: Tìm hoặc Tạo Khách Hàng từ User
+    private Integer findOrCreateCustomerFromUser(NguoiDung user) {
+        // Tìm xem có KH nào trùng email không
+        List<KhachHang> existing = khachHangRepository.search(user.getEmail());
+
+        if (!existing.isEmpty()) {
+            return existing.get(0).getMaKH();
+        }
+
+        // Nếu chưa có, tạo KH mới
+        KhachHang newCus = new KhachHang();
+        newCus.setTenKH(user.getHoTen() + " (GV)");
+        newCus.setEmail(user.getEmail());
+        newCus.setSdt(user.getSdt());
+        newCus.setDiaChi("Trường học"); // Mặc định hoặc lấy từ user nếu có
+
+        int newId = khachHangRepository.save(newCus);
+        return newId;
     }
 }
