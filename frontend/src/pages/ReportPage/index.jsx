@@ -31,19 +31,21 @@ const PERM_HISTORY = 101;
 const ReportPage = () => {
   const [loading, setLoading] = useState(false);
 
+  // State dữ liệu
   const [inventoryData, setInventoryData] = useState([]);
   const [historyData, setHistoryData] = useState([]);
   const [nxtData, setNxtData] = useState([]);
 
-  const [permissions, setPermissions] = useState([]);
-  const [isAdmin, setIsAdmin] = useState(false);
+  // [!] 1. STATE QUẢN LÝ TAB ĐANG CHỌN (Mặc định là inventory)
+  const [activeTab, setActiveTab] = useState("inventory");
 
-  // [!] 1. STATE QUẢN LÝ PHÂN TRANG
   const [pagination, setPagination] = useState({
     current: 1,
-    pageSize: 5, // Mặc định 5 dòng
+    pageSize: 5,
+    total: 0,
     showSizeChanger: true,
     pageSizeOptions: ["5", "10", "20", "50"],
+    // showTotal: (total) => `Tổng ${total} dòng`,
   });
 
   const [nxtFilter, setNxtFilter] = useState({
@@ -51,6 +53,10 @@ const ReportPage = () => {
     to: dayjs().endOf("month"),
   });
 
+  const [permissions, setPermissions] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Lấy quyền user
   useEffect(() => {
     const storedUser = localStorage.getItem("user_info");
     if (storedUser) {
@@ -70,41 +76,36 @@ const ReportPage = () => {
 
   const canViewInventory = isAdmin || permissions.includes(PERM_INVENTORY);
   const canViewHistory = isAdmin || permissions.includes(PERM_HISTORY);
+  const canViewReport = canViewInventory || canViewHistory;
 
-  // [!] 2. HÀM XỬ LÝ KHI CHUYỂN TRANG / ĐỔI SIZE
-  const handleTableChange = (newPagination) => {
-    setPagination({
-      ...pagination,
-      current: newPagination.current,
-      pageSize: newPagination.pageSize,
-    });
-  };
+  // --- CÁC HÀM FETCH DỮ LIỆU ---
 
-  // Tải dữ liệu Tồn kho
   const fetchInventory = useCallback(async () => {
     if (!canViewInventory) return;
     setLoading(true);
     try {
       const response = await reportService.getInventoryReport();
-      setInventoryData(response.data || []);
+      const data = response.data || [];
+      setInventoryData(data);
+      setPagination((prev) => ({ ...prev, total: data.length, current: 1 }));
     } catch (error) {}
     setLoading(false);
   }, [canViewInventory]);
 
-  // Tải dữ liệu Lịch sử
   const fetchHistory = useCallback(async () => {
     if (!canViewHistory) return;
     setLoading(true);
     try {
       const response = await reportService.getHistoryReport();
-      setHistoryData(response.data || []);
+      const data = response.data || [];
+      setHistoryData(data);
+      setPagination((prev) => ({ ...prev, total: data.length, current: 1 }));
     } catch (error) {
       message.error("Lỗi tải lịch sử!");
     }
     setLoading(false);
   }, [canViewHistory]);
 
-  // Tải dữ liệu NXT
   const fetchNXT = useCallback(async () => {
     setLoading(true);
     try {
@@ -120,20 +121,36 @@ const ReportPage = () => {
     setLoading(false);
   }, [nxtFilter]);
 
-  const handleTabChange = (key) => {
-    // Reset trang về 1 khi chuyển tab
-    setPagination((prev) => ({ ...prev, current: 1 }));
+  // [!] 2. USE EFFECT QUAN TRỌNG: Tự động gọi API khi tab thay đổi hoặc khi vừa có quyền
+  useEffect(() => {
+    if (activeTab === "inventory" && canViewInventory) {
+      fetchInventory();
+    } else if (activeTab === "history" && canViewHistory) {
+      fetchHistory();
+    } else if (activeTab === "nxt") {
+      fetchNXT();
+    }
+  }, [
+    activeTab,
+    canViewInventory,
+    canViewHistory,
+    fetchInventory,
+    fetchHistory,
+    fetchNXT,
+  ]);
 
-    if (key === "inventory") fetchInventory();
-    if (key === "history") fetchHistory();
-    if (key === "nxt") fetchNXT();
+  // Xử lý khi bấm chuyển Tab
+  const handleTabChange = (key) => {
+    setActiveTab(key); // Cập nhật state, useEffect ở trên sẽ tự chạy
   };
 
-  useEffect(() => {
-    if (canViewInventory) fetchInventory();
-    else if (canViewHistory) fetchHistory();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const handleTableChange = (newPagination) => {
+    setPagination({
+      ...pagination,
+      current: newPagination.current,
+      pageSize: newPagination.pageSize,
+    });
+  };
 
   // --- CẤU HÌNH CỘT ---
   const inventoryColumns = [
@@ -290,7 +307,6 @@ const ReportPage = () => {
             columns={inventoryColumns}
             dataSource={inventoryData}
             loading={loading}
-            // [!] ROW KEY: Dùng index để tránh lỗi duplicate nếu backend trả về trùng ID
             rowKey={(record, index) => index}
             pagination={pagination}
             onChange={handleTableChange}
@@ -416,9 +432,10 @@ const ReportPage = () => {
   return (
     <div style={{ padding: 0 }}>
       <h2>Báo cáo & Thống kê</h2>
-      {canViewInventory || canViewHistory ? (
+      {canViewReport ? (
+        // [!] CHỈ ĐỊNH TAB ĐANG ACTIVE
         <Tabs
-          defaultActiveKey="inventory"
+          activeKey={activeTab}
           items={items}
           onChange={handleTabChange}
         />
