@@ -82,13 +82,12 @@ public class PhieuXuatController {
         }
     }
 
-    // 4. GET ALL
     @GetMapping
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<PhieuXuatHang>> getAll() {
-        return ResponseEntity.ok(phieuXuatService.getAllPhieuXuat());
+    @PreAuthorize("hasAuthority('PERM_PHIEUXUAT_VIEW')")
+    public ResponseEntity<List<PhieuXuatHang>> getAll(Authentication authentication) {
+        // Truyền tên người dùng đang đăng nhập vào Service
+        return ResponseEntity.ok(phieuXuatService.getAllPhieuXuat(authentication.getName()));
     }
-
     // 5. GET BY ID
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")

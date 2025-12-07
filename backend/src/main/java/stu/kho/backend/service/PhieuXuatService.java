@@ -345,4 +345,20 @@ public class PhieuXuatService {
         int newId = khachHangRepository.save(newCus);
         return newId;
     }
+    public List<PhieuXuatHang> getAllPhieuXuat(String username) {
+        NguoiDung user = nguoiDungRepository.findByTenDangNhap(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Kiểm tra quyền hạn của user để quyết định dữ liệu trả về
+        // (Cách đơn giản: Dựa vào Vai trò. Ví dụ: Admin(1), Quản lý(4) xem hết)
+        int roleId = user.getVaiTro().getMaVaiTro();
+
+        if (roleId == 1 || roleId == 4) {
+            // Admin hoặc Quản lý -> Xem tất cả
+            return phieuXuatRepository.findAll();
+        } else {
+            // Giảng viên (5), Nhân viên (2), Thủ kho (3) -> Chỉ xem phiếu mình tạo
+            return phieuXuatRepository.findByNguoiLap(user.getMaNguoiDung());
+        }
+    }
 }

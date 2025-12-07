@@ -18,4 +18,5 @@ public interface PhieuXuatRepository {
     int deleteById(Integer id);
 
     List<PhieuXuatHang> filter(PhieuXuatFilterRequest req);
+    List<PhieuXuatHang> findByNguoiLap(Integer maNguoiLap); // <-- THÊM MỚI
 }

@@ -142,4 +142,9 @@ public class JdbcPhieuXuatRepository implements PhieuXuatRepository {
         sql.append(" ORDER BY NgayLapPhieu DESC");
         return jdbcTemplate.query(sql.toString(), phieuXuatRowMapper, params.toArray());
     }
+    @Override
+    public List<PhieuXuatHang> findByNguoiLap(Integer maNguoiLap) {
+        String sql = "SELECT * FROM phieuxuathang WHERE NguoiLap = ? ORDER BY NgayLapPhieu DESC";
+        return jdbcTemplate.query(sql, phieuXuatRowMapper, maNguoiLap);
+    }
 }
