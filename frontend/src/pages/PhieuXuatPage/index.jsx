@@ -9,15 +9,15 @@ import {
   Input,
   Space,
   message,
-  Select,
   InputNumber,
   Tag,
+  Select,
   Descriptions,
   Divider,
   Row,
   Col,
   Card,
-  DatePicker, // [!] Import thêm
+  DatePicker,
 } from "antd";
 import {
   PlusOutlined,
@@ -52,21 +52,22 @@ const PERM_EDIT_APPROVED = 121;
 const PhieuXuatPage = () => {
   const [listData, setListData] = useState([]);
 
-  // [!] 1. STATE BỘ LỌC
-  const [filter, setFilter] = useState({
-    chungTu: "",
-    trangThai: null,
-    maKho: null,
-    maKH: null, // Lọc theo khách hàng
-    dateRange: null,
-  });
-
+  // State phân trang
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 5,
     total: 0,
     showSizeChanger: true,
     pageSizeOptions: ["5", "10", "20", "50"],
+  });
+
+  // State bộ lọc
+  const [filter, setFilter] = useState({
+    chungTu: "",
+    trangThai: null,
+    maKho: null,
+    maKH: null,
+    dateRange: null,
   });
 
   const [listKho, setListKho] = useState([]);
@@ -91,8 +92,12 @@ const PhieuXuatPage = () => {
 
   const [permissions, setPermissions] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isLecturer, setIsLecturer] = useState(false);
 
-  // [!] 2. HÀM TẢI DỮ LIỆU (CÓ TÌM KIẾM)
+  // [!] 1. STATE LƯU THÔNG TIN NGƯỜI DÙNG HIỆN TẠI
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Hàm tải dữ liệu
   const fetchData = useCallback(
     async (page = 1, pageSize = 5, currentFilter = {}) => {
       setLoading(true);
@@ -136,11 +141,6 @@ const PhieuXuatPage = () => {
             total: data.totalElements,
           }));
         } else if (Array.isArray(data)) {
-          // Client-side pagination fallback
-          data.sort(
-            (a, b) => new Date(b.ngayLapPhieu) - new Date(a.ngayLapPhieu)
-          );
-
           const startIndex = (page - 1) * pageSize;
           const endIndex = startIndex + pageSize;
           setListData(data.slice(startIndex, endIndex));
@@ -169,6 +169,7 @@ const PhieuXuatPage = () => {
         customerService.getAllCustomers(),
         userService.getAllUsers(),
       ]);
+
       if (resKho.status === "fulfilled") setListKho(resKho.value.data || []);
       if (resSP.status === "fulfilled") setListSanPham(resSP.value.data || []);
       if (resKH.status === "fulfilled")
@@ -182,28 +183,42 @@ const PhieuXuatPage = () => {
   useEffect(() => {
     fetchData(1, 5, filter);
     fetchCommonData();
-    try {
-      const storedUser = localStorage.getItem("user_info");
-      if (storedUser) {
+
+    const storedUser = localStorage.getItem("user_info");
+    if (storedUser) {
+      try {
         let user = JSON.parse(storedUser);
-        if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung)
+
+        // Fix lỗi dữ liệu lồng
+        if (
+          user.quyen &&
+          !Array.isArray(user.quyen) &&
+          user.quyen.maNguoiDung
+        ) {
           user = user.quyen;
-        const role = user.vaiTro || user.tenVaiTro || "";
-        setIsAdmin(role.toUpperCase() === "ADMIN");
+        }
+
+        // [!] 2. LƯU THÔNG TIN USER ĐANG ĐĂNG NHẬP
+        setCurrentUser(user);
+
+        const roleName = user.vaiTro || user.tenVaiTro || "";
+        const roleId = user.maVaiTro;
+
+        setIsAdmin(roleName.toUpperCase() === "ADMIN");
+        setIsLecturer(roleName.toUpperCase() === "GIANG_VIEN" || roleId === 5);
+
         let perms = user.dsQuyenSoHuu || user.quyen;
         setPermissions(Array.isArray(perms) ? perms : []);
+      } catch (e) {
+        setPermissions([]);
       }
-    } catch (e) {
-      setPermissions([]);
     }
-     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchData, fetchCommonData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Xử lý tìm kiếm
   const handleSearch = () => {
     fetchData(1, pagination.pageSize, filter);
   };
-
   const handleResetFilter = () => {
     const emptyFilter = {
       chungTu: "",
@@ -215,12 +230,10 @@ const PhieuXuatPage = () => {
     setFilter(emptyFilter);
     fetchData(1, 5, emptyFilter);
   };
-
   const handleTableChange = (newPagination) => {
     fetchData(newPagination.current, newPagination.pageSize, filter);
   };
 
-  // ... (Logic check quyền, helper giữ nguyên) ...
   const checkPerm = (id) => isAdmin || permissions.includes(id);
   const canCreate = checkPerm(PERM_CREATE);
   const canEdit = checkPerm(PERM_EDIT);
@@ -234,14 +247,13 @@ const PhieuXuatPage = () => {
     const user = listUser.find((u) => u.maNguoiDung === userId);
     return user ? user.hoTen : `ID: ${userId}`;
   };
-  const renderStatus = (status) =>
-    status === 1 ? (
-      <Tag color="orange">Chờ duyệt</Tag>
-    ) : status === 2 ? (
-      <Tag color="green">Đã duyệt</Tag>
-    ) : (
-      <Tag color="red">Không duyệt</Tag>
-    );
+
+  const renderStatus = (status) => {
+    if (status === 1) return <Tag color="orange">Chờ duyệt</Tag>;
+    if (status === 2) return <Tag color="green">Đã duyệt</Tag>;
+    if (status === 3) return <Tag color="red">Không duyệt</Tag>;
+    return status;
+  };
 
   const isEditable = (record) => {
     if (isAdmin && record.trangThai !== 3) return true;
@@ -250,7 +262,6 @@ const PhieuXuatPage = () => {
     return false;
   };
 
-  // ... (Các hàm xử lý Form, Modal giữ nguyên) ...
   const handleOpenModal = () => {
     setEditingRecord(null);
     setSelectedKho(null);
@@ -274,13 +285,14 @@ const PhieuXuatPage = () => {
 
   const handleEdit = async (record) => {
     if (record.trangThai === 2) {
-      const diffDays = dayjs().diff(dayjs(record.ngayLapPhieu), "day");
+      const createdDate = dayjs(record.ngayLapPhieu);
+      const diffDays = dayjs().diff(createdDate, "day");
       if (diffDays > 30) {
-        messageApi.error(`Không thể sửa: Quá hạn 30 ngày.`);
+        messageApi.error(`Quá hạn sửa (${diffDays} ngày).`);
         return;
       }
       if (!canEditApproved && !isAdmin) {
-        messageApi.warning("Không có quyền sửa phiếu đã duyệt!");
+        messageApi.warning("Bạn không có quyền sửa phiếu đã duyệt!");
         return;
       }
     } else if (record.trangThai === 3) {
@@ -298,7 +310,7 @@ const PhieuXuatPage = () => {
       form.setFieldsValue(fullData);
       setIsModalVisible(true);
     } catch (error) {
-      messageApi.error("Lỗi tải chi tiết!");
+      messageApi.error("Lỗi tải chi tiết phiếu!");
     }
   };
 
@@ -319,22 +331,29 @@ const PhieuXuatPage = () => {
       .validateFields()
       .then(async (values) => {
         try {
-          if (editingRecord)
+          if (editingRecord) {
             await phieuXuatService.updatePhieuXuat(
               editingRecord.maPhieuXuat,
               values
             );
-          else await phieuXuatService.createPhieuXuat(values);
-          messageApi.success(
-            editingRecord ? "Cập nhật thành công!" : "Tạo mới thành công!"
-          );
+            messageApi.success("Cập nhật phiếu xuất thành công!");
+          } else {
+            if (isLecturer) {
+              await phieuXuatService.createPhieuXuatGiangVien(values);
+            } else {
+              await phieuXuatService.createPhieuXuat(values);
+            }
+            messageApi.success("Tạo thành công!");
+          }
           setIsModalVisible(false);
           fetchData(pagination.current, pagination.pageSize, filter);
         } catch (error) {
           messageApi.error("Có lỗi xảy ra!");
         }
       })
-      .catch(() => {});
+      .catch((info) => {
+        console.log("Validate Failed:", info);
+      });
   };
 
   const handleDelete = (id) => {
@@ -374,86 +393,110 @@ const PhieuXuatPage = () => {
     {
       title: "Ngày Lập",
       dataIndex: "ngayLapPhieu",
-      width: 180,
+      width: "15%",
       render: (val) => dayjs(val).format("DD/MM/YYYY HH:mm"),
     },
     {
       title: "Trạng Thái",
       dataIndex: "trangThai",
-      width: 150,
+      width: "10%",
       render: renderStatus,
     },
     {
       title: "Tổng Tiền",
       dataIndex: "tongTien",
-      width: 150,
-      render: (v) => `${Number(v || 0).toLocaleString()} đ`,
+      width: "10%",
+      render: (value) => `${Number(value || 0).toLocaleString()} đ`,
     },
+    // [!] 3. CẬP NHẬT CỘT KHÁCH HÀNG
     {
       title: "Khách Hàng",
       dataIndex: "maKH",
-      width: 200,
-      render: (id) => listKhachHang.find((i) => i.maKH === id)?.tenKH || id,
+      width: "18%",
+      render: (id, record) => {
+        // Cách 1: Tìm trong danh sách (dành cho Admin có quyền xem KH)
+        const kh = listKhachHang.find((item) => item.maKH === id);
+        if (kh) return kh.tenKH;
+
+        // Cách 2: Nếu là Giảng Viên (không có list KH), hiển thị tên chính họ
+        if (isLecturer && currentUser) {
+          return currentUser.hoTen;
+        }
+
+        // Cách 3: Nếu backend trả về object lồng (record.khachHang.tenKH)
+        if (record.khachHang && record.khachHang.tenKH)
+          return record.khachHang.tenKH;
+
+        return `Mã: ${id}`;
+      },
     },
     {
       title: "Kho Xuất",
       dataIndex: "maKho",
-      width: 150,
-      render: (id) => listKho.find((i) => i.maKho === id)?.tenKho || id,
+      width: "15%",
+      render: (maKho) =>
+        listKho.find((k) => k.maKho === maKho)?.tenKho || `Mã: ${maKho}`,
     },
     {
       title: "Người Duyệt",
       dataIndex: "nguoiDuyet",
-      width: 150,
-      render: (id) => getUserName(id),
+      width: "10%",
+      render: (text, record) =>
+        record.trangThai === 1 ? "---" : text || getUserName(record.nguoiDuyet),
     },
     {
       title: "Hành động",
       key: "action",
-      width: 220,
-      render: (_, record) => (
-        <Space
-          size="small"
-          wrap={false}
-        >
-          <Button
-            icon={<EyeOutlined />}
-            onClick={() => handleViewDetail(record)}
-            title="Xem"
-          />
-          {isEditable(record) && (
+      width: "20%",
+      render: (_, record) => {
+        const isChoDuyet = record.trangThai === 1;
+        const allowEdit = isEditable(record);
+
+        return (
+          <Space
+            size="small"
+            wrap={false}
+            style={{ display: "flex", flexWrap: "nowrap" }}
+          >
             <Button
-              icon={<EditOutlined />}
-              onClick={() => handleEdit(record)}
-              title="Sửa"
+              icon={<EyeOutlined />}
+              onClick={() => handleViewDetail(record)}
+              title="Xem"
             />
-          )}
-          {record.trangThai === 1 && canDelete && (
-            <Button
-              icon={<DeleteOutlined />}
-              danger
-              onClick={() => handleDelete(record.maPhieuXuat)}
-              title="Xóa"
-            />
-          )}
-          {record.trangThai === 1 && canApprove && (
-            <Button
-              icon={<CheckCircleOutlined />}
-              onClick={() => handleApprove(record.maPhieuXuat)}
-              style={{ color: "green", borderColor: "green" }}
-              title="Duyệt"
-            />
-          )}
-          {record.trangThai === 1 && canCancel && (
-            <Button
-              icon={<CloseCircleOutlined />}
-              onClick={() => handleReject(record.maPhieuXuat)}
-              danger
-              title="Hủy"
-            />
-          )}
-        </Space>
-      ),
+            {allowEdit && (
+              <Button
+                icon={<EditOutlined />}
+                onClick={() => handleEdit(record)}
+                title="Sửa"
+              />
+            )}
+            {isChoDuyet && canDelete && (
+              <Button
+                icon={<DeleteOutlined />}
+                danger
+                onClick={() => handleDelete(record.maPhieuXuat)}
+                title="Xóa"
+              />
+            )}
+            {isChoDuyet && canApprove && (
+              <Button
+                icon={<CheckCircleOutlined />}
+                onClick={() => handleApprove(record.maPhieuXuat)}
+                style={{ color: "green", borderColor: "green" }}
+                title="Duyệt"
+              />
+            )}
+            {isChoDuyet && canCancel && (
+              <Button
+                icon={<CloseCircleOutlined />}
+                onClick={() => handleReject(record.maPhieuXuat)}
+                danger
+                title="Hủy"
+              />
+            )}
+          </Space>
+        );
+      },
     },
   ];
 
@@ -461,7 +504,6 @@ const PhieuXuatPage = () => {
     <div>
       {contextHolder}
 
-      {/* [!] 3. THANH TÌM KIẾM */}
       <Card
         style={{ marginBottom: 16 }}
         bodyStyle={{ padding: "16px" }}
@@ -597,7 +639,7 @@ const PhieuXuatPage = () => {
         rowKey="maPhieuXuat"
         pagination={pagination}
         onChange={handleTableChange}
-        scroll={{ x: 1300 }}
+        scroll={{ x: "max-content" }}
       />
 
       {/* Modal Form */}
@@ -613,31 +655,35 @@ const PhieuXuatPage = () => {
           layout="vertical"
         >
           <Space wrap>
-            <Form.Item
-              name="maKH"
-              label="Khách Hàng"
-              rules={[{ required: true, message: "Vui lòng chọn Khách Hàng" }]}
-            >
-              <Select
-                style={{ width: 200 }}
-                placeholder="Chọn Khách Hàng"
-                showSearch
-                optionFilterProp="children"
+            {!isLecturer && (
+              <Form.Item
+                name="maKH"
+                label="Khách Hàng"
+                rules={[
+                  { required: true, message: "Vui lòng chọn khách hàng!" },
+                ]}
               >
-                {listKhachHang.map((kh) => (
-                  <Option
-                    key={kh.maKH}
-                    value={kh.maKH}
-                  >
-                    {kh.tenKH}
-                  </Option>
-                ))}
-              </Select>
-            </Form.Item>
+                <Select
+                  style={{ width: 200 }}
+                  placeholder="Chọn Khách Hàng"
+                  showSearch
+                  optionFilterProp="children"
+                >
+                  {listKhachHang.map((kh) => (
+                    <Option
+                      key={kh.maKH}
+                      value={kh.maKH}
+                    >
+                      {kh.tenKH}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            )}
             <Form.Item
               name="maKho"
               label="Kho Xuất Hàng"
-              rules={[{ required: true, message: "Vui lòng chọn Kho" }]}
+              rules={[{ required: true, message: "Vui lòng chọn kho!" }]}
             >
               <Select
                 style={{ width: 200 }}
@@ -659,13 +705,12 @@ const PhieuXuatPage = () => {
             <Form.Item
               name="chungTu"
               label="Chứng Từ"
-              rules={[{ required: true, message: "Vui lòng nhập Chứng Từ" }]}
+              rules={[{ required: true }]}
             >
-              <Input />
+              <Input placeholder="VD: PX-001" />
             </Form.Item>
           </Space>
 
-          {/* Header Bảng Nhập */}
           <Row
             gutter={8}
             style={{
@@ -702,12 +747,11 @@ const PhieuXuatPage = () => {
                       <Form.Item
                         {...restField}
                         name={[name, "maSP"]}
-                        rules={[
-                          { required: true, message: "Vui lòng chọn Sản Phẩm" },
-                        ]}
+                        rules={[{ required: true, message: "Chọn SP" }]}
                         style={{ marginBottom: 0 }}
                       >
                         <Select
+                          style={{ width: 300 }}
                           placeholder={
                             selectedKho
                               ? "Chọn Sản phẩm"
@@ -733,7 +777,7 @@ const PhieuXuatPage = () => {
                         {...restField}
                         name={[name, "soLuong"]}
                         rules={[
-                          { required: true, message: "Vui lòng nhập Số Lượng" },
+                          { required: true, message: "" },
                           { type: "integer", min: 1, message: ">0" },
                           ({ getFieldValue }) => ({
                             validator(_, value) {
@@ -773,9 +817,7 @@ const PhieuXuatPage = () => {
                       <Form.Item
                         {...restField}
                         name={[name, "donGia"]}
-                        rules={[
-                          { required: true, message: "Vui lòng nhập Giá" },
-                        ]}
+                        rules={[{ required: true, message: "" }]}
                         style={{ marginBottom: 0 }}
                       >
                         <InputNumber
@@ -785,7 +827,7 @@ const PhieuXuatPage = () => {
                             `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
                           }
                           parser={(v) => v.replace(/\$\s?|(,*)/g, "")}
-                          style={{ width: "100%" }}
+                          style={{ width: 150 }}
                           onKeyPress={(e) =>
                             !/[0-9]/.test(e.key) && e.preventDefault()
                           }
@@ -835,7 +877,6 @@ const PhieuXuatPage = () => {
         <p>Bạn có chắc muốn xóa phiếu xuất này?</p>
       </Modal>
 
-      {/* Modal Xem Chi Tiết */}
       <Modal
         title="Chi tiết Phiếu Xuất"
         open={isDetailModalOpen}
@@ -869,8 +910,11 @@ const PhieuXuatPage = () => {
                 {Number(viewingPhieuXuat.tongTien).toLocaleString()} đ
               </Descriptions.Item>
               <Descriptions.Item label="Khách Hàng">
+                {/* [!] HIỂN THỊ TÊN KHÁCH HÀNG TRONG CHI TIẾT */}
                 {listKhachHang.find((kh) => kh.maKH === viewingPhieuXuat.maKH)
-                  ?.tenKH || viewingPhieuXuat.maKH}
+                  ?.tenKH ||
+                  viewingPhieuXuat.khachHang?.tenKH ||
+                  (isLecturer ? currentUser?.hoTen : viewingPhieuXuat.maKH)}
               </Descriptions.Item>
               <Descriptions.Item label="Kho Xuất">
                 {listKho.find((k) => k.maKho === viewingPhieuXuat.maKho)

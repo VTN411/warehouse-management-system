@@ -41,3 +41,7 @@ export const getPhieuXuatById = (id) => {
 export const filterPhieuXuat = (data) => {
   return api.post(`${API_ENDPOINT}/filter`, data);
 };
+
+export const createPhieuXuatGiangVien = (data) => {
+  return api.post(`${API_ENDPOINT}/giangvien/create`, data);
+};

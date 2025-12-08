@@ -25,20 +25,32 @@ const { Option } = Select;
 
 // [!] CẬP NHẬT DANH SÁCH QUYỀN
 const permissionGroups = [
-  // 1. NHÓM QUẢN TRỊ (Dành cho Admin/Quản lý cấp cao)
+  // 1. NHÓM QUẢN TRỊ & HỆ THỐNG
   {
     label: "Quản trị Hệ thống",
     perms: [
-      { id: 10, name: "Tạo Người dùng" },
-      { id: 11, name: "Sửa Người dùng" },
-      { id: 12, name: "Xóa Người dùng" },
-      { id: 14, name: "Xem Danh sách Người dùng" },
-      // Nếu có nhật ký hệ thống
-      // { id: 100, name: "Xem Nhật ký hệ thống" }, 
+      { id: 14, name: "Xem Danh sách User" },
+      { id: 10, name: "Tạo User Mới" },
+      { id: 11, name: "Sửa User" },
+      { id: 12, name: "Xóa User" },
+      { id: 13, name: "Cập nhật Cấu hình" },
+      { id: 100, name: "Xem Nhật ký hệ thống" },
+    ],
+  },
+  
+  // 2. DASHBOARD & BÁO CÁO
+  {
+    label: "Báo cáo & Thống kê",
+    perms: [
+      { id: 130, name: "Xem Dashboard Tổng quan" },
+      { id: 30, name: "Xem Báo cáo Tổng hợp" },
+      { id: 103, name: "Xem Báo cáo Tồn kho" },
+      { id: 101, name: "Xem Lịch sử Giao dịch" },
+      { id: 131, name: "Xem Báo cáo Nhập-Xuất-Tồn" },
     ],
   },
 
-  // 2. NHÓM DANH MỤC
+  // 3. NHÓM DANH MỤC
   {
     label: "Quản lý Sản phẩm",
     perms: [
@@ -48,7 +60,7 @@ const permissionGroups = [
     ],
   },
   {
-    label: "Quản lý Loại hàng", // [!] MỚI THÊM
+    label: "Quản lý Loại hàng",
     perms: [
       { id: 140, name: "Xem Loại hàng" },
       { id: 141, name: "Tạo Loại hàng" },
@@ -57,26 +69,21 @@ const permissionGroups = [
     ],
   },
   {
-    label: "Quản lý Kho",
+    label: "Quản lý Kho hàng",
     perms: [
-      { id: 70, name: "Xem Kho" },
+      { id: 70, name: "Xem Danh sách Kho" },
       { id: 71, name: "Tạo Kho" },
       { id: 72, name: "Sửa Kho" },
       { id: 73, name: "Xóa Kho" },
     ],
   },
   {
-    label: "Nhà Cung Cấp",
+    label: "Đối tác (NCC & Khách)",
     perms: [
-      { id: 60, name: "Xem NCC" },
+      { id: 60, name: "Xem Nhà Cung Cấp" },
       { id: 61, name: "Tạo NCC" },
       { id: 62, name: "Sửa NCC" },
       { id: 63, name: "Xóa NCC" },
-    ],
-  },
-  {
-    label: "Khách Hàng",
-    perms: [
       { id: 90, name: "Xem Khách Hàng" },
       { id: 91, name: "Tạo Khách Hàng" },
       { id: 92, name: "Sửa Khách Hàng" },
@@ -84,47 +91,41 @@ const permissionGroups = [
     ],
   },
 
-  // 3. NHÓM NGHIỆP VỤ KHO
+  // 4. NGHIỆP VỤ KHO
   {
-    label: "Phiếu Nhập",
+    label: "Nhập Kho",
     perms: [
+      { id: 26, name: "Xem DS Phiếu Nhập" },
       { id: 20, name: "Tạo Phiếu Nhập" },
       { id: 21, name: "Sửa Phiếu Nhập (Chờ duyệt)" },
       { id: 22, name: "Xóa Phiếu Nhập" },
       { id: 40, name: "Duyệt Phiếu Nhập" },
       { id: 41, name: "Hủy Phiếu Nhập" },
-      { id: 120, name: "Sửa Phiếu Nhập Đã Duyệt (30 ngày)" }, // [!] MỚI
+      { id: 120, name: "Sửa Phiếu Nhập Đã Duyệt (30 ngày)" },
+      { id: 31, name: "Duyệt Đơn Đặt Hàng (PO)" },
     ],
   },
   {
-    label: "Phiếu Xuất",
+    label: "Xuất Kho",
     perms: [
+      { id: 27, name: "Xem DS Phiếu Xuất" },
       { id: 23, name: "Tạo Phiếu Xuất" },
       { id: 24, name: "Sửa Phiếu Xuất (Chờ duyệt)" },
       { id: 25, name: "Xóa Phiếu Xuất" },
       { id: 42, name: "Duyệt Phiếu Xuất" },
       { id: 43, name: "Hủy Phiếu Xuất" },
-      { id: 121, name: "Sửa Phiếu Xuất Đã Duyệt (30 ngày)" }, // [!] MỚI
+      { id: 121, name: "Sửa Phiếu Xuất Đã Duyệt (30 ngày)" },
+      { id: 32, name: "Duyệt Đơn Bán Hàng (SO)" },
     ],
   },
   {
-    label: "Điều Chuyển Kho", // [!] MỚI
+    label: "Điều Chuyển Kho",
     perms: [
-      { id: 110, name: "Xem Điều chuyển" },
-      { id: 111, name: "Tạo Điều chuyển" },
-      { id: 112, name: "Duyệt Điều chuyển" },
-      { id: 113, name: "Hủy Điều chuyển" },
-      { id: 114, name: "Sửa Điều chuyển Đã Duyệt" },
-    ],
-  },
-
-  // 4. NHÓM BÁO CÁO
-  {
-    label: "Báo cáo & Thống kê", // [!] MỚI
-    perms: [
-      { id: 100, name: "Xem Báo cáo Tồn kho" },
-      { id: 101, name: "Xem Lịch sử Giao dịch" },
-      // { id: 30, name: "Xem Dashboard" }, // Nếu muốn phân quyền xem Dashboard
+      { id: 110, name: "Xem Điều Chuyển" },
+      { id: 111, name: "Tạo Điều Chuyển" },
+      { id: 112, name: "Duyệt Điều Chuyển" },
+      { id: 113, name: "Hủy Điều Chuyển" },
+      { id: 114, name: "Sửa Điều Chuyển Đã Duyệt" },
     ],
   },
 ];
@@ -147,6 +148,8 @@ const UserManagementPage = () => {
     { MaVaiTro: 2, TenVaiTro: "NHAN_VIEN" },
     { MaVaiTro: 3, TenVaiTro: "THUKHO" },
     { MaVaiTro: 4, TenVaiTro: "QUAN_LY" },
+    { MaVaiTro: 5, TenVaiTro: "GIANG_VIEN" },
+
   ];
 
   const fetchUsers = useCallback(async () => {
