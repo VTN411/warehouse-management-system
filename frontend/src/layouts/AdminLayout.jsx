@@ -9,7 +9,7 @@ import {
   UserOutlined,
   LogoutOutlined,
   HistoryOutlined,
-  SwapOutlined, // Icon Điều chuyển
+  SwapOutlined,
 } from "@ant-design/icons";
 import { Layout, Menu, theme, Avatar, Dropdown, Space, App } from "antd";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
@@ -46,6 +46,7 @@ const AdminLayout = () => {
     if (storedUser) {
       try {
         user = JSON.parse(storedUser);
+        // Fix lỗi dữ liệu lồng
         if (
           user.quyen &&
           !Array.isArray(user.quyen) &&
@@ -54,6 +55,7 @@ const AdminLayout = () => {
           user = user.quyen;
         }
         setCurrentUser(user);
+
         const p1 = Array.isArray(user.quyen) ? user.quyen : [];
         const p2 = Array.isArray(user.dsQuyenSoHuu) ? user.dsQuyenSoHuu : [];
         perms = [...new Set([...p1, ...p2])];
@@ -70,7 +72,8 @@ const AdminLayout = () => {
       return perms.includes(idCode) || perms.includes(stringCode);
     };
 
-    // 1. Danh mục
+    // --- XÂY DỰNG MENU ---
+
     const danhMucChildren = [
       ...(hasPerm(140, "PERM_CATEGORY_VIEW")
         ? [getItem("Loại hàng", "/categories")]
@@ -87,7 +90,6 @@ const AdminLayout = () => {
         : []),
     ];
 
-    // 2. Nhập xuất (Chỉ còn Nhập và Xuất)
     const nhapXuatChildren = [
       ...(hasPerm(20, "PERM_PHIEUNHAP_CREATE") ||
       hasPerm(null, "PERM_PHIEUNHAP_VIEW")
@@ -99,9 +101,11 @@ const AdminLayout = () => {
         : []),
     ];
 
-    // 3. Tổng hợp Menu
     const dynamicMenu = [
-      getItem("Dashboard", "/dashboard", <PieChartOutlined />),
+      // [!] ĐÃ SỬA: CHỈ HIỂN THỊ NẾU CÓ QUYỀN 130
+      ...(hasPerm(130, "PERM_DASHBOARD_VIEW")
+        ? [getItem("Dashboard", "/dashboard", <PieChartOutlined />)]
+        : []),
 
       ...(danhMucChildren.length > 0
         ? [getItem("Danh mục", "sub1", <DesktopOutlined />, danhMucChildren)]
@@ -111,8 +115,6 @@ const AdminLayout = () => {
         ? [getItem("Nhập xuất", "sub2", <TeamOutlined />, nhapXuatChildren)]
         : []),
 
-      // [!] ĐƯA ĐIỀU CHUYỂN RA NGOÀI (Ngang hàng)
-      // Kiểm tra quyền ID 110 (Xem) hoặc 111 (Tạo)
       ...(hasPerm(110, "PERM_TRANSFER_VIEW") ||
       hasPerm(111, "PERM_TRANSFER_CREATE")
         ? [getItem("Điều chuyển", "/stock-transfer", <SwapOutlined />)]
@@ -188,6 +190,7 @@ const AdminLayout = () => {
           onClick={onClickMenu}
         />
       </Sider>
+
       <Layout>
         <Header
           style={{
@@ -226,6 +229,7 @@ const AdminLayout = () => {
             </Space>
           </Dropdown>
         </Header>
+
         <Content style={{ margin: "16px" }}>
           <div
             style={{

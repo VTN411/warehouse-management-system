@@ -10,7 +10,6 @@ import {
   Button,
   Space,
   Table,
-  message,
   Spin,
   Tabs,
 } from "antd";
@@ -38,6 +37,9 @@ import * as dashboardService from "../../services/dashboard.service";
 
 const { RangePicker } = DatePicker;
 
+// [!] 1. ĐỊNH NGHĨA QUYỀN DASHBOARD
+const PERM_DASHBOARD_VIEW = 130;
+
 const Dashboard = () => {
   const [loading, setLoading] = useState(false);
 
@@ -57,11 +59,45 @@ const Dashboard = () => {
     to: dayjs().endOf("month"),
   });
 
+  // [!] 2. STATE PHÂN QUYỀN
+  const [permissions, setPermissions] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // [!] 3. LẤY QUYỀN TỪ LOCALSTORAGE
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user_info");
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        // Fix dữ liệu lồng nếu có
+        const userData =
+          user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung
+            ? user.quyen
+            : user;
+
+        const role = userData.vaiTro || userData.tenVaiTro || "";
+        setIsAdmin(role.toUpperCase() === "ADMIN");
+
+        let perms = userData.dsQuyenSoHuu || userData.quyen || [];
+        if (!Array.isArray(perms)) perms = [];
+        setPermissions(perms);
+      } catch (e) {
+        setPermissions([]);
+      }
+    }
+  }, []);
+
+  // Biến kiểm tra quyền
+  const canViewDashboard = isAdmin || permissions.includes(PERM_DASHBOARD_VIEW);
+
   // Hàm format tiền tệ
   const formatCurrency = (value) => `${Number(value || 0).toLocaleString()} đ`;
 
   // 1. Hàm tải dữ liệu tổng hợp
   const fetchData = useCallback(async () => {
+    // [!] Nếu không có quyền thì không gọi API để tránh lỗi 403 ngầm
+    if (!canViewDashboard) return;
+
     setLoading(true);
     try {
       const dateParams = {
@@ -98,14 +134,17 @@ const Dashboard = () => {
         );
     } catch (error) {
       console.error("Dashboard Error:", error);
-      message.error("Không thể tải dữ liệu Dashboard.");
+      // message.error("Không thể tải dữ liệu Dashboard.");
     }
     setLoading(false);
-  }, [filter]);
+  }, [filter, canViewDashboard]);
 
+  // [!] CHỈ GỌI API KHI CÓ QUYỀN
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (canViewDashboard) {
+      fetchData();
+    }
+  }, [fetchData, canViewDashboard]);
 
   // Xử lý khi đổi ngày
   const handleDateChange = (dates) => {
@@ -134,27 +173,49 @@ const Dashboard = () => {
 
   // Cấu hình cột cho bảng Cảnh báo
   const alertColumns = [
-    { title: 'Mã', dataIndex: 'maSP', width: 60 },
-    { title: 'Tên Sản Phẩm', dataIndex: 'tenSP' },
-    { 
-      title: 'Tồn Kho', 
-      key: 'tonKho', // Bỏ dataIndex cứng
+    { title: "Mã", dataIndex: "maSP", width: 60 },
+    { title: "Tên Sản Phẩm", dataIndex: "tenSP" },
+    {
+      title: "Tồn Kho",
+      key: "tonKho", // Bỏ dataIndex cứng
       width: 120,
       render: (_, record) => {
         // [!] Fix logic: Kiểm tra xem backend trả về 'soLuongTon' hay 'tonHienTai'
-        // Nếu giá trị là 0 thì vẫn phải hiển thị (dùng !== undefined)
         let ton = 0;
         if (record.soLuongTon !== undefined) ton = record.soLuongTon;
         else if (record.tonHienTai !== undefined) ton = record.tonHienTai;
-        
+
         return (
-          <span style={{ color: ton <= 0 ? 'red' : 'orange', fontWeight: 'bold' }}>
-            {ton} {record.mucTonToiThieu ? `/ Min: ${record.mucTonToiThieu}` : ''}
+          <span
+            style={{ color: ton <= 0 ? "red" : "orange", fontWeight: "bold" }}
+          >
+            {ton}{" "}
+            {record.mucTonToiThieu ? `/ Min: ${record.mucTonToiThieu}` : ""}
           </span>
         );
-      } 
-    }
+      },
+    },
   ];
+
+  // [!] 4. HIỂN THỊ NẾU KHÔNG CÓ QUYỀN
+  if (!canViewDashboard) {
+    return (
+      <div style={{ padding: 24 }}>
+        <Card>
+          <div style={{ textAlign: "center", padding: "20px" }}>
+            <WarningOutlined
+              style={{ fontSize: 40, color: "#faad14", marginBottom: 16 }}
+            />
+            <h3>Bạn không có quyền xem Dashboard</h3>
+            <p>
+              Vui lòng liên hệ Admin để được cấp quyền (ID:{" "}
+              {PERM_DASHBOARD_VIEW}).
+            </p>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: "0 10px" }}>
@@ -421,6 +482,19 @@ const Dashboard = () => {
                     },
                     {
                       key: "2",
+                      label: `Tồn kho âm (${alerts.tonAm?.length || 0})`,
+                      children: (
+                        <Table
+                          dataSource={alerts.tonAm}
+                          columns={alertColumns}
+                          rowKey="maSP"
+                          pagination={{ pageSize: 5 }}
+                          size="small"
+                        />
+                      ),
+                    },
+                    {
+                      key: "3",
                       label: `Hết hạn sử dụng (${
                         alerts.hetHanSuDung?.length || 0
                       })`,
