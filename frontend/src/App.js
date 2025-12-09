@@ -37,18 +37,18 @@ function App() {
           <Route element={<PrivateRoute />}>
             <Route element={<AdminLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/admin/users" element={<UserManagementPage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/stock-in" element={<PhieuNhapPage />} />
-              <Route path="/products" element={<ProductPage />} />
-              <Route path="/warehouses" element={<WarehousePage />} />
-              <Route path="/suppliers" element={<SupplierPage />} />
-              <Route path="/stock-out" element={<PhieuXuatPage />} />
-              <Route path="/customers" element={<CustomerPage />} />
-              <Route path="/system-logs" element={<SystemLogPage />} />
-              <Route path="/reports" element={<ReportPage />} />
-              <Route path="/stock-transfer" element={<TransferPage />} />
-              <Route path="/categories" element={<CategoryPage />} />
+              <Route path="/QuanLyNguoiDung" element={<UserManagementPage />} />
+              <Route path="/HoSo" element={<ProfilePage />} />
+              <Route path="/Nhap" element={<PhieuNhapPage />} />
+              <Route path="/SanPham" element={<ProductPage />} />
+              <Route path="/Kho" element={<WarehousePage />} />
+              <Route path="/NhaCungCap" element={<SupplierPage />} />
+              <Route path="/Xuat" element={<PhieuXuatPage />} />
+              <Route path="/KhachHang" element={<CustomerPage />} />
+              <Route path="/NhatKyHeThong" element={<SystemLogPage />} />
+              <Route path="/BaoCao" element={<ReportPage />} />
+              <Route path="/DieuChuyen" element={<TransferPage />} />
+              <Route path="/LoaiHang" element={<CategoryPage />} />
             </Route>
           </Route>
 

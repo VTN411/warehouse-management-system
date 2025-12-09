@@ -5,15 +5,17 @@ import { Table, message, Tag, Card, DatePicker, Space, Button } from "antd";
 import {
   HistoryOutlined,
   ReloadOutlined,
+  LockOutlined,
 } from "@ant-design/icons";
 import * as logService from "../../services/log.service";
-import * as userService from "../../services/user.service"; // [!] Import UserService
+import * as userService from "../../services/user.service";
 import dayjs from "dayjs";
 
 const { RangePicker } = DatePicker;
 
-// [!] DANH SÁCH TÊN QUYỀN (Copy từ UserManagement sang để tra cứu)
-// Nếu bạn muốn chuẩn hơn, hãy tạo một file constants/permissions.js để dùng chung
+// [!] ID QUYỀN XEM NHẬT KÝ
+const PERM_VIEW_LOG = 100;
+
 const PERMISSION_MAP = {
   10: "Tạo User",
   11: "Sửa User",
@@ -48,7 +50,7 @@ const PERMISSION_MAP = {
   91: "Tạo KH",
   92: "Sửa KH",
   93: "Xóa KH",
-  100: "Xem Tồn Kho",
+  100: "Xem Nhật Ký Hệ Thống",
   101: "Xem Lịch Sử GD",
   110: "Xem Điều Chuyển",
   111: "Tạo Điều Chuyển",
@@ -57,6 +59,8 @@ const PERMISSION_MAP = {
   114: "Sửa ĐC đã duyệt",
   120: "Sửa P.Nhập đã duyệt",
   121: "Sửa P.Xuất đã duyệt",
+  130: "Xem Dashboard",
+  131: "Xem Báo Cáo NXT",
   140: "Xem Loại Hàng",
   141: "Tạo Loại Hàng",
   142: "Sửa Loại Hàng",
@@ -68,10 +72,7 @@ const SystemLogPage = () => {
   const [displayedLogs, setDisplayedLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
-
-  // [!] STATE DANH SÁCH USER ĐỂ TRA CỨU TÊN
   const [userMap, setUserMap] = useState({});
-
   const [dateRange, setDateRange] = useState(null);
 
   const [tableParams, setTableParams] = useState({
@@ -79,32 +80,57 @@ const SystemLogPage = () => {
       current: 1,
       pageSize: 10,
       showSizeChanger: true,
-      pageSizeOptions: ["10", "20", "50", "100"],
+      pageSizeOptions: ["10", "20", "50"],
       showTotal: (total) => `Tổng cộng ${total} dòng`,
     },
   });
 
-  // Hàm lấy logs và danh sách user
+  // [!] State Phân quyền
+  const [permissions, setPermissions] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // 1. LẤY QUYỀN
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user_info");
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        const userData =
+          user.quyen && !Array.isArray(user.quyen) ? user.quyen : user;
+        const role = userData.vaiTro || userData.tenVaiTro || "";
+
+        setIsAdmin(role.toUpperCase() === "ADMIN");
+        let perms = userData.dsQuyenSoHuu || userData.quyen || [];
+        if (!Array.isArray(perms)) perms = [];
+        setPermissions(perms);
+      } catch (e) {
+        setPermissions([]);
+      }
+    }
+  }, []);
+
+  // [!] BIẾN KIỂM TRA QUYỀN
+  const canViewLog = isAdmin || permissions.includes(PERM_VIEW_LOG);
+
+  // 2. HÀM TẢI DATA (Chỉ chạy khi có quyền)
   const fetchData = useCallback(async () => {
+    if (!canViewLog) return; // Chặn gọi API nếu không có quyền
+
     setLoading(true);
     try {
-      // Gọi song song 2 API
       const [resLogs, resUsers] = await Promise.allSettled([
         logService.getAllLogs(),
         userService.getAllUsers(),
       ]);
 
-      // Xử lý Logs
       let dataLogs = [];
       if (resLogs.status === "fulfilled") {
         dataLogs = resLogs.value.data || [];
-        // Sắp xếp mới nhất lên đầu
         dataLogs.sort(
           (a, b) => new Date(b.thoiGianThucHien) - new Date(a.thoiGianThucHien)
         );
       }
 
-      // Xử lý Users -> Chuyển thành Map { id: "Tên User" } để tra cứu cho nhanh
       let map = {};
       if (resUsers.status === "fulfilled") {
         (resUsers.value.data || []).forEach((u) => {
@@ -114,7 +140,6 @@ const SystemLogPage = () => {
       setUserMap(map);
       setLogs(dataLogs);
       setDisplayedLogs(dataLogs);
-
       setTableParams((prev) => ({
         ...prev,
         pagination: { ...prev.pagination, total: dataLogs.length },
@@ -123,13 +148,13 @@ const SystemLogPage = () => {
       messageApi.error("Lỗi tải dữ liệu!");
     }
     setLoading(false);
-  }, [messageApi]);
+  }, [messageApi, canViewLog]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (canViewLog) fetchData();
+  }, [fetchData, canViewLog]);
 
-  // Logic lọc theo ngày
+  // Logic lọc ngày (Giữ nguyên)
   useEffect(() => {
     if (!dateRange) {
       setDisplayedLogs(logs);
@@ -139,7 +164,6 @@ const SystemLogPage = () => {
       }));
       return;
     }
-
     const [start, end] = dateRange;
     const filtered = logs.filter((log) => {
       const logDate = dayjs(log.thoiGianThucHien);
@@ -148,7 +172,6 @@ const SystemLogPage = () => {
         (logDate.isSame(end, "day") || logDate.isBefore(end, "day"))
       );
     });
-
     setDisplayedLogs(filtered);
     setTableParams((prev) => ({
       ...prev,
@@ -160,37 +183,24 @@ const SystemLogPage = () => {
     setTableParams({ pagination, filters, ...sorter });
   };
 
-  // [!] HÀM FORMAT NỘI DUNG HÀNH ĐỘNG
   const formatActionText = (text) => {
     if (!text) return "";
-
-    // Regex bắt chuỗi: "MaChucNang: 100" -> thay bằng tên quyền
     let newText = text.replace(/MaChucNang:\s*(\d+)/g, (match, id) => {
       const name = PERMISSION_MAP[id];
       return name ? `Quyền: ${name}` : match;
     });
-
-    // Regex bắt chuỗi: "user (MaNguoiDung: 7)" hoặc "MaNguoiDung: 7" -> thay bằng tên user
-    // (Lưu ý: userMap[7] = "Nguyen Van A (admin)")
     newText = newText.replace(/MaNguoiDung:\s*(\d+)/g, (match, id) => {
       const userName = userMap[id];
       return userName ? `User: ${userName}` : match;
     });
-
     return newText;
   };
 
   const columns = [
-    {
-      title: "Mã HD",
-      dataIndex: "maHD",
-      key: "maHD",
-      width: 80,
-    },
+    { title: "Mã HD", dataIndex: "maHD", width: 80 },
     {
       title: "Người Thực Hiện",
       dataIndex: "tenDangNhap",
-      key: "tenDangNhap",
       width: 200,
       render: (text, record) => (
         <div>
@@ -202,7 +212,6 @@ const SystemLogPage = () => {
     {
       title: "Hành Động",
       dataIndex: "hanhDong",
-      key: "hanhDong",
       render: (text) => {
         let color = "blue";
         if (
@@ -219,8 +228,6 @@ const SystemLogPage = () => {
         )
           color = "green";
         if (text.includes("Cập nhật") || text.includes("Sửa")) color = "orange";
-
-        // [!] GỌI HÀM FORMAT ĐỂ HIỂN THỊ TÊN THAY VÌ ID
         return (
           <Tag
             color={color}
@@ -234,11 +241,28 @@ const SystemLogPage = () => {
     {
       title: "Thời Gian",
       dataIndex: "thoiGianThucHien",
-      key: "thoiGianThucHien",
       width: 180,
       render: (text) => dayjs(text).format("DD/MM/YYYY HH:mm:ss"),
     },
   ];
+
+  // [!] 3. NẾU KHÔNG CÓ QUYỀN -> ẨN HOẶC HIỆN THÔNG BÁO
+  if (!canViewLog) {
+    return (
+      <div style={{ padding: 24, textAlign: "center" }}>
+        <Card>
+          <Space
+            direction="vertical"
+            align="center"
+          >
+            <LockOutlined style={{ fontSize: 40, color: "red" }} />
+            <h3>Bạn không có quyền truy cập Nhật Ký Hệ Thống.</h3>
+            <p>Vui lòng liên hệ Quản trị viên (Quyền ID: {PERM_VIEW_LOG}).</p>
+          </Space>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: 24 }}>

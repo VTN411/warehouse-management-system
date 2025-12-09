@@ -26,17 +26,17 @@ const { Option } = Select;
 // [!] CẬP NHẬT DANH SÁCH QUYỀN
 const permissionGroups = [
   // 1. NHÓM QUẢN TRỊ & HỆ THỐNG
-  {
-    label: "Quản trị Hệ thống",
-    perms: [
-      { id: 14, name: "Xem Danh sách User" },
-      { id: 10, name: "Tạo User Mới" },
-      { id: 11, name: "Sửa User" },
-      { id: 12, name: "Xóa User" },
-      { id: 13, name: "Cập nhật Cấu hình" },
-      { id: 100, name: "Xem Nhật ký hệ thống" },
-    ],
-  },
+  // {
+  //   label: "Quản trị Hệ thống",
+  //   perms: [
+  //     { id: 14, name: "Xem Danh sách User" },
+  //     { id: 10, name: "Tạo User Mới" },
+  //     { id: 11, name: "Sửa User" },
+  //     { id: 12, name: "Xóa User" },
+  //     { id: 13, name: "Cập nhật Cấu hình" },
+  //     { id: 100, name: "Xem Nhật ký hệ thống" },
+  //   ],
+  // },
   
   // 2. DASHBOARD & BÁO CÁO
   {

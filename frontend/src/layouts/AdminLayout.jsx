@@ -22,8 +22,8 @@ function getItem(label, key, icon, children) {
 }
 
 const adminMenuItems = [
-  getItem("Quản lý Người dùng", "/admin/users", <UserOutlined />),
-  getItem("Nhật ký Hệ thống", "/system-logs", <HistoryOutlined />),
+  getItem("Quản lý Người dùng", "/QuanLyNguoiDung", <UserOutlined />),
+  getItem("Nhật ký Hệ thống", "/NhatKyHeThong", <HistoryOutlined />),
 ];
 
 const AdminLayout = () => {
@@ -76,28 +76,28 @@ const AdminLayout = () => {
 
     const danhMucChildren = [
       ...(hasPerm(140, "PERM_CATEGORY_VIEW")
-        ? [getItem("Loại hàng", "/categories")]
+        ? [getItem("Loại hàng", "/LoaiHang")]
         : []),
-      getItem("Sản phẩm", "/products"),
+      getItem("Sản phẩm", "/SanPham"),
       ...(hasPerm(70, "PERM_KHO_VIEW")
-        ? [getItem("Kho hàng", "/warehouses")]
+        ? [getItem("Kho hàng", "/Kho")]
         : []),
       ...(hasPerm(60, "PERM_SUPPLIER_VIEW")
-        ? [getItem("Nhà cung cấp", "/suppliers")]
+        ? [getItem("Nhà cung cấp", "/NhaCungCap")]
         : []),
       ...(hasPerm(90, "PERM_CUSTOMER_VIEW")
-        ? [getItem("Khách hàng", "/customers")]
+        ? [getItem("Khách hàng", "/KhachHang")]
         : []),
     ];
 
     const nhapXuatChildren = [
       ...(hasPerm(20, "PERM_PHIEUNHAP_CREATE") ||
       hasPerm(null, "PERM_PHIEUNHAP_VIEW")
-        ? [getItem("Nhập kho", "/stock-in")]
+        ? [getItem("Nhập kho", "/Nhap")]
         : []),
       ...(hasPerm(23, "PERM_PHIEUXUAT_CREATE") ||
       hasPerm(null, "PERM_PHIEUXUAT_VIEW")
-        ? [getItem("Xuất kho", "/stock-out")]
+        ? [getItem("Xuất kho", "/Xuat")]
         : []),
     ];
 
@@ -117,17 +117,18 @@ const AdminLayout = () => {
 
       ...(hasPerm(110, "PERM_TRANSFER_VIEW") ||
       hasPerm(111, "PERM_TRANSFER_CREATE")
-        ? [getItem("Điều chuyển", "/stock-transfer", <SwapOutlined />)]
+        ? [getItem("Điều chuyển", "/DieuChuyen", <SwapOutlined />)]
         : []),
 
       ...(hasPerm(30, "PERM_VIEW_REPORT")
-        ? [getItem("Báo cáo", "/reports", <FileOutlined />)]
+        ? [getItem("Báo cáo", "/BaoCao", <FileOutlined />)]
         : []),
     ];
 
     if (hasPerm(10, "PERM_ADMIN_CREATE_USER")) {
       dynamicMenu.push(...adminMenuItems);
     }
+    
 
     setMenuItems(dynamicMenu);
   }, []);
