@@ -141,6 +141,10 @@ const PhieuXuatPage = () => {
             total: data.totalElements,
           }));
         } else if (Array.isArray(data)) {
+
+          data.sort(
+            (a, b) => new Date(b.ngayLapPhieu) - new Date(a.ngayLapPhieu)
+          );
           const startIndex = (page - 1) * pageSize;
           const endIndex = startIndex + pageSize;
           setListData(data.slice(startIndex, endIndex));
@@ -441,8 +445,7 @@ const PhieuXuatPage = () => {
       title: "Người Duyệt",
       dataIndex: "nguoiDuyet",
       width: "10%",
-      render: (text, record) =>
-        record.trangThai === 1 ? "---" : text || getUserName(record.nguoiDuyet),
+       render: (id) => getUserName(id),
     },
     {
       title: "Hành động",
@@ -705,8 +708,7 @@ const PhieuXuatPage = () => {
             <Form.Item
               name="chungTu"
               label="Chứng Từ"
-              rules={[{ required: true }]}
-            >
+              rules={[{ required: true, message: "Vui lòng nhập Chứng Từ " }]}            >
               <Input placeholder="VD: PX-001" />
             </Form.Item>
           </Space>
@@ -793,7 +795,7 @@ const PhieuXuatPage = () => {
                               if (inStock && value > inStock.soLuongTon)
                                 return Promise.reject(
                                   new Error(
-                                    `Quá tồn kho (${inStock.soLuongTon})`
+                                    `Không dủ hàng trong kho`
                                   )
                                 );
                               return Promise.resolve();

@@ -7,15 +7,20 @@ import {
   ReloadOutlined,
   LockOutlined,
 } from "@ant-design/icons";
+// [!] Import đầy đủ các service để lấy tên
 import * as logService from "../../services/log.service";
 import * as userService from "../../services/user.service";
+import * as productService from "../../services/product.service";
+import * as customerService from "../../services/customer.service";
+import * as supplierService from "../../services/supplier.service";
+import * as warehouseService from "../../services/warehouse.service";
 import dayjs from "dayjs";
 
 const { RangePicker } = DatePicker;
 
-// [!] ID QUYỀN XEM NHẬT KÝ
 const PERM_VIEW_LOG = 100;
 
+// Map tên quyền (giữ nguyên)
 const PERMISSION_MAP = {
   10: "Tạo User",
   11: "Sửa User",
@@ -52,6 +57,7 @@ const PERMISSION_MAP = {
   93: "Xóa KH",
   100: "Xem Nhật Ký Hệ Thống",
   101: "Xem Lịch Sử GD",
+  103: "Xem Báo Cáo Tồn",
   110: "Xem Điều Chuyển",
   111: "Tạo Điều Chuyển",
   112: "Duyệt ĐC",
@@ -72,8 +78,16 @@ const SystemLogPage = () => {
   const [displayedLogs, setDisplayedLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
-  const [userMap, setUserMap] = useState({});
   const [dateRange, setDateRange] = useState(null);
+
+  // [!] State lưu các Map để tra cứu tên
+  const [dataMaps, setDataMaps] = useState({
+    users: {},
+    products: {},
+    customers: {},
+    suppliers: {},
+    warehouses: {},
+  });
 
   const [tableParams, setTableParams] = useState({
     pagination: {
@@ -85,11 +99,9 @@ const SystemLogPage = () => {
     },
   });
 
-  // [!] State Phân quyền
   const [permissions, setPermissions] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // 1. LẤY QUYỀN
   useEffect(() => {
     const storedUser = localStorage.getItem("user_info");
     if (storedUser) {
@@ -98,7 +110,6 @@ const SystemLogPage = () => {
         const userData =
           user.quyen && !Array.isArray(user.quyen) ? user.quyen : user;
         const role = userData.vaiTro || userData.tenVaiTro || "";
-
         setIsAdmin(role.toUpperCase() === "ADMIN");
         let perms = userData.dsQuyenSoHuu || userData.quyen || [];
         if (!Array.isArray(perms)) perms = [];
@@ -109,20 +120,32 @@ const SystemLogPage = () => {
     }
   }, []);
 
-  // [!] BIẾN KIỂM TRA QUYỀN
   const canViewLog = isAdmin || permissions.includes(PERM_VIEW_LOG);
 
-  // 2. HÀM TẢI DATA (Chỉ chạy khi có quyền)
+  // HÀM TẢI DỮ LIỆU & TẠO MAP
   const fetchData = useCallback(async () => {
-    if (!canViewLog) return; // Chặn gọi API nếu không có quyền
+    if (!canViewLog) return;
 
     setLoading(true);
     try {
-      const [resLogs, resUsers] = await Promise.allSettled([
+      // [!] Gọi song song tất cả các API cần thiết
+      const [
+        resLogs,
+        resUsers,
+        resProducts,
+        resCustomers,
+        resSuppliers,
+        resWarehouses,
+      ] = await Promise.allSettled([
         logService.getAllLogs(),
         userService.getAllUsers(),
+        productService.getAllProducts(), // Lấy cả SP đã xóa mềm nếu API hỗ trợ
+        customerService.getAllCustomers(),
+        supplierService.getAllSuppliers(),
+        warehouseService.getAllWarehouses(),
       ]);
 
+      // 1. Xử lý Logs
       let dataLogs = [];
       if (resLogs.status === "fulfilled") {
         dataLogs = resLogs.value.data || [];
@@ -131,13 +154,56 @@ const SystemLogPage = () => {
         );
       }
 
-      let map = {};
+      // 2. Tạo Map User { id: "Tên (Username)" }
+      let uMap = {};
       if (resUsers.status === "fulfilled") {
-        (resUsers.value.data || []).forEach((u) => {
-          map[u.maNguoiDung] = `${u.hoTen} (${u.tenDangNhap})`;
-        });
+        (resUsers.value.data || []).forEach(
+          (u) => (uMap[u.maNguoiDung] = `${u.hoTen} (${u.tenDangNhap})`)
+        );
       }
-      setUserMap(map);
+
+      // 3. Tạo Map Sản phẩm { id: "Tên SP" }
+      let pMap = {};
+      if (resProducts.status === "fulfilled") {
+        const pList = Array.isArray(resProducts.value.data)
+          ? resProducts.value.data
+          : resProducts.value.data?.content || [];
+        pList.forEach((p) => (pMap[p.maSP] = p.tenSP));
+      }
+
+      // 4. Tạo Map Khách hàng
+      let cMap = {};
+      if (resCustomers.status === "fulfilled") {
+        (resCustomers.value.data || []).forEach(
+          (c) => (cMap[c.maKH] = c.tenKH)
+        );
+      }
+
+      // 5. Tạo Map NCC
+      let sMap = {};
+      if (resSuppliers.status === "fulfilled") {
+        (resSuppliers.value.data || []).forEach(
+          (s) => (sMap[s.maNCC] = s.tenNCC)
+        );
+      }
+
+      // 6. Tạo Map Kho
+      let wMap = {};
+      if (resWarehouses.status === "fulfilled") {
+        (resWarehouses.value.data || []).forEach(
+          (w) => (wMap[w.maKho] = w.tenKho)
+        );
+      }
+
+      // Lưu tất cả map vào state
+      setDataMaps({
+        users: uMap,
+        products: pMap,
+        customers: cMap,
+        suppliers: sMap,
+        warehouses: wMap,
+      });
+
       setLogs(dataLogs);
       setDisplayedLogs(dataLogs);
       setTableParams((prev) => ({
@@ -154,14 +220,9 @@ const SystemLogPage = () => {
     if (canViewLog) fetchData();
   }, [fetchData, canViewLog]);
 
-  // Logic lọc ngày (Giữ nguyên)
   useEffect(() => {
     if (!dateRange) {
       setDisplayedLogs(logs);
-      setTableParams((prev) => ({
-        ...prev,
-        pagination: { ...prev.pagination, total: logs.length, current: 1 },
-      }));
       return;
     }
     const [start, end] = dateRange;
@@ -173,27 +234,62 @@ const SystemLogPage = () => {
       );
     });
     setDisplayedLogs(filtered);
-    setTableParams((prev) => ({
-      ...prev,
-      pagination: { ...prev.pagination, total: filtered.length, current: 1 },
-    }));
   }, [dateRange, logs]);
 
   const handleTableChange = (pagination, filters, sorter) => {
     setTableParams({ pagination, filters, ...sorter });
   };
 
+  // [!] HÀM FORMAT THÔNG MINH: Thay ID bằng Tên
   const formatActionText = (text) => {
     if (!text) return "";
-    let newText = text.replace(/MaChucNang:\s*(\d+)/g, (match, id) => {
-      const name = PERMISSION_MAP[id];
-      return name ? `Quyền: ${name}` : match;
+    let newText = text;
+
+    // 1. Thay thế User ID
+    newText = newText.replace(
+      /user \(MaNguoiDung:\s*(\d+)\)|MaNguoiDung:\s*(\d+)/gi,
+      (match, id1, id2) => {
+        const id = id1 || id2;
+        return dataMaps.users[id]
+          ? `User: <b>${dataMaps.users[id]}</b>`
+          : match;
+      }
+    );
+
+    // 2. Thay thế Quyền (MaChucNang)
+    newText = newText.replace(/MaChucNang:\s*(\d+)/gi, (match, id) => {
+      return PERMISSION_MAP[id] ? `Quyền: <b>${PERMISSION_MAP[id]}</b>` : match;
     });
-    newText = newText.replace(/MaNguoiDung:\s*(\d+)/g, (match, id) => {
-      const userName = userMap[id];
-      return userName ? `User: ${userName}` : match;
+
+    // 3. Thay thế Sản phẩm ID
+    newText = newText.replace(/sản phẩm ID:\s*(\d+)/gi, (match, id) => {
+      return dataMaps.products[id]
+        ? `sản phẩm: <b>${dataMaps.products[id]}</b>`
+        : match;
     });
-    return newText;
+
+    // 4. Thay thế Khách hàng ID
+    newText = newText.replace(/khách hàng ID:\s*(\d+)/gi, (match, id) => {
+      return dataMaps.customers[id]
+        ? `khách hàng: <b>${dataMaps.customers[id]}</b>`
+        : match;
+    });
+
+    // 5. Thay thế Nhà cung cấp ID
+    newText = newText.replace(/Nhà cung cấp ID:\s*(\d+)/gi, (match, id) => {
+      return dataMaps.suppliers[id]
+        ? `NCC: <b>${dataMaps.suppliers[id]}</b>`
+        : match;
+    });
+
+    // 6. Thay thế Kho ID
+    newText = newText.replace(/kho hàng ID:\s*(\d+)/gi, (match, id) => {
+      return dataMaps.warehouses[id]
+        ? `kho: <b>${dataMaps.warehouses[id]}</b>`
+        : match;
+    });
+
+    return <span dangerouslySetInnerHTML={{ __html: newText }} />;
   };
 
   const columns = [
@@ -228,10 +324,12 @@ const SystemLogPage = () => {
         )
           color = "green";
         if (text.includes("Cập nhật") || text.includes("Sửa")) color = "orange";
+
+        // Gọi hàm format mới
         return (
           <Tag
             color={color}
-            style={{ fontSize: "13px", whiteSpace: "normal" }}
+            style={{ fontSize: "13px", whiteSpace: "normal", padding: "5px" }}
           >
             {formatActionText(text)}
           </Tag>
@@ -246,18 +344,13 @@ const SystemLogPage = () => {
     },
   ];
 
-  // [!] 3. NẾU KHÔNG CÓ QUYỀN -> ẨN HOẶC HIỆN THÔNG BÁO
   if (!canViewLog) {
     return (
       <div style={{ padding: 24, textAlign: "center" }}>
         <Card>
-          <Space
-            direction="vertical"
-            align="center"
-          >
+          <Space direction="vertical">
             <LockOutlined style={{ fontSize: 40, color: "red" }} />
-            <h3>Bạn không có quyền truy cập Nhật Ký Hệ Thống.</h3>
-            <p>Vui lòng liên hệ Quản trị viên (Quyền ID: {PERM_VIEW_LOG}).</p>
+            <h3>Bạn không có quyền truy cập.</h3>
           </Space>
         </Card>
       </div>

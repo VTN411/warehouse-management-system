@@ -82,8 +82,8 @@ const ProductPage = () => {
         };
 
         const response = await productService.filterProducts(filterData);
-
         const data = response.data;
+        
         if (data && Array.isArray(data.content)) {
           setProducts(data.content);
           setPagination((prev) => ({
@@ -240,18 +240,47 @@ const ProductPage = () => {
           // Load lại trang hiện tại sau khi lưu
           fetchProducts(pagination.current, pagination.pageSize, filter);
         } catch (error) {
-          messageApi.error(error.response?.data?.message || "Có lỗi xảy ra!");
-        } finally {
-          setSubmitLoading(false);
+        // [!] LOGIC BẮT LỖI TỪ BACKEND ĐỂ HIỂN THỊ
+        console.error("Lỗi API:", error.response); // In ra console để debug nếu cần
+
+        let errorMsg = "Có lỗi xảy ra!";
+        
+        if (error.response) {
+            // Trường hợp 1: Backend trả về JSON chuẩn (ví dụ: { "message": "Tên bị trùng", "status": 400 })
+            if (error.response.data && error.response.data.message) {
+                errorMsg = error.response.data.message;
+            } 
+            // Trường hợp 2: Backend trả về chuỗi text trực tiếp (ví dụ: "Tên bị trùng")
+            else if (typeof error.response.data === "string") {
+                errorMsg = error.response.data;
+            }
+        } else if (error.message) {
+            // Trường hợp lỗi mạng hoặc lỗi code frontend
+            errorMsg = error.message;
         }
-      })
-      .catch(() => {});
+
+        // Hiển thị thông báo lỗi màu đỏ
+        messageApi.error(errorMsg); 
+      } finally {
+        setSubmitLoading(false);
+      }
+    }).catch(() => {
+        // Lỗi validate form (bỏ qua vì Antd đã hiện chữ đỏ dưới ô input)
+    });
   };
 
-  const handleDelete = (id) => {
-    setDeletingProductId(id);
+  const handleDelete = (record) => {
+    // 1. Kiểm tra tồn kho
+    if (record.soLuongTon > 0) {
+        messageApi.warning(`Không thể xóa! Sản phẩm "${record.tenSP}" đang còn tồn kho (${record.soLuongTon}).`);
+        return; // Dừng lại ngay, không mở modal xóa
+    }
+
+    // 2. Nếu tồn = 0 thì mới mở modal xác nhận
+    setDeletingProductId(record.maSP);
     setIsDeleteModalOpen(true);
   };
+
   const handleDeleteConfirm = async () => {
     try {
       await productService.deleteProduct(deletingProductId);
@@ -268,56 +297,88 @@ const ProductPage = () => {
   };
 
   const columns = [
-    { title: "Mã", dataIndex: "maSP", width: 60 },
+    { title: "Mã", dataIndex: "maSP", width: 60, 
+      render: (text, record) => <span style={{ opacity: record.daXoa ? 0.5 : 1 }}>{text}</span> 
+    },
     {
       title: "Ảnh",
       dataIndex: "hinhAnh",
       width: 80,
-      render: (url) =>
-        url ? (
-          <Image
-            width={40}
-            src={url}
-            fallback="https://via.placeholder.com/40"
-          />
-        ) : (
-          <Tag>No Img</Tag>
-        ),
+      render: (url, record) => (
+        <div style={{ opacity: record.daXoa ? 0.5 : 1 }}>
+            {url ? <Image width={40} src={url} /> : <Tag>No Img</Tag>}
+        </div>
+      ),
     },
-    { title: "Tên Sản Phẩm", dataIndex: "tenSP", width: 200 },
-    { title: "ĐVT", dataIndex: "donViTinh", width: 70 },
+    { 
+      title: "Tên Sản Phẩm", 
+      dataIndex: "tenSP", 
+      width: 200,
+      render: (text, record) => (
+        <div style={{ opacity: record.daXoa ? 0.5 : 1 }}>
+          <span style={{ textDecoration: record.daXoa ? 'line-through' : 'none', color: record.daXoa ? '#999' : 'inherit' }}>
+            {text}
+          </span>
+          {/* Hiện nhãn nếu đã xóa */}
+          {record.daXoa && <Tag color="default" style={{ marginLeft: 8 }}>Đã xóa</Tag>}
+        </div>
+      )
+    },
+    { 
+        title: "ĐVT", dataIndex: "donViTinh", width: 70,
+        render: (t, r) => <span style={{ opacity: r.daXoa ? 0.5 : 1 }}>{t}</span>
+    },
     {
       title: "Giá Nhập",
       dataIndex: "giaNhap",
-      render: (val) => `${Number(val).toLocaleString()} đ`,
       width: 110,
+      render: (val, r) => <span style={{ opacity: r.daXoa ? 0.5 : 1 }}>{Number(val).toLocaleString()} đ</span>,
     },
-    { title: "Tồn", dataIndex: "soLuongTon", width: 70 },
+    { 
+        title: "Tồn", dataIndex: "soLuongTon", width: 70,
+        render: (t, r) => <span style={{ opacity: r.daXoa ? 0.5 : 1 }}>{t}</span>
+    },
     {
       title: "Loại",
       width: 120,
       render: (_, r) => {
         const id = r.loaiHang?.maLoai || r.maLoai;
         const cat = listLoaiHang.find((c) => c.maLoai === id);
-        return cat ? cat.tenLoai : `Mã: ${id}`;
+        return <span style={{ opacity: r.daXoa ? 0.5 : 1 }}>{cat ? cat.tenLoai : `Mã: ${id}`}</span>;
       },
     },
     {
+
       title: "NCC",
+
       width: 150,
+
       render: (_, r) => (
+
         <>
+
           {r.danhSachNCC &&
+
             r.danhSachNCC.map((n, idx) => (
+
               <Tag
+
                 key={idx}
+
                 color="blue"
+
               >
+
                 {n.tenNCC || n.maNCC || n}
+
               </Tag>
+
             ))}
+
         </>
+
       ),
+
     },
     {
       title: "Hành động",
@@ -329,18 +390,23 @@ const ProductPage = () => {
             <Button
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
+              // [!] KHÓA NÚT SỬA NẾU ĐÃ XÓA
+              disabled={!!record.daXoa} 
             />
           )}
           {canDelete && (
             <Button
               icon={<DeleteOutlined />}
               danger
-              onClick={() => handleDelete(record.maSP)}
+              onClick={() => handleDelete(record)}
+              // [!] KHÓA NÚT XÓA NẾU ĐÃ XÓA (Tránh xóa 2 lần)
+              disabled={!!record.daXoa} 
             />
           )}
         </Space>
       ),
     },
+
   ];
 
   return (

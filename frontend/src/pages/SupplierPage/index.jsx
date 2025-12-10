@@ -18,7 +18,7 @@ import {
   EditOutlined,
   DeleteOutlined,
   ReloadOutlined,
-  SearchOutlined, // [!] Import icon tìm kiếm
+  SearchOutlined,
 } from "@ant-design/icons";
 import * as supplierService from "../../services/supplier.service";
 
@@ -29,6 +29,7 @@ const PERM_SUPPLIER_DELETE = 63;
 const SupplierPage = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState(null);
   const [form] = Form.useForm();
@@ -37,24 +38,20 @@ const SupplierPage = () => {
   const [permissions, setPermissions] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // State cho modal xóa
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
-  // [!] State cho tìm kiếm
   const [keyword, setKeyword] = useState("");
 
-  // 1. LẤY DỮ LIỆU (Hỗ trợ tìm kiếm)
+  // 1. LẤY DỮ LIỆU
   const fetchSuppliers = useCallback(
     async (searchKey = "") => {
       setLoading(true);
       try {
         let response;
         if (searchKey) {
-          // Gọi API tìm kiếm nếu có từ khóa
           response = await supplierService.searchSuppliers(searchKey);
         } else {
-          // Gọi API lấy tất cả nếu không có từ khóa
           response = await supplierService.getAllSuppliers();
         }
         setSuppliers(response.data || []);
@@ -66,10 +63,8 @@ const SupplierPage = () => {
     [messageApi]
   );
 
-  // 2. CHECK QUYỀN & LOAD DATA
   useEffect(() => {
-    fetchSuppliers(); // Load mặc định (không từ khóa)
-
+    fetchSuppliers();
     try {
       const storedUser = localStorage.getItem("user_info");
       if (storedUser) {
@@ -88,17 +83,13 @@ const SupplierPage = () => {
         setPermissions(perms);
       }
     } catch (e) {
-      console.error("Lỗi đọc quyền:", e);
       setPermissions([]);
     }
   }, [fetchSuppliers]);
 
-  // [!] Xử lý khi bấm nút Tìm
   const handleSearch = () => {
     fetchSuppliers(keyword);
   };
-
-  // [!] Xử lý khi bấm nút Reset (Tải lại)
   const handleReset = () => {
     setKeyword("");
     fetchSuppliers("");
@@ -108,40 +99,65 @@ const SupplierPage = () => {
   const canEdit = isAdmin || permissions.includes(PERM_SUPPLIER_EDIT);
   const canDelete = isAdmin || permissions.includes(PERM_SUPPLIER_DELETE);
 
-  // --- XỬ LÝ MODAL ---
   const handleOpenModal = () => {
     setEditingSupplier(null);
     form.resetFields();
     setIsModalVisible(true);
   };
-
   const handleEdit = (record) => {
     setEditingSupplier(record);
     form.setFieldsValue(record);
     setIsModalVisible(true);
   };
 
+  // [!] 1. LOGIC KIỂM TRA TRÙNG LẶP & XỬ LÝ LỖI TẠO MỚI
   const handleOk = () => {
     form
       .validateFields()
       .then(async (values) => {
+        // Chuẩn hóa dữ liệu để so sánh
+        const inputName = values.tenNCC.trim().toLowerCase();
+        const inputAddress = (values.diaChi || "").trim().toLowerCase();
+
+        // Kiểm tra trùng: Cả Tên và Địa chỉ đều giống
+        const isDuplicate = suppliers.some((ncc) => {
+          if (editingSupplier && ncc.maNCC === editingSupplier.maNCC)
+            return false;
+          const currentName = ncc.tenNCC.trim().toLowerCase();
+          const currentAddress = (ncc.diaChi || "").trim().toLowerCase();
+          return currentName === inputName && currentAddress === inputAddress;
+        });
+
+        if (isDuplicate) {
+          messageApi.error(
+            `Nhà cung cấp "${values.tenNCC}" tại địa chỉ này đã tồn tại!`
+          );
+          return;
+        }
+
+        setSubmitLoading(true);
         try {
           if (editingSupplier) {
             await supplierService.updateSupplier(editingSupplier.maNCC, values);
-            messageApi.success("Cập nhật nhà cung cấp thành công!");
+            messageApi.success("Cập nhật thành công!");
           } else {
             await supplierService.createSupplier(values);
-            messageApi.success("Thêm nhà cung cấp thành công!");
+            messageApi.success("Thêm mới thành công!");
           }
           setIsModalVisible(false);
-          fetchSuppliers(keyword); // Load lại theo từ khóa hiện tại
+          fetchSuppliers(keyword);
         } catch (error) {
-          messageApi.error("Có lỗi xảy ra!");
+          // Hiển thị lỗi từ Backend (nếu có)
+          const errorMsg =
+            error.response?.data?.message ||
+            error.response?.data ||
+            "Có lỗi xảy ra!";
+          messageApi.error(errorMsg);
+        } finally {
+          setSubmitLoading(false);
         }
       })
-      .catch((info) => {
-        console.log("Validate Failed:", info);
-      });
+      .catch(() => {});
   };
 
   const handleDelete = (id) => {
@@ -149,13 +165,31 @@ const SupplierPage = () => {
     setIsDeleteModalOpen(true);
   };
 
+  // [!] 2. LOGIC XÓA & HIỂN THỊ LỖI TỪ BACKEND
   const handleDeleteConfirm = async () => {
     try {
       await supplierService.deleteSupplier(deletingId);
-      messageApi.success("Xóa nhà cung cấp thành công!");
-      fetchSuppliers(keyword); // Load lại theo từ khóa
+      messageApi.success("Đã xóa nhà cung cấp!");
+      fetchSuppliers(keyword);
     } catch (error) {
-      messageApi.error("Lỗi khi xóa nhà cung cấp!");
+      // Ưu tiên lấy message từ Backend trả về
+      // VD: Backend trả về { message: "Không thể xóa vì NCC đang có hàng trong kho" }
+      const errorMsg =
+        error.response?.data?.message ||
+        error.response?.data ||
+        "Lỗi khi xóa nhà cung cấp!";
+
+      // Nếu lỗi quá dài hoặc là lỗi SQL thuần, hiển thị thông báo thân thiện hơn
+      if (
+        errorMsg.includes("ConstraintViolation") ||
+        errorMsg.includes("foreign key")
+      ) {
+        messageApi.error(
+          "Không thể xóa! Nhà cung cấp này đang có giao dịch hoặc sản phẩm liên quan."
+        );
+      } else {
+        messageApi.error(errorMsg);
+      }
     }
     setIsDeleteModalOpen(false);
     setDeletingId(null);
@@ -163,10 +197,11 @@ const SupplierPage = () => {
 
   const columns = [
     {
-      title: "Tên Nhà Cung Cấp",
+      title: "Tên NCC",
       dataIndex: "tenNCC",
       key: "tenNCC",
       width: 200,
+      render: (t) => <b>{t}</b>,
     },
     { title: "Người Liên Hệ", dataIndex: "nguoiLienHe", key: "nguoiLienHe" },
     { title: "SĐT", dataIndex: "sdt", key: "sdt" },
@@ -175,7 +210,8 @@ const SupplierPage = () => {
     {
       title: "Hành động",
       key: "action",
-      width: 150,
+      width: 120,
+      align: "center",
       render: (_, record) => (
         <Space size="middle">
           {canEdit && (
@@ -199,8 +235,6 @@ const SupplierPage = () => {
   return (
     <div>
       {contextHolder}
-
-      {/* [!] THANH TÌM KIẾM */}
       <Card
         style={{ marginBottom: 16 }}
         bodyStyle={{ padding: "16px" }}
@@ -233,7 +267,6 @@ const SupplierPage = () => {
               >
                 Tải lại
               </Button>
-              {/* Nút Thêm chuyển xuống đây hoặc để ở dưới tùy bạn */}
             </Space>
           </Col>
         </Row>
@@ -257,14 +290,14 @@ const SupplierPage = () => {
         dataSource={suppliers}
         loading={loading}
         rowKey="maNCC"
-        pagination={{ pageSize: 5 }}
+        pagination={{ pageSize: 10 }}
       />
 
-      {/* MODAL THÊM/SỬA */}
       <Modal
         title={editingSupplier ? "Sửa Nhà Cung Cấp" : "Thêm Nhà Cung Cấp"}
         open={isModalVisible}
         onOk={handleOk}
+        confirmLoading={submitLoading}
         onCancel={() => setIsModalVisible(false)}
       >
         <Form
@@ -287,6 +320,7 @@ const SupplierPage = () => {
           <Form.Item
             name="sdt"
             label="Số Điện Thoại"
+            rules={[{ required: true, message: "Vui lòng nhập Số Điện Thoại" }]}
           >
             <Input placeholder="Ví dụ: 0909..." />
           </Form.Item>
@@ -300,6 +334,7 @@ const SupplierPage = () => {
           <Form.Item
             name="diaChi"
             label="Địa Chỉ"
+            rules={[{ required: true, message: "Vui lòng nhập Địa Chỉ" }]}
           >
             <Input.TextArea
               rows={2}
@@ -309,7 +344,6 @@ const SupplierPage = () => {
         </Form>
       </Modal>
 
-      {/* MODAL XÓA */}
       <Modal
         title="Xác nhận xóa"
         open={isDeleteModalOpen}

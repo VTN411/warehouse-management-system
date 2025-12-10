@@ -29,6 +29,7 @@ const PERM_DELETE = 93;
 const CustomerPage = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [form] = Form.useForm();
@@ -39,20 +40,17 @@ const CustomerPage = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
-  // [!] State tìm kiếm
   const [keyword, setKeyword] = useState("");
 
-  // 1. HÀM LẤY DỮ LIỆU (HỖ TRỢ TÌM KIẾM)
+  // 1. LẤY DỮ LIỆU
   const fetchCustomers = useCallback(
     async (searchKey = "") => {
       setLoading(true);
       try {
         let response;
         if (searchKey) {
-          // Gọi API tìm kiếm
           response = await customerService.searchCustomers(searchKey);
         } else {
-          // Gọi API lấy tất cả
           response = await customerService.getAllCustomers();
         }
         setCustomers(response.data || []);
@@ -88,12 +86,9 @@ const CustomerPage = () => {
     }
   }, [fetchCustomers]);
 
-  // [!] Xử lý tìm kiếm
   const handleSearch = () => {
     fetchCustomers(keyword);
   };
-
-  // [!] Xử lý reset
   const handleReset = () => {
     setKeyword("");
     fetchCustomers("");
@@ -103,23 +98,44 @@ const CustomerPage = () => {
   const canEdit = isAdmin || permissions.includes(PERM_EDIT);
   const canDelete = isAdmin || permissions.includes(PERM_DELETE);
 
-  // --- XỬ LÝ MODAL ---
   const handleOpenModal = () => {
     setEditingCustomer(null);
     form.resetFields();
     setIsModalVisible(true);
   };
-
   const handleEdit = (record) => {
     setEditingCustomer(record);
     form.setFieldsValue(record);
     setIsModalVisible(true);
   };
 
+  // [!] 1. KIỂM TRA TRÙNG LẶP & XỬ LÝ LỖI
   const handleOk = () => {
     form
       .validateFields()
       .then(async (values) => {
+        // Chuẩn hóa dữ liệu
+        const inputName = values.tenKH.trim().toLowerCase();
+        const inputPhone = (values.sdt || "").trim();
+
+        // Kiểm tra trùng: Cả Tên và SĐT đều giống
+        const isDuplicate = customers.some((kh) => {
+          if (editingCustomer && kh.maKH === editingCustomer.maKH) return false;
+
+          const currentName = kh.tenKH.trim().toLowerCase();
+          const currentPhone = (kh.sdt || "").trim();
+
+          return currentName === inputName && currentPhone === inputPhone;
+        });
+
+        if (isDuplicate) {
+          messageApi.error(
+            `Khách hàng "${values.tenKH}" với SĐT "${values.sdt}" đã tồn tại!`
+          );
+          return;
+        }
+
+        setSubmitLoading(true);
         try {
           if (editingCustomer) {
             await customerService.updateCustomer(editingCustomer.maKH, values);
@@ -129,9 +145,15 @@ const CustomerPage = () => {
             messageApi.success("Thêm mới thành công!");
           }
           setIsModalVisible(false);
-          fetchCustomers(keyword); // Load lại theo từ khóa hiện tại
+          fetchCustomers(keyword);
         } catch (error) {
-          messageApi.error("Có lỗi xảy ra!");
+          const errorMsg =
+            error.response?.data?.message ||
+            error.response?.data ||
+            "Có lỗi xảy ra!";
+          messageApi.error(errorMsg);
+        } finally {
+          setSubmitLoading(false);
         }
       })
       .catch(() => {});
@@ -142,21 +164,37 @@ const CustomerPage = () => {
     setIsDeleteModalOpen(true);
   };
 
+  // [!] 2. XÓA KHÁCH HÀNG & HIỂN THỊ LỖI BACKEND
   const handleDeleteConfirm = async () => {
     try {
       await customerService.deleteCustomer(deletingId);
       messageApi.success("Đã xóa thành công!");
       fetchCustomers(keyword);
     } catch (error) {
-      messageApi.error("Lỗi khi xóa!");
+      // Ưu tiên lấy message từ Backend
+      const errorMsg =
+        error.response?.data?.message || error.response?.data || "Lỗi khi xóa!";
+
+      if (errorMsg.includes("foreign key") || errorMsg.includes("constraint")) {
+        messageApi.error(
+          "Không thể xóa! Khách hàng này đã có đơn hàng hoặc phiếu xuất."
+        );
+      } else {
+        messageApi.error(errorMsg);
+      }
     }
     setIsDeleteModalOpen(false);
     setDeletingId(null);
   };
 
   const columns = [
-    // { title: "Mã KH", dataIndex: "maKH", key: "maKH", width: 80 },
-    { title: "Tên Khách Hàng", dataIndex: "tenKH", key: "tenKH", width: 200 },
+    {
+      title: "Tên Khách Hàng",
+      dataIndex: "tenKH",
+      key: "tenKH",
+      width: 200,
+      render: (t) => <b>{t}</b>,
+    },
     { title: "SĐT", dataIndex: "sdt", key: "sdt" },
     { title: "Email", dataIndex: "email", key: "email" },
     { title: "Địa Chỉ", dataIndex: "diaChi", key: "diaChi" },
@@ -164,6 +202,7 @@ const CustomerPage = () => {
       title: "Hành động",
       key: "action",
       width: 150,
+      align: "center",
       render: (_, record) => (
         <Space size="middle">
           {canEdit && (
@@ -187,8 +226,6 @@ const CustomerPage = () => {
   return (
     <div>
       {contextHolder}
-
-      {/* [!] THANH TÌM KIẾM */}
       <Card
         style={{ marginBottom: 16 }}
         bodyStyle={{ padding: "16px" }}
@@ -247,11 +284,11 @@ const CustomerPage = () => {
         pagination={{ pageSize: 5 }}
       />
 
-      {/* MODAL FORM */}
       <Modal
         title={editingCustomer ? "Sửa Khách Hàng" : "Thêm Khách Hàng"}
         open={isModalVisible}
         onOk={handleOk}
+        confirmLoading={submitLoading}
         onCancel={() => setIsModalVisible(false)}
       >
         <Form
@@ -261,13 +298,14 @@ const CustomerPage = () => {
           <Form.Item
             name="tenKH"
             label="Tên Khách Hàng"
-            rules={[{ required: true, message: "Vui lòng nhập tên!" }]}
+            rules={[{ required: true, message: "Vui lòng nhập Tên" }]}
           >
             <Input placeholder="Ví dụ: Nguyễn Văn A" />
           </Form.Item>
           <Form.Item
             name="sdt"
             label="Số Điện Thoại"
+            rules={[{ required: true, message: "Vui lòng nhập Số Điện Thoại" }]}
           >
             <Input placeholder="Ví dụ: 0909..." />
           </Form.Item>
@@ -281,6 +319,7 @@ const CustomerPage = () => {
           <Form.Item
             name="diaChi"
             label="Địa Chỉ"
+            rules={[{ required: true, message: "Vui lòng nhập Địa Chỉ" }]}
           >
             <Input.TextArea
               rows={2}
@@ -290,7 +329,6 @@ const CustomerPage = () => {
         </Form>
       </Modal>
 
-      {/* MODAL XÓA */}
       <Modal
         title="Xác nhận xóa"
         open={isDeleteModalOpen}

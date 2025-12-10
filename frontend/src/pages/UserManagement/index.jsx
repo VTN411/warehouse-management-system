@@ -264,12 +264,19 @@ const UserManagementPage = () => {
           setEditingUser(null);
           fetchUsers();
         } catch (error) {
-          messageApi.error("Có lỗi xảy ra!");
+          // [!] SỬA ĐOẠN NÀY: Lấy tin nhắn lỗi từ Backend trả về
+          const errorMessage = error.response?.data?.message || error.response?.data || "Có lỗi xảy ra!";
+          
+          // Kiểm tra nếu lỗi liên quan đến trùng lặp (thường backend trả về chữ 'exist' hoặc 'tồn tại')
+          if (errorMessage.toLowerCase().includes("duplicate") || errorMessage.toLowerCase().includes("tồn tại")) {
+             messageApi.error("Tên đăng nhập đã tồn tại, vui lòng chọn tên khác!");
+          } else {
+             messageApi.error(errorMessage);
+          }
         }
       })
       .catch((info) => {
         console.log("Validate Failed:", info);
-        // Không làm gì cả, Ant Design đã tự hiện dòng chữ đỏ dưới ô input rồi
       });
   };
 

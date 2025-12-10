@@ -692,7 +692,7 @@ const PhieuNhapPage = () => {
             <Form.Item
               name="chungTu"
               label="Chứng từ"
-              rules={[{ required: true, message: "Vui lòng nhập chứng từ " }]}
+              rules={[{ required: true, message: "Vui lòng nhập Chứng Từ " }]}
             >
               <Input />
             </Form.Item>

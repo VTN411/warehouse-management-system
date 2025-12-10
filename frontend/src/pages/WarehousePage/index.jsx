@@ -127,29 +127,43 @@ const WarehousePage = () => {
   };
 
   const handleOk = () => {
-    form
-      .validateFields()
-      .then(async (values) => {
-        try {
-          if (editingWarehouse) {
-            await warehouseService.updateWarehouse(
-              editingWarehouse.maKho,
-              values
-            );
-            messageApi.success("Cập nhật kho thành công!");
-          } else {
-            await warehouseService.createWarehouse(values);
-            messageApi.success("Tạo kho mới thành công!");
-          }
-          setIsModalVisible(false);
-          fetchWarehouses(keyword); // Load lại theo từ khóa
-        } catch (error) {
-          messageApi.error("Có lỗi xảy ra!");
-        }
-      })
-      .catch((info) => {
-        console.log("Validate Failed:", info);
+    form.validateFields().then(async (values) => {
+      // [!] LOGIC KIỂM TRA TRÙNG LẶP (TÊN + ĐỊA CHỈ)
+      const cleanName = values.tenKho.trim().toLowerCase();
+      const cleanAddress = (values.diaChi || "").trim().toLowerCase();
+
+      // Kiểm tra xem có kho nào trùng cả tên lẫn địa chỉ không
+      const isDuplicate = warehouses.some(kho => {
+        // Nếu đang sửa thì bỏ qua chính nó
+        if (editingWarehouse && kho.maKho === editingWarehouse.maKho) return false;
+
+        const currentName = kho.tenKho.trim().toLowerCase();
+        const currentAddress = (kho.diaChi || "").trim().toLowerCase();
+
+        // Trùng khi cả 2 cùng giống
+        return currentName === cleanName && currentAddress === cleanAddress;
       });
+
+      if (isDuplicate) {
+        messageApi.error(`Kho "${values.tenKho}" tại địa chỉ này đã tồn tại!`);
+        return; // Dừng lại, không gửi API
+      }
+
+      // Nếu không trùng thì xử lý tiếp
+      try {
+        if (editingWarehouse) {
+          await warehouseService.updateWarehouse(editingWarehouse.maKho, values);
+          messageApi.success("Cập nhật thành công!");
+        } else {
+          await warehouseService.createWarehouse(values);
+          messageApi.success("Tạo kho mới thành công!");
+        }
+        setIsModalVisible(false);
+        fetchWarehouses();
+      } catch (error) {
+        messageApi.error(error.response?.data?.message || "Có lỗi xảy ra!");
+      }
+    }).catch(() => {});
   };
 
   // --- XỬ LÝ XÓA ---
