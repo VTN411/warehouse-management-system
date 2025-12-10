@@ -49,7 +49,7 @@ public class JdbcSanPhamRepository implements SanPhamRepository {
             sp.setMucTonToiThieu(rs.getInt("MucTonToiThieu"));
             sp.setMucTonToiDa(rs.getInt("MucTonToiDa"));
             sp.setMaLoai(rs.getInt("MaLoai"));
-
+            sp.setDaXoa(rs.getBoolean("DaXoa"));
             // Map Loại Hàng
             if (sp.getMaLoai() != null) {
                 loaiHangRepository.findById(sp.getMaLoai()).ifPresent(sp::setLoaiHang);
@@ -69,7 +69,8 @@ public class JdbcSanPhamRepository implements SanPhamRepository {
 
     @Override
     public Optional<SanPham> findById(Integer id) {
-        String sql = "SELECT * FROM sanpham WHERE MaSP = ?";
+        // Tìm theo ID và phải chưa xóa
+        String sql = "SELECT * FROM sanpham WHERE MaSP = ? AND DaXoa = 0";
         try {
             SanPham sp = jdbcTemplate.queryForObject(sql, sanPhamRowMapper, id);
             return Optional.ofNullable(sp);
@@ -80,7 +81,8 @@ public class JdbcSanPhamRepository implements SanPhamRepository {
 
     @Override
     public List<SanPham> findAll() {
-        String sql = "SELECT * FROM sanpham";
+        // Chỉ lấy sản phẩm CHƯA xóa
+        String sql = "SELECT * FROM sanpham WHERE DaXoa = 0 ORDER BY MaSP DESC";
         return jdbcTemplate.query(sql, sanPhamRowMapper);
     }
 
@@ -132,7 +134,7 @@ public class JdbcSanPhamRepository implements SanPhamRepository {
 
     @Override
     public int deleteById(Integer id) {
-        String sql = "DELETE FROM sanpham WHERE MaSP = ?";
+        String sql = "UPDATE sanpham SET DaXoa = 1 WHERE MaSP = ?";
         return jdbcTemplate.update(sql, id);
     }
 
@@ -172,7 +174,7 @@ public class JdbcSanPhamRepository implements SanPhamRepository {
 
     @Override
     public List<SanPham> findByTenSP(String tenSP) {
-        String sql = "SELECT * FROM sanpham WHERE TenSP = ?";
+        String sql = "SELECT * FROM sanpham WHERE TenSP = ? AND DaXoa = 0";
         return jdbcTemplate.query(sql, sanPhamRowMapper, tenSP);
     }
 }

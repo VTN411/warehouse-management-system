@@ -16,7 +16,7 @@ public class SanPham {
     private Integer soLuongTon;
     private Integer mucTonToiThieu;
     private Integer mucTonToiDa;
-
+    private Boolean daXoa;
     // --- Khóa Ngoại  ---
     private Integer maLoai;
 

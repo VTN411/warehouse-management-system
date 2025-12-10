@@ -163,32 +163,40 @@ public class SanPhamService {
     }
 
     private void validateProductUniqueness(SanPhamRequest request) {
-        // 1. Tìm xem trong DB đã có sản phẩm nào tên giống vậy chưa
+        // BƯỚC 1: Tìm tất cả sản phẩm đang hoạt động (Chưa xóa) có cùng tên
+        // Yêu cầu: Repository phải query "WHERE TenSP = ? AND DaXoa = 0"
         List<SanPham> existingProducts = sanPhamRepository.findByTenSP(request.getTenSP());
 
+        // Nếu không có sản phẩm nào trùng tên -> Hợp lệ, kết thúc kiểm tra
         if (existingProducts.isEmpty()) {
-            return; // Chưa có tên này -> Cho phép tạo thoải mái
+            return;
         }
 
-        // 2. Nếu đã có sản phẩm cùng tên, kiểm tra xem có trùng Nhà Cung Cấp không
+        // Nếu request không có danh sách NCC (null hoặc rỗng) -> Hợp lệ (vì không thể trùng cặp SP-NCC)
+        if (request.getDanhSachMaNCC() == null || request.getDanhSachMaNCC().isEmpty()) {
+            return;
+        }
+
+        // BƯỚC 2: Duyệt qua từng sản phẩm cũ để kiểm tra danh sách NCC
         List<Integer> newNccIds = request.getDanhSachMaNCC(); // List NCC người dùng đang chọn
 
         for (SanPham oldProduct : existingProducts) {
-            // Lấy danh sách NCC của sản phẩm cũ
+            // Lấy danh sách ID Nhà cung cấp của sản phẩm cũ này
             List<Integer> oldNccIds = nccSanPhamRepository.findMaNCCByMaSP(oldProduct.getMaSP());
 
-            // 3. So sánh: Nếu có bất kỳ NCC nào trong list MỚI nằm trong list CŨ -> BÁO LỖI
+            // BƯỚC 3: So sánh giao thoa (Intersection)
+            // Nếu có bất kỳ NCC nào trong list MỚI nằm trong list CŨ -> BÁO LỖI
             for (Integer newId : newNccIds) {
                 if (oldNccIds.contains(newId)) {
                     throw new RuntimeException(
-                            "Lỗi: Sản phẩm '" + request.getTenSP() +
-                                    "' đã tồn tại với Nhà cung cấp ID " + newId +
+                            "Lỗi trùng lặp: Sản phẩm '" + request.getTenSP() +
+                                    "' hiện đang kinh doanh (chưa xóa) đã tồn tại với Nhà cung cấp ID " + newId +
                                     ". Vui lòng kiểm tra lại hoặc cập nhật số lượng cho sản phẩm cũ."
                     );
                 }
             }
         }
 
-        // Nếu chạy hết vòng lặp mà không trùng -> OK, cho phép tạo (sẽ sinh ra dòng SP mới cùng tên nhưng khác ID và khác NCC)
+        // Nếu chạy hết vòng lặp mà không ném lỗi -> Hợp lệ
     }
 }
