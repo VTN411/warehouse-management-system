@@ -420,6 +420,12 @@ const PhieuNhapPage = () => {
       render: renderStatus,
     },
     {
+      title: "Tổng Tiền",
+      dataIndex: "tongTien",
+      width: "10%",
+      render: (value) => `${Number(value || 0).toLocaleString()} đ`,
+    },
+    {
       title: "Nhà Cung Cấp",
       dataIndex: "maNCC",
       width: 250,
