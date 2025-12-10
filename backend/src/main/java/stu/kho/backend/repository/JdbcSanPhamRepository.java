@@ -169,4 +169,10 @@ public class JdbcSanPhamRepository implements SanPhamRepository {
         // 3. Thực thi
         return jdbcTemplate.query(sql.toString(), sanPhamRowMapper, params.toArray());
     }
+
+    @Override
+    public List<SanPham> findByTenSP(String tenSP) {
+        String sql = "SELECT * FROM sanpham WHERE TenSP = ?";
+        return jdbcTemplate.query(sql, sanPhamRowMapper, tenSP);
+    }
 }

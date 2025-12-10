@@ -37,6 +37,7 @@ public class SanPhamService {
     // =================================================================
     @Transactional
     public SanPham createSanPham(SanPhamRequest request, MultipartFile imageFile, String tenNguoiTao) {
+        validateProductUniqueness(request);
         // 1. Tạo đối tượng SanPham
         SanPham sp = new SanPham();
         sp.setTenSP(request.getTenSP());
@@ -159,5 +160,35 @@ public class SanPhamService {
     }
     public List<SanPham> filterSanPham(SanPhamFilterRequest request) {
         return sanPhamRepository.filter(request);
+    }
+
+    private void validateProductUniqueness(SanPhamRequest request) {
+        // 1. Tìm xem trong DB đã có sản phẩm nào tên giống vậy chưa
+        List<SanPham> existingProducts = sanPhamRepository.findByTenSP(request.getTenSP());
+
+        if (existingProducts.isEmpty()) {
+            return; // Chưa có tên này -> Cho phép tạo thoải mái
+        }
+
+        // 2. Nếu đã có sản phẩm cùng tên, kiểm tra xem có trùng Nhà Cung Cấp không
+        List<Integer> newNccIds = request.getDanhSachMaNCC(); // List NCC người dùng đang chọn
+
+        for (SanPham oldProduct : existingProducts) {
+            // Lấy danh sách NCC của sản phẩm cũ
+            List<Integer> oldNccIds = nccSanPhamRepository.findMaNCCByMaSP(oldProduct.getMaSP());
+
+            // 3. So sánh: Nếu có bất kỳ NCC nào trong list MỚI nằm trong list CŨ -> BÁO LỖI
+            for (Integer newId : newNccIds) {
+                if (oldNccIds.contains(newId)) {
+                    throw new RuntimeException(
+                            "Lỗi: Sản phẩm '" + request.getTenSP() +
+                                    "' đã tồn tại với Nhà cung cấp ID " + newId +
+                                    ". Vui lòng kiểm tra lại hoặc cập nhật số lượng cho sản phẩm cũ."
+                    );
+                }
+            }
+        }
+
+        // Nếu chạy hết vòng lặp mà không trùng -> OK, cho phép tạo (sẽ sinh ra dòng SP mới cùng tên nhưng khác ID và khác NCC)
     }
 }

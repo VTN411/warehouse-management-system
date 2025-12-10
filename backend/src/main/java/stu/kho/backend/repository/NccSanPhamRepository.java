@@ -13,4 +13,6 @@ public interface NccSanPhamRepository {
     List<Integer> findNccIdsByMaSP(Integer maSP);
 
     boolean existsLink(Integer maNCC, Integer maSP);
-}
+    List<Integer> findMaNCCByMaSP(Integer maSP);
+
+    }
