@@ -149,7 +149,7 @@ const AdminLayout = () => {
       key: "profile",
       label: "Thông tin tài khoản",
       icon: <UserOutlined />,
-      onClick: () => navigate("/profile"),
+      onClick: () => navigate("/hoso"),
     },
     { type: "divider" },
     {
