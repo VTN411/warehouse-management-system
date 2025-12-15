@@ -353,11 +353,11 @@ public class PhieuXuatService {
         // (Cách đơn giản: Dựa vào Vai trò. Ví dụ: Admin(1), Quản lý(4) xem hết)
         int roleId = user.getVaiTro().getMaVaiTro();
 
-        if (roleId == 1 || roleId == 4) {
+        if (roleId == 1 || roleId==2|| roleId==3|| roleId == 4 ) {
             // Admin hoặc Quản lý -> Xem tất cả
             return phieuXuatRepository.findAll();
         } else {
-            // Giảng viên (5), Nhân viên (2), Thủ kho (3) -> Chỉ xem phiếu mình tạo
+            // Giảng viên (5) -> Chỉ xem phiếu mình tạo
             return phieuXuatRepository.findByNguoiLap(user.getMaNguoiDung());
         }
     }
