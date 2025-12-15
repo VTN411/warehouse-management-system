@@ -49,7 +49,7 @@ api.interceptors.request.use(
     const token = getToken();
     
     // Debug: Xem token hiện tại là gì
-    console.log("Check Token trước khi gửi:", token);
+    
 
     if (!token) {
        handleSessionExpired();

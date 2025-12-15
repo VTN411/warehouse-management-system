@@ -172,7 +172,7 @@ const WarehousePage = () => {
     setIsDeleteModalOpen(true);
   };
 
-  const handleDeleteConfirm = async () => {
+  const handleDeleteConfirm = async () => { 
     try {
       await warehouseService.deleteWarehouse(deletingId);
       messageApi.success("Xóa kho thành công!");

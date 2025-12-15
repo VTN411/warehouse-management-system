@@ -91,12 +91,10 @@ const AdminLayout = () => {
     ];
 
     const nhapXuatChildren = [
-      ...(hasPerm(20, "PERM_PHIEUNHAP_CREATE") ||
-      hasPerm(null, "PERM_PHIEUNHAP_VIEW")
+      ...(hasPerm(26, "PERM_PHIEUNHAP_VIEW")
         ? [getItem("Nhập kho", "/Nhap")]
         : []),
-      ...(hasPerm(23, "PERM_PHIEUXUAT_CREATE") ||
-      hasPerm(null, "PERM_PHIEUXUAT_VIEW")
+      ...(hasPerm(27, "PERM_PHIEUXUAT_VIEW") 
         ? [getItem("Xuất kho", "/Xuat")]
         : []),
     ];

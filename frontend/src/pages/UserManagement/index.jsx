@@ -229,9 +229,9 @@ const UserManagementPage = () => {
       fetchUsers();
     } catch (error) {
       let errMsg = "Lỗi khi xóa người dùng!";
-      if (error.response?.data?.message) {
-        errMsg = error.response.data.message;
-      }
+      // if (error.response?.data?.message) {
+      //   errMsg = error.response.data.message;
+      // }
       messageApi.error(errMsg);
     }
     setIsDeleteModalOpen(false);

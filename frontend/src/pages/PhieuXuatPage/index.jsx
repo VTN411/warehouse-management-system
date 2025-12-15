@@ -48,6 +48,7 @@ const PERM_DELETE = 25;
 const PERM_APPROVE = 42;
 const PERM_CANCEL = 43;
 const PERM_EDIT_APPROVED = 121;
+const PERM_VIEW = 27;
 
 const PhieuXuatPage = () => {
   const [listData, setListData] = useState([]);
@@ -185,38 +186,60 @@ const PhieuXuatPage = () => {
   }, []);
 
   useEffect(() => {
-    fetchData(1, 5, filter);
-    fetchCommonData();
-
     const storedUser = localStorage.getItem("user_info");
     if (storedUser) {
       try {
         let user = JSON.parse(storedUser);
-
-        // Fix lỗi dữ liệu lồng
-        if (
-          user.quyen &&
-          !Array.isArray(user.quyen) &&
-          user.quyen.maNguoiDung
-        ) {
+        
+        // Fix lỗi dữ liệu lồng (nếu có)
+        if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung) {
           user = user.quyen;
         }
-
-        // [!] 2. LƯU THÔNG TIN USER ĐANG ĐĂNG NHẬP
         setCurrentUser(user);
 
-        const roleName = user.vaiTro || user.tenVaiTro || "";
-        const roleId = user.maVaiTro;
+        const roleName = (user.vaiTro || user.tenVaiTro || "").toUpperCase();
+        setIsAdmin(roleName === "ADMIN");
 
-        setIsAdmin(roleName.toUpperCase() === "ADMIN");
-        setIsLecturer(roleName.toUpperCase() === "GIANG_VIEN" || roleId === 5);
+        // Logic Role Giảng viên (để ẩn/hiện cột Khách hàng)
+        if (roleName === "GIANG_VIEN") {
+            setIsLecturer(true);
+        } else {
+            setIsLecturer(false);
+        }
 
-        let perms = user.dsQuyenSoHuu || user.quyen;
-        setPermissions(Array.isArray(perms) ? perms : []);
+        // --- XỬ LÝ DANH SÁCH QUYỀN (QUAN TRỌNG) ---
+        let rawPerms = user.dsQuyenSoHuu || user.quyen || [];
+        
+        // Đảm bảo rawPerms là mảng
+        if (!Array.isArray(rawPerms)) rawPerms = [];
+
+        // Chuẩn hóa quyền về dạng số nguyên (tránh lỗi string "27" != number 27)
+        const parsedPerms = rawPerms.map(p => {
+            // Nếu quyền là object (ví dụ {maQuyen: 27, tenQuyen: 'View'}), lấy id ra
+            if (typeof p === 'object' && p !== null) return parseInt(p.maQuyen || p.id);
+            // Nếu quyền là số hoặc chuỗi, ép kiểu về số
+            return parseInt(p);
+        });
+
+        
+
+        // --- CHECK QUYỀN 27 ĐỂ GỌI API ---
+        const hasViewPerm = parsedPerms.includes(PERM_VIEW); // PERM_VIEW = 27
+
+        // Chỉ gọi API nếu là Admin HOẶC có quyền 27 HOẶC là Giảng viên (xem của chính mình)
+        if (roleName === "ADMIN" || hasViewPerm || roleName === "GIANG_VIEN") {
+            fetchData(1, 5, filter);
+        } else {
+            // Nếu không có quyền thì tắt loading (để hiện thông báo lỗi ở dưới)
+            setLoading(false);
+        }
+        
       } catch (e) {
+        console.error("Lỗi parse user:", e);
         setPermissions([]);
       }
     }
+    fetchCommonData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -412,24 +435,21 @@ const PhieuXuatPage = () => {
       width: "10%",
       render: (value) => `${Number(value || 0).toLocaleString()} đ`,
     },
-    // [!] 3. CẬP NHẬT CỘT KHÁCH HÀNG
     {
       title: "Khách Hàng",
       dataIndex: "maKH",
       width: "18%",
       render: (id, record) => {
-        // Cách 1: Tìm trong danh sách (dành cho Admin có quyền xem KH)
-        const kh = listKhachHang.find((item) => item.maKH === id);
-        if (kh) return kh.tenKH;
+        // Nếu KHÔNG PHẢI Giảng viên (Admin, Nhân viên, Thủ kho...) -> Xem tên khách hàng thật
+        if (!isLecturer) {
+           const kh = listKhachHang.find((item) => item.maKH === id);
+           return kh ? kh.tenKH : (record.khachHang?.tenKH || `Mã: ${id}`);
+        }
 
-        // Cách 2: Nếu là Giảng Viên (không có list KH), hiển thị tên chính họ
+        // Nếu LÀ Giảng viên -> Xem tên mình
         if (isLecturer && currentUser) {
           return currentUser.hoTen;
         }
-
-        // Cách 3: Nếu backend trả về object lồng (record.khachHang.tenKH)
-        if (record.khachHang && record.khachHang.tenKH)
-          return record.khachHang.tenKH;
 
         return `Mã: ${id}`;
       },
@@ -502,7 +522,20 @@ const PhieuXuatPage = () => {
       },
     },
   ];
+const hasViewRight = isAdmin || permissions.includes(PERM_VIEW) || isLecturer;
 
+  // Nếu không loading và không có quyền -> Chặn
+  if (!loading && permissions.length > 0 && !hasViewRight) {
+      return (
+        <Card style={{ margin: 20, textAlign: "center" }}>
+            <h2 style={{ color: "red" }}>Truy cập bị từ chối</h2>
+            <p>Tài khoản của bạn chưa được cấp quyền xem danh sách phiếu xuất.</p>
+            <p>Vui lòng liên hệ Admin để cấp quyền mã: <b>{PERM_VIEW}</b></p>
+            {/* Debug: Hiển thị danh sách quyền hiện có để kiểm tra */}
+            <small style={{color: 'gray'}}>Quyền hiện có: {permissions.join(', ')}</small>
+        </Card>
+      );
+  }
   return (
     <div>
       {contextHolder}
@@ -673,10 +706,7 @@ const PhieuXuatPage = () => {
                   optionFilterProp="children"
                 >
                   {listKhachHang.map((kh) => (
-                    <Option
-                      key={kh.maKH}
-                      value={kh.maKH}
-                    >
+                    <Option key={kh.maKH} value={kh.maKH}>
                       {kh.tenKH}
                     </Option>
                   ))}

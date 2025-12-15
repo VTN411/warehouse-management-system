@@ -476,19 +476,7 @@ const Dashboard = () => {
                         />
                       ),
                     },
-                    {
-                      key: "2",
-                      label: `Tồn kho âm (${alerts.tonAm?.length || 0})`,
-                      children: (
-                        <Table
-                          dataSource={alerts.tonAm}
-                          columns={alertColumns}
-                          rowKey="maSP"
-                          pagination={{ pageSize: 5 }}
-                          size="small"
-                        />
-                      ),
-                    },
+                    
                     {
                       key: "3",
                       label: `Hết hạn sử dụng (${

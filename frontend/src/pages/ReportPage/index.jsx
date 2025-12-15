@@ -25,8 +25,10 @@ import dayjs from "dayjs";
 
 const { RangePicker } = DatePicker;
 
-const PERM_INVENTORY = 100;
-const PERM_HISTORY = 101;
+// --- KHAI BÁO MÃ QUYỀN ---
+const PERM_INVENTORY = 103; // Xem báo cáo tồn kho
+const PERM_HISTORY = 101; // Xem lịch sử giao dịch
+const PERM_NXT = 131; // Xem báo cáo Nhập Xuất Tồn
 
 const ReportPage = () => {
   const [loading, setLoading] = useState(false);
@@ -36,8 +38,8 @@ const ReportPage = () => {
   const [historyData, setHistoryData] = useState([]);
   const [nxtData, setNxtData] = useState([]);
 
-  // [!] 1. STATE QUẢN LÝ TAB ĐANG CHỌN (Mặc định là inventory)
-  const [activeTab, setActiveTab] = useState("inventory");
+  // State quản lý Tab
+  const [activeTab, setActiveTab] = useState("");
 
   const [pagination, setPagination] = useState({
     current: 1,
@@ -45,7 +47,6 @@ const ReportPage = () => {
     total: 0,
     showSizeChanger: true,
     pageSizeOptions: ["5", "10", "20", "50"],
-    // showTotal: (total) => `Tổng ${total} dòng`,
   });
 
   const [nxtFilter, setNxtFilter] = useState({
@@ -56,7 +57,7 @@ const ReportPage = () => {
   const [permissions, setPermissions] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Lấy quyền user
+  // 1. LẤY QUYỀN USER
   useEffect(() => {
     const storedUser = localStorage.getItem("user_info");
     if (storedUser) {
@@ -64,19 +65,37 @@ const ReportPage = () => {
         const user = JSON.parse(storedUser);
         const userData =
           user.quyen && !Array.isArray(user.quyen) ? user.quyen : user;
-        const role = userData.vaiTro || userData.tenVaiTro || "";
+
+        const role = (
+          userData.vaiTro ||
+          userData.tenVaiTro ||
+          ""
+        ).toUpperCase();
         setIsAdmin(role === "ADMIN");
-        let perms = userData.dsQuyenSoHuu || userData.quyen || [];
-        setPermissions(Array.isArray(perms) ? perms : []);
+
+        let rawPerms = userData.dsQuyenSoHuu || userData.quyen || [];
+        if (!Array.isArray(rawPerms)) rawPerms = [];
+
+        // Chuẩn hóa quyền về dạng số
+        const parsedPerms = rawPerms.map((p) => {
+          if (typeof p === "object" && p !== null)
+            return parseInt(p.maQuyen || p.id);
+          return parseInt(p);
+        });
+
+        setPermissions(parsedPerms);
       } catch (e) {
         setPermissions([]);
       }
     }
   }, []);
 
+  // 2. BIẾN FLAG KIỂM TRA QUYỀN
   const canViewInventory = isAdmin || permissions.includes(PERM_INVENTORY);
   const canViewHistory = isAdmin || permissions.includes(PERM_HISTORY);
-  const canViewReport = canViewInventory || canViewHistory;
+  const canViewNXT = isAdmin || permissions.includes(PERM_NXT);
+
+  const canViewAnyReport = canViewInventory || canViewHistory || canViewNXT;
 
   // --- CÁC HÀM FETCH DỮ LIỆU ---
 
@@ -88,7 +107,9 @@ const ReportPage = () => {
       const data = response.data || [];
       setInventoryData(data);
       setPagination((prev) => ({ ...prev, total: data.length, current: 1 }));
-    } catch (error) {}
+    } catch (error) {
+      // message.error("Lỗi tải tồn kho");
+    }
     setLoading(false);
   }, [canViewInventory]);
 
@@ -107,6 +128,7 @@ const ReportPage = () => {
   }, [canViewHistory]);
 
   const fetchNXT = useCallback(async () => {
+    if (!canViewNXT) return;
     setLoading(true);
     try {
       const params = {
@@ -119,29 +141,10 @@ const ReportPage = () => {
       message.error("Lỗi tải báo cáo NXT!");
     }
     setLoading(false);
-  }, [nxtFilter]);
+  }, [nxtFilter, canViewNXT]);
 
-  // [!] 2. USE EFFECT QUAN TRỌNG: Tự động gọi API khi tab thay đổi hoặc khi vừa có quyền
-  useEffect(() => {
-    if (activeTab === "inventory" && canViewInventory) {
-      fetchInventory();
-    } else if (activeTab === "history" && canViewHistory) {
-      fetchHistory();
-    } else if (activeTab === "nxt") {
-      fetchNXT();
-    }
-  }, [
-    activeTab,
-    canViewInventory,
-    canViewHistory,
-    fetchInventory,
-    fetchHistory,
-    fetchNXT,
-  ]);
-
-  // Xử lý khi bấm chuyển Tab
   const handleTabChange = (key) => {
-    setActiveTab(key); // Cập nhật state, useEffect ở trên sẽ tự chạy
+    setActiveTab(key);
   };
 
   const handleTableChange = (newPagination) => {
@@ -152,7 +155,8 @@ const ReportPage = () => {
     });
   };
 
-  // --- CẤU HÌNH CỘT ---
+  // --- [QUAN TRỌNG] KHAI BÁO CỘT TRƯỚC KHI DÙNG TRONG getTabItems ---
+
   const inventoryColumns = [
     { title: "Tên Sản Phẩm", dataIndex: "tenSP", key: "tenSP" },
     { title: "ĐVT", dataIndex: "donViTinh", key: "donViTinh", width: 80 },
@@ -289,158 +293,208 @@ const ReportPage = () => {
     },
   ];
 
-  const items = [
-    {
-      key: "inventory",
-      label: (
-        <span>
-          <BarChartOutlined /> Tồn kho hiện tại
-        </span>
-      ),
-      children: (
-        <>
-          <div style={{ textAlign: "right", marginBottom: 16 }}>
-            <Button icon={<FileExcelOutlined />}>Xuất Excel</Button>
-          </div>
-          <Table
-            className="fixed-height-table"
-            columns={inventoryColumns}
-            dataSource={inventoryData}
-            loading={loading}
-            rowKey={(record, index) => index}
-            pagination={pagination}
-            onChange={handleTableChange}
-          />
-        </>
-      ),
-    },
-    {
-      key: "history",
-      label: (
-        <span>
-          <HistoryOutlined /> Lịch sử Giao dịch
-        </span>
-      ),
-      children: (
-        <>
-          <div style={{ textAlign: "right", marginBottom: 16 }}>
-            <Button icon={<FileExcelOutlined />}>Xuất Excel</Button>
-          </div>
-          <Table
-            className="fixed-height-table"
-            columns={historyColumns}
-            dataSource={historyData}
-            loading={loading}
-            rowKey={(record, index) => index}
-            pagination={pagination}
-            onChange={handleTableChange}
-          />
-        </>
-      ),
-    },
-    {
-      key: "nxt",
-      label: (
-        <span>
-          <TableOutlined /> Nhập - Xuất - Tồn
-        </span>
-      ),
-      children: (
-        <>
-          <div
-            style={{
-              marginBottom: 16,
-              display: "flex",
-              justifyContent: "space-between",
-            }}
-          >
-            <Space>
-              <span>Kỳ báo cáo:</span>
-              <RangePicker
-                allowClear={false}
-                value={[nxtFilter.from, nxtFilter.to]}
-                onChange={(dates) =>
-                  setNxtFilter({ from: dates[0], to: dates[1] })
-                }
-              />
-              <Button
-                type="primary"
-                onClick={fetchNXT}
-                loading={loading}
-              >
-                Xem báo cáo
-              </Button>
-            </Space>
-            <Button icon={<FileExcelOutlined />}>Xuất Excel</Button>
-          </div>
-          <Table
-            className="fixed-height-table"
-            columns={nxtColumns}
-            dataSource={nxtData}
-            loading={loading}
-            rowKey="maSP"
-            pagination={pagination}
-            onChange={handleTableChange}
-            bordered
-            summary={(pageData) => {
-              let totalNhap = 0;
-              let totalXuat = 0;
-              let totalGiaTri = 0;
-              pageData.forEach(({ slNhap, slXuat, giaTriTonCuoi }) => {
-                totalNhap += slNhap;
-                totalXuat += slXuat;
-                totalGiaTri += giaTriTonCuoi;
-              });
-              return (
-                <Table.Summary.Row
-                  style={{ fontWeight: "bold", background: "#fafafa" }}
-                >
-                  <Table.Summary.Cell
-                    index={0}
-                    colSpan={4}
-                  >
-                    Tổng cộng
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell
-                    index={1}
-                    align="center"
-                  >
-                    {totalNhap}
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell
-                    index={2}
-                    align="center"
-                  >
-                    {totalXuat}
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell index={3}></Table.Summary.Cell>
-                  <Table.Summary.Cell
-                    index={4}
-                    align="right"
-                  >
-                    {totalGiaTri.toLocaleString()} đ
-                  </Table.Summary.Cell>
-                </Table.Summary.Row>
-              );
-            }}
-          />
-        </>
-      ),
-    },
-  ];
+  // 3. XÂY DỰNG DANH SÁCH TAB DỰA TRÊN QUYỀN
+  const getTabItems = () => {
+    const items = [];
 
+    // Tab Tồn kho (Quyền 103)
+    if (canViewInventory) {
+      items.push({
+        key: "inventory",
+        label: (
+          <span>
+            <BarChartOutlined /> Tồn kho hiện tại
+          </span>
+        ),
+        children: (
+          <>
+           
+            <Table
+              className="fixed-height-table"
+              columns={inventoryColumns}
+              dataSource={inventoryData}
+              loading={loading}
+              rowKey={(record, index) => index}
+              pagination={pagination}
+              onChange={handleTableChange}
+            />
+          </>
+        ),
+      });
+    }
+
+    // Tab Lịch sử (Quyền 101)
+    if (canViewHistory) {
+      items.push({
+        key: "history",
+        label: (
+          <span>
+            <HistoryOutlined /> Lịch sử Giao dịch
+          </span>
+        ),
+        children: (
+          <>
+            <div style={{ textAlign: "right", marginBottom: 16 }}>
+              <Button icon={<FileExcelOutlined />}>Xuất Excel</Button>
+            </div>
+            <Table
+              className="fixed-height-table"
+              columns={historyColumns}
+              dataSource={historyData}
+              loading={loading}
+              rowKey={(record, index) => index}
+              pagination={pagination}
+              onChange={handleTableChange}
+            />
+          </>
+        ),
+      });
+    }
+
+    // Tab Nhập Xuất Tồn (Quyền 131)
+    if (canViewNXT) {
+      items.push({
+        key: "nxt",
+        label: (
+          <span>
+            <TableOutlined /> Nhập - Xuất - Tồn
+          </span>
+        ),
+        children: (
+          <>
+            <div
+              style={{
+                marginBottom: 16,
+                display: "flex",
+                justifyContent: "space-between",
+              }}
+            >
+              <Space>
+                <span>Kỳ báo cáo:</span>
+                <RangePicker
+                  allowClear={false}
+                  value={[nxtFilter.from, nxtFilter.to]}
+                  onChange={(dates) =>
+                    setNxtFilter({ from: dates[0], to: dates[1] })
+                  }
+                />
+                <Button
+                  type="primary"
+                  onClick={fetchNXT}
+                  loading={loading}
+                >
+                  Xem báo cáo
+                </Button>
+              </Space>
+              <Button icon={<FileExcelOutlined />}>Xuất Excel</Button>
+            </div>
+            <Table
+              className="fixed-height-table"
+              columns={nxtColumns}
+              dataSource={nxtData}
+              loading={loading}
+              rowKey="maSP"
+              pagination={pagination}
+              onChange={handleTableChange}
+              bordered
+              summary={(pageData) => {
+                let totalNhap = 0;
+                let totalXuat = 0;
+                let totalGiaTri = 0;
+                pageData.forEach(({ slNhap, slXuat, giaTriTonCuoi }) => {
+                  totalNhap += slNhap;
+                  totalXuat += slXuat;
+                  totalGiaTri += giaTriTonCuoi;
+                });
+                return (
+                  <Table.Summary.Row
+                    style={{ fontWeight: "bold", background: "#fafafa" }}
+                  >
+                    <Table.Summary.Cell
+                      index={0}
+                      colSpan={4}
+                    >
+                      Tổng cộng
+                    </Table.Summary.Cell>
+                    <Table.Summary.Cell
+                      index={1}
+                      align="center"
+                    >
+                      {totalNhap}
+                    </Table.Summary.Cell>
+                    <Table.Summary.Cell
+                      index={2}
+                      align="center"
+                    >
+                      {totalXuat}
+                    </Table.Summary.Cell>
+                    <Table.Summary.Cell index={3}></Table.Summary.Cell>
+                    <Table.Summary.Cell
+                      index={4}
+                      align="right"
+                    >
+                      {totalGiaTri.toLocaleString()} đ
+                    </Table.Summary.Cell>
+                  </Table.Summary.Row>
+                );
+              }}
+            />
+          </>
+        ),
+      });
+    }
+
+    return items;
+  };
+
+  const items = getTabItems();
+
+  // 4. TỰ ĐỘNG CHỌN TAB ĐẦU TIÊN CÓ QUYỀN
+  useEffect(() => {
+    if (items.length > 0) {
+      const isCurrentTabValid = items.some((i) => i.key === activeTab);
+      if (!activeTab || !isCurrentTabValid) {
+        setActiveTab(items[0].key);
+      }
+    }
+  }, [items, activeTab]);
+
+  // 5. GỌI API KHI ACTIVE TAB THAY ĐỔI
+  useEffect(() => {
+    if (activeTab === "inventory" && canViewInventory) {
+      fetchInventory();
+    } else if (activeTab === "history" && canViewHistory) {
+      fetchHistory();
+    } else if (activeTab === "nxt" && canViewNXT) {
+      fetchNXT();
+    }
+  }, [
+    activeTab,
+    canViewInventory,
+    canViewHistory,
+    canViewNXT,
+    fetchInventory,
+    fetchHistory,
+    fetchNXT,
+  ]);
+
+  // --- RENDER GIAO DIỆN ---
   return (
     <div style={{ padding: 0 }}>
       <h2>Báo cáo & Thống kê</h2>
-      {canViewReport ? (
-        // [!] CHỈ ĐỊNH TAB ĐANG ACTIVE
+      {canViewAnyReport && items.length > 0 ? (
         <Tabs
           activeKey={activeTab}
           items={items}
           onChange={handleTabChange}
         />
       ) : (
-        <Card>Bạn không có quyền xem báo cáo nào.</Card>
+        <Card style={{ textAlign: "center", marginTop: 20 }}>
+          <WarningOutlined
+            style={{ fontSize: 40, color: "orange", marginBottom: 10 }}
+          />
+          <p>Bạn không có quyền xem bất kỳ báo cáo nào.</p>
+        </Card>
       )}
     </div>
   );
