@@ -334,9 +334,7 @@ const ReportPage = () => {
         ),
         children: (
           <>
-            <div style={{ textAlign: "right", marginBottom: 16 }}>
-              <Button icon={<FileExcelOutlined />}>Xuất Excel</Button>
-            </div>
+            
             <Table
               className="fixed-height-table"
               columns={historyColumns}
