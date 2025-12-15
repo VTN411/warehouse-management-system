@@ -207,10 +207,6 @@ const Dashboard = () => {
               style={{ fontSize: 40, color: "#faad14", marginBottom: 16 }}
             />
             <h3>Bạn không có quyền xem Dashboard</h3>
-            <p>
-              Vui lòng liên hệ Admin để được cấp quyền (ID:{" "}
-              {PERM_DASHBOARD_VIEW}).
-            </p>
           </div>
         </Card>
       </div>

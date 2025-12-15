@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { loginAPI, getUserInfoAPI } from "../../services/auth.service"; // Import cả 2
 import { setToken } from "../../utils/token";
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
 
 const LoginPage = () => {
   const [loading, setLoading] = useState(false);
@@ -39,10 +39,10 @@ const LoginPage = () => {
 
       // 5. Hoàn tất
       message.success("Đăng nhập thành công!");
-      navigate("/dashboard");
+      navigate("/SanPham");
     } catch (error) {
       console.log("LỖI ĐĂNG NHẬP HOẶC LẤY QUYỀN:", error);
-      const errorMsg = error.response?.data?.message || "Đăng nhập thất bại!";
+      const errorMsg =  "Đăng nhập thất bại!";
       message.error(errorMsg);
       setLoading(false);
     }
@@ -111,16 +111,6 @@ const LoginPage = () => {
             >
               <Input.Password size="large" />
             </Form.Item>
-
-            <div style={{ marginBottom: 24, textAlign: "right" }}>
-              <Text
-                type="danger"
-                style={{ cursor: "pointer" }}
-              >
-                Quên mật khẩu?
-              </Text>
-            </div>
-
             <Form.Item>
               <Button
                 type="primary"
