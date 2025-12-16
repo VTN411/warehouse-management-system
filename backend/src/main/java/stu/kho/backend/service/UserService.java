@@ -69,7 +69,7 @@ public class UserService {
         dto.setHoTen(user.getHoTen());
         dto.setEmail(user.getEmail());
         dto.setSdt(user.getSdt());
-
+        dto.setTrangThai(user.getTrangThai());
         Integer maVaiTro = null;
         if (user.getVaiTro() != null) {
             dto.setTenVaiTro(user.getVaiTro().getTenVaiTro());

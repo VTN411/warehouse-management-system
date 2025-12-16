@@ -11,6 +11,7 @@ public class UserResponse {
     private String hoTen;
     private String email;
     private String sdt;
-    private String tenVaiTro; // Chỉ trả về tên vai trò (VD: ADMIN)
+    private String tenVaiTro;
+    private Boolean trangThai;
     private List<Integer> dsQuyenSoHuu;
 }
