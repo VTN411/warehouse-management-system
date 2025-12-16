@@ -27,13 +27,20 @@ public class JdbcKhoHangRepository implements KhoHangRepository {
             kho.setTenKho(rs.getString("TenKho"));
             kho.setDiaChi(rs.getString("DiaChi"));
             kho.setGhiChu(rs.getString("GhiChu"));
+            // 1. QUAN TRỌNG: Phải map thêm cột DaXoa để logic thùng rác hoạt động
+            kho.setDaXoa(rs.getBoolean("DaXoa"));
             return kho;
         };
     }
 
+    // 2. SỬA LỖI NGHIÊM TRỌNG TẠI ĐÂY
     @Override
     public Optional<KhoHang> findById(Integer id) {
-        String sql = "SELECT * FROM khohang WHERE DaXoa = 0 ORDER BY MaKho DESC";
+        // Cũ (Sai): "SELECT * FROM khohang WHERE DaXoa = 0 ORDER BY MaKho DESC"
+        // Sai vì: Đây là câu SQL lấy danh sách, không phải lấy 1 cái theo ID, và thiếu dấu ?
+
+        // Mới (Đúng): Phải có WHERE MaKho = ?
+        String sql = "SELECT * FROM khohang WHERE MaKho = ?";
         try {
             KhoHang kho = jdbcTemplate.queryForObject(sql, khoHangRowMapper, id);
             return Optional.ofNullable(kho);
@@ -44,15 +51,14 @@ public class JdbcKhoHangRepository implements KhoHangRepository {
 
     @Override
     public List<KhoHang> findAll() {
-        String sql = "SELECT * FROM khohang";
+        // Lấy danh sách hiển thị (Chỉ lấy cái chưa xóa)
+        String sql = "SELECT * FROM khohang WHERE DaXoa = 0 ORDER BY MaKho DESC";
         return jdbcTemplate.query(sql, khoHangRowMapper);
     }
 
-    // --- CÁC PHƯƠNG THỨC MỚI ---
-
     @Override
     public int save(KhoHang kho) {
-        String sql = "INSERT INTO khohang (TenKho, DiaChi, GhiChu) VALUES (?, ?, ?)";
+        String sql = "INSERT INTO khohang (TenKho, DiaChi, GhiChu, DaXoa) VALUES (?, ?, ?, 0)";
         KeyHolder keyHolder = new GeneratedKeyHolder();
 
         jdbcTemplate.update(connection -> {
@@ -83,25 +89,27 @@ public class JdbcKhoHangRepository implements KhoHangRepository {
 
     @Override
     public int deleteById(Integer id) {
+        // Soft Delete
         String sql = "UPDATE khohang SET DaXoa = 1 WHERE MaKho = ?";
         return jdbcTemplate.update(sql, id);
     }
 
     @Override
     public List<KhoHang> search(String keyword) {
-        String sql = "SELECT * FROM khohang WHERE TenKho LIKE ? OR DiaChi LIKE ?";
+        // Tìm kiếm (chỉ trong danh sách chưa xóa)
+        String sql = "SELECT * FROM khohang WHERE (TenKho LIKE ? OR DiaChi LIKE ?) AND DaXoa = 0";
         String searchArg = "%" + keyword + "%";
         return jdbcTemplate.query(sql, khoHangRowMapper, searchArg, searchArg);
     }
 
-    // 2. LOGIC KHÔI PHỤC
+    // --- LOGIC MỚI ---
+
     @Override
     public void restoreById(Integer id) {
         String sql = "UPDATE khohang SET DaXoa = 0 WHERE MaKho = ?";
         jdbcTemplate.update(sql, id);
     }
 
-    // 3. LOGIC LẤY THÙNG RÁC
     @Override
     public List<KhoHang> findAllDeleted() {
         String sql = "SELECT * FROM khohang WHERE DaXoa = 1";
