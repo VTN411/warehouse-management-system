@@ -12,6 +12,7 @@ import {
   Card,
   Row,
   Col,
+  Tooltip,
 } from "antd";
 import {
   PlusOutlined,
@@ -19,222 +20,209 @@ import {
   DeleteOutlined,
   ReloadOutlined,
   SearchOutlined,
+  RestOutlined, // Icon thùng rác
+  UndoOutlined, // Icon khôi phục
+  ArrowLeftOutlined, // Icon quay lại
 } from "@ant-design/icons";
 import * as supplierService from "../../services/supplier.service";
-
-const PERM_SUPPLIER_CREATE = 61;
-const PERM_SUPPLIER_EDIT = 62;
-const PERM_SUPPLIER_DELETE = 63;
 
 const SupplierPage = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [submitLoading, setSubmitLoading] = useState(false);
+
+  // State: Đang ở chế độ xem thùng rác hay không?
+  const [inTrashMode, setInTrashMode] = useState(false);
+
+  // Modal State
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deletingRecord, setDeletingRecord] = useState(null);
+
+  const [keyword, setKeyword] = useState("");
   const [form] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
 
-  const [permissions, setPermissions] = useState([]);
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [deletingId, setDeletingId] = useState(null);
-
-  const [keyword, setKeyword] = useState("");
-
-  // 1. LẤY DỮ LIỆU
+  // 1. LẤY DỮ LIỆU (Tự động chọn API dựa vào chế độ xem)
   const fetchSuppliers = useCallback(
     async (searchKey = "") => {
       setLoading(true);
       try {
         let response;
-        if (searchKey) {
-          response = await supplierService.searchSuppliers(searchKey);
+
+        if (inTrashMode) {
+          // A. Nếu đang ở THÙNG RÁC -> Gọi API Trash
+          console.log("Đang lấy dữ liệu thùng rác...");
+          response = await supplierService.getTrashSuppliers();
         } else {
-          response = await supplierService.getAllSuppliers();
+          // B. Nếu đang ở DANH SÁCH CHÍNH -> Gọi API thường
+          if (searchKey) {
+            response = await supplierService.searchSuppliers(searchKey);
+          } else {
+            response = await supplierService.getAllSuppliers();
+          }
         }
-        setSuppliers(response.data || []);
+
+        // Xử lý dữ liệu trả về (hỗ trợ cả dạng mảng và dạng trang)
+        let rawData = [];
+        if (Array.isArray(response.data)) {
+          rawData = response.data;
+        } else if (response.data && Array.isArray(response.data.content)) {
+          rawData = response.data.content;
+        }
+
+        setSuppliers(rawData);
       } catch (error) {
-        messageApi.error("Không thể tải danh sách nhà cung cấp!");
+        console.error("Lỗi tải dữ liệu:", error);
+        messageApi.error("Không thể tải danh sách!");
       }
       setLoading(false);
     },
-    [messageApi]
+    [messageApi, inTrashMode]
   );
 
   useEffect(() => {
-    fetchSuppliers();
-    try {
-      const storedUser = localStorage.getItem("user_info");
-      if (storedUser) {
-        let user = JSON.parse(storedUser);
-        if (
-          user.quyen &&
-          !Array.isArray(user.quyen) &&
-          user.quyen.maNguoiDung
-        ) {
-          user = user.quyen;
-        }
-        const role = user.vaiTro || user.tenVaiTro || "";
-        setIsAdmin(role === "ADMIN");
-        let perms = user.dsQuyenSoHuu || user.quyen;
-        if (!Array.isArray(perms)) perms = [];
-        setPermissions(perms);
-      }
-    } catch (e) {
-      setPermissions([]);
-    }
-  }, [fetchSuppliers]);
-
-  const handleSearch = () => {
     fetchSuppliers(keyword);
-  };
-  const handleReset = () => {
+  }, [fetchSuppliers, keyword, inTrashMode]);
+
+  const handleSearch = () => fetchSuppliers(keyword);
+
+  // Reset: Nếu ở trash thì reload trash, nếu ở main thì reload main
+  const handleReload = () => {
     setKeyword("");
     fetchSuppliers("");
   };
 
-  const canCreate = isAdmin || permissions.includes(PERM_SUPPLIER_CREATE);
-  const canEdit = isAdmin || permissions.includes(PERM_SUPPLIER_EDIT);
-  const canDelete = isAdmin || permissions.includes(PERM_SUPPLIER_DELETE);
+  // --- HÀM KHÔI PHỤC (RESTORE) ---
+  const handleRestore = async (record) => {
+    try {
+      setLoading(true);
+      // Gọi API restore mới thêm
+      await supplierService.restoreSupplier(record.maNCC);
 
+      messageApi.success("Khôi phục thành công!");
+      fetchSuppliers(); // Tải lại danh sách thùng rác (item đó sẽ biến mất)
+    } catch (error) {
+      messageApi.error("Lỗi khi khôi phục!");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- HÀM XÓA (SOFT DELETE) ---
+  const handleDeleteClick = (record) => {
+    setDeletingRecord(record);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingRecord) return;
+    try {
+      await supplierService.deleteSupplier(deletingRecord.maNCC);
+      messageApi.success("Đã chuyển vào thùng rác!");
+      fetchSuppliers(keyword);
+    } catch (error) {
+      messageApi.error("Lỗi khi xóa!");
+    }
+    setIsDeleteModalOpen(false);
+    setDeletingRecord(null);
+  };
+
+  // --- MODAL & FORM (Thêm/Sửa) ---
   const handleOpenModal = () => {
     setEditingSupplier(null);
     form.resetFields();
     setIsModalVisible(true);
   };
+
   const handleEdit = (record) => {
     setEditingSupplier(record);
     form.setFieldsValue(record);
     setIsModalVisible(true);
   };
 
-  // [!] 1. LOGIC KIỂM TRA TRÙNG LẶP & XỬ LÝ LỖI TẠO MỚI
   const handleOk = () => {
     form
       .validateFields()
       .then(async (values) => {
-        // Chuẩn hóa dữ liệu để so sánh
-        const inputName = values.tenNCC.trim().toLowerCase();
-        const inputAddress = (values.diaChi || "").trim().toLowerCase();
-
-        // Kiểm tra trùng: Cả Tên và Địa chỉ đều giống
-        const isDuplicate = suppliers.some((ncc) => {
-          if (editingSupplier && ncc.maNCC === editingSupplier.maNCC)
-            return false;
-          const currentName = ncc.tenNCC.trim().toLowerCase();
-          const currentAddress = (ncc.diaChi || "").trim().toLowerCase();
-          return currentName === inputName && currentAddress === inputAddress;
-        });
-
-        if (isDuplicate) {
-          messageApi.error(
-            `Nhà cung cấp "${values.tenNCC}" tại địa chỉ này đã tồn tại!`
-          );
-          return;
-        }
-
-        setSubmitLoading(true);
         try {
           if (editingSupplier) {
             await supplierService.updateSupplier(editingSupplier.maNCC, values);
             messageApi.success("Cập nhật thành công!");
           } else {
             await supplierService.createSupplier(values);
-            messageApi.success("Thêm mới thành công!");
+            messageApi.success("Tạo mới thành công!");
           }
           setIsModalVisible(false);
           fetchSuppliers(keyword);
         } catch (error) {
-          // Hiển thị lỗi từ Backend (nếu có)
-          const errorMsg =
-            error.response?.data?.message ||
-            error.response?.data ||
-            "Có lỗi xảy ra!";
-          messageApi.error(errorMsg);
-        } finally {
-          setSubmitLoading(false);
+          messageApi.error("Có lỗi xảy ra!");
         }
       })
       .catch(() => {});
   };
 
-  const handleDelete = (id) => {
-    setDeletingId(id);
-    setIsDeleteModalOpen(true);
-  };
-
-  // [!] 2. LOGIC XÓA & HIỂN THỊ LỖI TỪ BACKEND
-  const handleDeleteConfirm = async () => {
-    try {
-      await supplierService.deleteSupplier(deletingId);
-      messageApi.success("Đã xóa nhà cung cấp!");
-      fetchSuppliers(keyword);
-    } catch (error) {
-      // Ưu tiên lấy message từ Backend trả về
-      // VD: Backend trả về { message: "Không thể xóa vì NCC đang có hàng trong kho" }
-      const errorMsg =
-        error.response?.data?.message ||
-        error.response?.data ||
-        "Lỗi khi xóa nhà cung cấp!";
-
-      // Nếu lỗi quá dài hoặc là lỗi SQL thuần, hiển thị thông báo thân thiện hơn
-      if (
-        errorMsg.includes("ConstraintViolation") ||
-        errorMsg.includes("foreign key")
-      ) {
-        messageApi.error(
-          "Không thể xóa! Nhà cung cấp này đang có giao dịch hoặc sản phẩm liên quan."
-        );
-      } else {
-        messageApi.error(errorMsg);
-      }
-    }
-    setIsDeleteModalOpen(false);
-    setDeletingId(null);
-  };
-
+  // --- CẤU HÌNH CỘT ---
   const columns = [
+    {
+      title: "Mã",
+      dataIndex: "maNCC",
+      width: 80,
+    },
     {
       title: "Tên NCC",
       dataIndex: "tenNCC",
       key: "tenNCC",
-      width: 200,
-      render: (t) => <b>{t}</b>,
+      render: (text) => <span style={{ fontWeight: 500 }}>{text}</span>,
     },
     { title: "Người Liên Hệ", dataIndex: "nguoiLienHe", key: "nguoiLienHe" },
     { title: "SĐT", dataIndex: "sdt", key: "sdt" },
     { title: "Email", dataIndex: "email", key: "email" },
-    { title: "Địa Chỉ", dataIndex: "diaChi", key: "diaChi" },
     {
       title: "Hành động",
       key: "action",
-      width: 120,
-      align: "center",
-      render: (_, record) => (
-        <Space size="middle">
-          {canEdit && (
-            <Button
-              icon={<EditOutlined />}
-              onClick={() => handleEdit(record)}
-            />
-          )}
-          {canDelete && (
-            <Button
-              icon={<DeleteOutlined />}
-              danger
-              onClick={() => handleDelete(record.maNCC)}
-            />
-          )}
-        </Space>
-      ),
+      width: 150,
+      render: (_, record) => {
+        return (
+          <Space size="small">
+            {inTrashMode ? (
+              // 1. GIAO DIỆN TRONG THÙNG RÁC: Chỉ hiện nút Khôi Phục
+              <Tooltip title="Khôi phục hoạt động">
+                <Button
+                  type="primary"
+                  ghost // Nút viền xanh, nền trắng
+                  icon={<UndoOutlined />}
+                  onClick={() => handleRestore(record)}
+                >
+                  Khôi phục
+                </Button>
+              </Tooltip>
+            ) : (
+              // 2. GIAO DIỆN BÌNH THƯỜNG: Hiện Sửa/Xóa
+              <>
+                <Button
+                  icon={<EditOutlined />}
+                  onClick={() => handleEdit(record)}
+                  title="Sửa"
+                />
+                <Button
+                  icon={<DeleteOutlined />}
+                  danger
+                  onClick={() => handleDeleteClick(record)}
+                  title="Xóa tạm thời"
+                />
+              </>
+            )}
+          </Space>
+        );
+      },
     },
   ];
 
   return (
     <div>
       {contextHolder}
+
       <Card
         style={{ marginBottom: 16 }}
         bodyStyle={{ padding: "16px" }}
@@ -242,62 +230,100 @@ const SupplierPage = () => {
         <Row
           gutter={[16, 16]}
           align="middle"
+          justify="space-between"
         >
-          <Col span={12}>
-            <Input
-              placeholder="Tìm kiếm theo tên hoặc SĐT..."
-              prefix={<SearchOutlined />}
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              onPressEnter={handleSearch}
-            />
+          {/* --- CỤM TÌM KIẾM --- */}
+          <Col>
+            {/* Chỉ hiện tìm kiếm khi KHÔNG ở thùng rác */}
+            {!inTrashMode ? (
+              <Space>
+                <Input
+                  placeholder="Tìm kiếm NCC..."
+                  prefix={<SearchOutlined />}
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  onPressEnter={handleSearch}
+                  style={{ width: 250 }}
+                />
+                <Button
+                  type="primary"
+                  onClick={handleSearch}
+                >
+                  Tìm
+                </Button>
+              </Space>
+            ) : (
+              // Tiêu đề khi ở trong thùng rác
+              <h3 style={{ margin: 0, color: "#ff4d4f" }}>
+                <RestOutlined /> Thùng rác (Nhà cung cấp đã xóa)
+              </h3>
+            )}
           </Col>
-          <Col span={12}>
+
+          {/* --- CỤM NÚT CHỨC NĂNG --- */}
+          <Col>
             <Space>
-              <Button
-                type="primary"
-                icon={<SearchOutlined />}
-                onClick={handleSearch}
-              >
-                Tìm kiếm
-              </Button>
+              {/* Nút Tải lại */}
               <Button
                 icon={<ReloadOutlined />}
-                onClick={handleReset}
+                onClick={handleReload}
               >
                 Tải lại
               </Button>
+
+              {/* Logic chuyển đổi nút Thùng rác / Quay lại */}
+              {inTrashMode ? (
+                <Button
+                  icon={<ArrowLeftOutlined />}
+                  onClick={() => {
+                    setInTrashMode(false); // Thoát chế độ thùng rác
+                    setKeyword("");
+                  }}
+                >
+                  Quay lại danh sách
+                </Button>
+              ) : (
+                <>
+                  {/* Nút vào Thùng rác */}
+                  <Button
+                    icon={<RestOutlined />}
+                    danger
+                    onClick={() => {
+                      setInTrashMode(true); // Bật chế độ thùng rác
+                      setKeyword("");
+                    }}
+                  >
+                    Thùng rác
+                  </Button>
+
+                  {/* Nút Thêm mới (Chỉ hiện ở màn hình chính) */}
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={handleOpenModal}
+                  >
+                    Thêm NCC Mới
+                  </Button>
+                </>
+              )}
             </Space>
           </Col>
         </Row>
       </Card>
 
-      <Space style={{ marginBottom: 16 }}>
-        {canCreate && (
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleOpenModal}
-          >
-            Thêm Nhà Cung Cấp
-          </Button>
-        )}
-      </Space>
-
       <Table
-        className="fixed-height-table"
         columns={columns}
         dataSource={suppliers}
         loading={loading}
         rowKey="maNCC"
-        pagination={{ pageSize: 10 }}
+        pagination={{ pageSize: 5 }}
       />
 
+      {/* MODAL THÊM/SỬA */}
       <Modal
         title={editingSupplier ? "Sửa Nhà Cung Cấp" : "Thêm Nhà Cung Cấp"}
         open={isModalVisible}
         onOk={handleOk}
-        confirmLoading={submitLoading}
         onCancel={() => setIsModalVisible(false)}
       >
         <Form
@@ -306,44 +332,41 @@ const SupplierPage = () => {
         >
           <Form.Item
             name="tenNCC"
-            label="Tên Nhà Cung Cấp"
-            rules={[{ required: true, message: "Vui lòng nhập tên!" }]}
+            label="Tên NCC"
+            rules={[{ required: true }]}
           >
-            <Input placeholder="Ví dụ: Samsung Vina" />
+            <Input />
           </Form.Item>
           <Form.Item
             name="nguoiLienHe"
             label="Người Liên Hệ"
           >
-            <Input placeholder="Ví dụ: Mr. Kim" />
+            <Input />
           </Form.Item>
           <Form.Item
             name="sdt"
             label="Số Điện Thoại"
-            rules={[{ required: true, message: "Vui lòng nhập Số Điện Thoại" }]}
+            rules={[{ required: true }]}
           >
-            <Input placeholder="Ví dụ: 0909..." />
+            <Input />
           </Form.Item>
           <Form.Item
             name="email"
             label="Email"
             rules={[{ type: "email" }]}
           >
-            <Input placeholder="Ví dụ: contact@samsung.com" />
+            <Input />
           </Form.Item>
           <Form.Item
             name="diaChi"
             label="Địa Chỉ"
-            rules={[{ required: true, message: "Vui lòng nhập Địa Chỉ" }]}
           >
-            <Input.TextArea
-              rows={2}
-              placeholder="Ví dụ: Khu công nghệ cao..."
-            />
+            <Input.TextArea rows={2} />
           </Form.Item>
         </Form>
       </Modal>
 
+      {/* MODAL XÁA */}
       <Modal
         title="Xác nhận xóa"
         open={isDeleteModalOpen}
@@ -353,7 +376,12 @@ const SupplierPage = () => {
         cancelText="Hủy"
         okType="danger"
       >
-        <p>Bạn có chắc muốn xóa nhà cung cấp này không?</p>
+        <p>
+          Bạn có chắc muốn xóa <b>{deletingRecord?.tenNCC}</b>?
+        </p>
+        <p style={{ fontSize: "12px", color: "#888" }}>
+          Dữ liệu sẽ được chuyển vào thùng rác và có thể khôi phục sau này.
+        </p>
       </Modal>
     </div>
   );

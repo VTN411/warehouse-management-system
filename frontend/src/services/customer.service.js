@@ -29,3 +29,11 @@ export const searchCustomers = (keyword) => {
     params: { query: keyword } // API này tìm được cả Tên và SĐT
   });
 };
+export const getTrashCustomers = () => {
+  return api.get(`${API_ENDPOINT}/trash`);
+};
+
+// 2. Khôi phục khách hàng
+export const restoreCustomer = (id) => {
+  return api.put(`${API_ENDPOINT}/${id}/restore`);
+};

@@ -34,3 +34,12 @@ export const searchWarehouses = (keyword) => {
     params: { query: keyword }
   });
 };
+// 7. Lấy danh sách kho trong thùng rác
+export const getTrashWarehouses = () => {
+  return api.get(`${API_ENDPOINT}/trash`);
+};
+
+// 8. Khôi phục kho
+export const restoreWarehouse = (id) => {
+  return api.put(`${API_ENDPOINT}/${id}/restore`);
+};

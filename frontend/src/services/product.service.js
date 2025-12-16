@@ -52,3 +52,12 @@ export const filterProducts = (filterData) => {
   // filterData gồm: { keyword, maLoai, page, size... }
   return api.post(`${API_ENDPOINT}/filter`, filterData);
 };
+// 1. Lấy danh sách sản phẩm trong thùng rác
+export const getTrashProducts = () => {
+  return api.get(`${API_ENDPOINT}/trash`);
+};
+
+// 2. Khôi phục sản phẩm
+export const restoreProduct = (id) => {
+  return api.put(`${API_ENDPOINT}/${id}/restore`);
+};

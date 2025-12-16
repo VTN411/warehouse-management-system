@@ -12,6 +12,8 @@ import {
   Card,
   Row,
   Col,
+  Tag,
+  Tooltip,
 } from "antd";
 import {
   PlusOutlined,
@@ -19,6 +21,9 @@ import {
   DeleteOutlined,
   ReloadOutlined,
   SearchOutlined,
+  RestOutlined, // Icon thùng rác
+  UndoOutlined, // Icon khôi phục
+  ArrowLeftOutlined, // Icon quay lại
 } from "@ant-design/icons";
 import * as customerService from "../../services/customer.service";
 
@@ -29,6 +34,10 @@ const PERM_DELETE = 93;
 const CustomerPage = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  // State: Chế độ Thùng rác
+  const [inTrashMode, setInTrashMode] = useState(false);
+
   const [submitLoading, setSubmitLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
@@ -42,28 +51,40 @@ const CustomerPage = () => {
 
   const [keyword, setKeyword] = useState("");
 
-  // 1. LẤY DỮ LIỆU
+  // 1. LẤY DỮ LIỆU (Theo chế độ)
   const fetchCustomers = useCallback(
     async (searchKey = "") => {
       setLoading(true);
       try {
         let response;
-        if (searchKey) {
-          response = await customerService.searchCustomers(searchKey);
+
+        if (inTrashMode) {
+          // A. CHẾ ĐỘ THÙNG RÁC
+          response = await customerService.getTrashCustomers();
         } else {
-          response = await customerService.getAllCustomers();
+          // B. CHẾ ĐỘ DANH SÁCH CHÍNH
+          if (searchKey) {
+            response = await customerService.searchCustomers(searchKey);
+          } else {
+            response = await customerService.getAllCustomers();
+          }
         }
-        setCustomers(response.data || []);
+
+        // Xử lý dữ liệu trả về (mảng hoặc object phân trang)
+        const data = Array.isArray(response.data)
+          ? response.data
+          : response.data?.content || [];
+        setCustomers(data);
       } catch (error) {
         messageApi.error("Không thể tải danh sách khách hàng!");
       }
       setLoading(false);
     },
-    [messageApi]
+    [messageApi, inTrashMode]
   );
 
   useEffect(() => {
-    fetchCustomers();
+    fetchCustomers(keyword);
     try {
       const storedUser = localStorage.getItem("user_info");
       if (storedUser) {
@@ -84,7 +105,7 @@ const CustomerPage = () => {
     } catch (e) {
       setPermissions([]);
     }
-  }, [fetchCustomers]);
+  }, [fetchCustomers, keyword, inTrashMode]);
 
   const handleSearch = () => {
     fetchCustomers(keyword);
@@ -103,34 +124,43 @@ const CustomerPage = () => {
     form.resetFields();
     setIsModalVisible(true);
   };
+
   const handleEdit = (record) => {
     setEditingCustomer(record);
     form.setFieldsValue(record);
     setIsModalVisible(true);
   };
 
-  // [!] 1. KIỂM TRA TRÙNG LẶP & XỬ LÝ LỖI
+  // --- HÀM KHÔI PHỤC (RESTORE) ---
+  const handleRestore = async (record) => {
+    try {
+      await customerService.restoreCustomer(record.maKH);
+      messageApi.success("Khôi phục thành công!");
+      fetchCustomers(); // Tải lại danh sách thùng rác (item sẽ biến mất)
+    } catch (error) {
+      messageApi.error(error.response?.data?.message || "Lỗi khi khôi phục!");
+    }
+  };
+
+  // --- XỬ LÝ LƯU (THÊM/SỬA) ---
   const handleOk = () => {
     form
       .validateFields()
       .then(async (values) => {
-        // Chuẩn hóa dữ liệu
         const inputName = values.tenKH.trim().toLowerCase();
         const inputPhone = (values.sdt || "").trim();
 
-        // Kiểm tra trùng: Cả Tên và SĐT đều giống
+        // Check trùng lặp Client-side
         const isDuplicate = customers.some((kh) => {
           if (editingCustomer && kh.maKH === editingCustomer.maKH) return false;
-
           const currentName = kh.tenKH.trim().toLowerCase();
           const currentPhone = (kh.sdt || "").trim();
-
           return currentName === inputName && currentPhone === inputPhone;
         });
 
         if (isDuplicate) {
           messageApi.error(
-            `Khách hàng "${values.tenKH}" với SĐT "${values.sdt}" đã tồn tại!`
+            `Khách hàng "${values.tenKH}" - SĐT "${values.sdt}" đã tồn tại!`
           );
           return;
         }
@@ -147,11 +177,7 @@ const CustomerPage = () => {
           setIsModalVisible(false);
           fetchCustomers(keyword);
         } catch (error) {
-          const errorMsg =
-            error.response?.data?.message ||
-            error.response?.data ||
-            "Có lỗi xảy ra!";
-          messageApi.error(errorMsg);
+          messageApi.error(error.response?.data?.message || "Có lỗi xảy ra!");
         } finally {
           setSubmitLoading(false);
         }
@@ -159,26 +185,22 @@ const CustomerPage = () => {
       .catch(() => {});
   };
 
+  // --- XỬ LÝ XÓA (SOFT DELETE) ---
   const handleDelete = (id) => {
     setDeletingId(id);
     setIsDeleteModalOpen(true);
   };
 
-  // [!] 2. XÓA KHÁCH HÀNG & HIỂN THỊ LỖI BACKEND
   const handleDeleteConfirm = async () => {
     try {
       await customerService.deleteCustomer(deletingId);
-      messageApi.success("Đã xóa thành công!");
+      messageApi.success("Đã chuyển vào thùng rác!");
       fetchCustomers(keyword);
     } catch (error) {
-      // Ưu tiên lấy message từ Backend
       const errorMsg =
         error.response?.data?.message || error.response?.data || "Lỗi khi xóa!";
-
       if (errorMsg.includes("foreign key") || errorMsg.includes("constraint")) {
-        messageApi.error(
-          "Không thể xóa! Khách hàng này đã có đơn hàng hoặc phiếu xuất."
-        );
+        messageApi.error("Không thể xóa! Khách hàng đã có giao dịch.");
       } else {
         messageApi.error(errorMsg);
       }
@@ -187,6 +209,7 @@ const CustomerPage = () => {
     setDeletingId(null);
   };
 
+  // --- CẤU HÌNH CỘT ---
   const columns = [
     {
       title: "Tên Khách Hàng",
@@ -199,24 +222,57 @@ const CustomerPage = () => {
     { title: "Email", dataIndex: "email", key: "email" },
     { title: "Địa Chỉ", dataIndex: "diaChi", key: "diaChi" },
     {
+      title: "Trạng thái",
+      key: "status",
+      align: "center",
+      width: 120,
+      render: () =>
+        inTrashMode ? (
+          <Tag color="red">Đã xóa</Tag>
+        ) : (
+          <Tag color="green">Hoạt động</Tag>
+        ),
+    },
+    {
       title: "Hành động",
       key: "action",
       width: 150,
       align: "center",
       render: (_, record) => (
         <Space size="middle">
-          {canEdit && (
-            <Button
-              icon={<EditOutlined />}
-              onClick={() => handleEdit(record)}
-            />
-          )}
-          {canDelete && (
-            <Button
-              icon={<DeleteOutlined />}
-              danger
-              onClick={() => handleDelete(record.maKH)}
-            />
+          {inTrashMode ? (
+            // 1. TRONG THÙNG RÁC -> CHỈ HIỆN KHÔI PHỤC
+            <Tooltip title="Khôi phục khách hàng">
+              <Button
+                type="primary"
+                ghost
+                icon={<UndoOutlined />}
+                onClick={() => handleRestore(record)}
+              >
+                Khôi phục
+              </Button>
+            </Tooltip>
+          ) : (
+            // 2. DANH SÁCH CHÍNH -> HIỆN SỬA/XÓA
+            <>
+              {canEdit && (
+                <Tooltip title="Sửa thông tin">
+                  <Button
+                    icon={<EditOutlined />}
+                    onClick={() => handleEdit(record)}
+                  />
+                </Tooltip>
+              )}
+              {canDelete && (
+                <Tooltip title="Xóa tạm thời">
+                  <Button
+                    icon={<DeleteOutlined />}
+                    danger
+                    onClick={() => handleDelete(record.maKH)}
+                  />
+                </Tooltip>
+              )}
+            </>
           )}
         </Space>
       ),
@@ -233,47 +289,82 @@ const CustomerPage = () => {
         <Row
           gutter={[16, 16]}
           align="middle"
+          justify="space-between"
         >
           <Col span={12}>
-            <Input
-              placeholder="Tìm kiếm theo tên hoặc SĐT..."
-              prefix={<SearchOutlined />}
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              onPressEnter={handleSearch}
-            />
+            {inTrashMode ? (
+              <h3 style={{ margin: 0, color: "#ff4d4f" }}>
+                <RestOutlined /> Thùng rác (Khách hàng đã xóa)
+              </h3>
+            ) : (
+              <Input
+                placeholder="Tìm kiếm theo tên hoặc SĐT..."
+                prefix={<SearchOutlined />}
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                onPressEnter={handleSearch}
+                style={{ maxWidth: 400 }}
+              />
+            )}
           </Col>
-          <Col span={12}>
+          <Col>
             <Space>
-              <Button
-                type="primary"
-                icon={<SearchOutlined />}
-                onClick={handleSearch}
-              >
-                Tìm kiếm
-              </Button>
+              {!inTrashMode && (
+                <Button
+                  type="primary"
+                  icon={<SearchOutlined />}
+                  onClick={handleSearch}
+                >
+                  Tìm kiếm
+                </Button>
+              )}
+
               <Button
                 icon={<ReloadOutlined />}
                 onClick={handleReset}
               >
                 Tải lại
               </Button>
+
+              {/* Logic Nút Chuyển Đổi */}
+              {inTrashMode ? (
+                <Button
+                  icon={<ArrowLeftOutlined />}
+                  onClick={() => {
+                    setInTrashMode(false);
+                    setKeyword("");
+                  }}
+                >
+                  Quay lại danh sách
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    icon={<RestOutlined />}
+                    danger
+                    onClick={() => {
+                      setInTrashMode(true);
+                      setKeyword("");
+                    }}
+                  >
+                    Thùng rác
+                  </Button>
+
+                  {canCreate && (
+                    <Button
+                      type="primary"
+                      icon={<PlusOutlined />}
+                      onClick={handleOpenModal}
+                    >
+                      Thêm Khách Hàng
+                    </Button>
+                  )}
+                </>
+              )}
             </Space>
           </Col>
         </Row>
       </Card>
-
-      <Space style={{ marginBottom: 16 }}>
-        {canCreate && (
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleOpenModal}
-          >
-            Thêm Khách Hàng
-          </Button>
-        )}
-      </Space>
 
       <Table
         className="fixed-height-table"
@@ -284,6 +375,7 @@ const CustomerPage = () => {
         pagination={{ pageSize: 5 }}
       />
 
+      {/* MODAL THÊM/SỬA */}
       <Modal
         title={editingCustomer ? "Sửa Khách Hàng" : "Thêm Khách Hàng"}
         open={isModalVisible}
@@ -305,7 +397,7 @@ const CustomerPage = () => {
           <Form.Item
             name="sdt"
             label="Số Điện Thoại"
-            rules={[{ required: true, message: "Vui lòng nhập Số Điện Thoại" }]}
+            rules={[{ required: true, message: "Vui lòng nhập SĐT" }]}
           >
             <Input placeholder="Ví dụ: 0909..." />
           </Form.Item>
@@ -329,6 +421,7 @@ const CustomerPage = () => {
         </Form>
       </Modal>
 
+      {/* MODAL XÓA */}
       <Modal
         title="Xác nhận xóa"
         open={isDeleteModalOpen}
@@ -339,6 +432,9 @@ const CustomerPage = () => {
         okType="danger"
       >
         <p>Bạn có chắc muốn xóa khách hàng này không?</p>
+        <p style={{ fontSize: 12, color: "#888" }}>
+          Dữ liệu sẽ được chuyển vào thùng rác.
+        </p>
       </Modal>
     </div>
   );

@@ -31,3 +31,12 @@ export const searchSuppliers = (keyword) => {
     }
   });
 };
+
+export const getTrashSuppliers = () => {
+  return api.get(`${API_ENDPOINT}/trash`);
+};
+
+
+export const restoreSupplier = (id) => {
+  return api.put(`${API_ENDPOINT}/${id}/restore`);
+};

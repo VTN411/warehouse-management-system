@@ -36,3 +36,12 @@ export const grantPermission = (userId, permissionId) => {
 export const revokePermission = (userId, permissionId) => {
   return api.delete(`/admin/users/${userId}/permissions/${permissionId}`);
 };
+// 7. Lấy danh sách người dùng đã xóa (Thùng rác)
+export const getTrashUsers = () => {
+  return api.get(`${API_ENDPOINT}/trash`);
+};
+
+// 8. Khôi phục người dùng
+export const restoreUser = (userId) => {
+  return api.put(`${API_ENDPOINT}/${userId}/restore`);
+};

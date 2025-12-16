@@ -18,3 +18,13 @@ export const updateCategory = (id, data) => {
 export const deleteCategory = (id) => {
   return api.delete(`${API_ENDPOINT}/${id}`);
 };
+
+
+export const getTrashCategories = () => {
+  return api.get(`${API_ENDPOINT}/trash`);
+};
+
+
+export const restoreCategory = (id) => {
+  return api.put(`${API_ENDPOINT}/${id}/restore`);
+};
