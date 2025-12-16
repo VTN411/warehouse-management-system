@@ -157,4 +157,13 @@
             List<HoatDongResponse> logs = hoatDongRepository.findAllLogs();
             return ResponseEntity.ok(logs);
         }
+        @GetMapping("/trash")
+        public ResponseEntity<List<UserResponse>> getTrashUsers() {
+            return ResponseEntity.ok(userService.getTrashUsers());
+        }
+        @PutMapping("/{id}/restore")
+        public ResponseEntity<String> restoreUser(@PathVariable Integer id) {
+            userService.restoreUser(id);
+            return ResponseEntity.ok("Khôi phục tài khoản thành công!");
+        }
     }

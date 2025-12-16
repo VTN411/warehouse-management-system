@@ -48,7 +48,8 @@ public class UserService {
         nguoiDung.setHoTen(request.getHoTen());
         nguoiDung.setEmail(request.getEmail());
         nguoiDung.setSdt(request.getSdt());
-        nguoiDung.setVaiTro(vaiTro); // Cấp quyền
+        nguoiDung.setVaiTro(vaiTro);// Cấp quyền
+        nguoiDung.setTrangThai(true);
 
         // 3. Lưu vào CSDL
         nguoiDungRepository.save(nguoiDung);
@@ -142,5 +143,22 @@ public class UserService {
             dto.setTenVaiTro(user.getVaiTro().getTenVaiTro());
         }
         return dto;
+    }
+    public List<UserResponse> getTrashUsers() {
+        List<NguoiDung> deletedUsers = nguoiDungRepository.findAllDeleted();
+
+        // Convert sang DTO để trả về Frontend
+        return deletedUsers.stream()
+                .map(this::convertToUserResponseWithPermissions)
+                .collect(Collectors.toList());
+    }
+
+    // 2. Hàm Khôi phục tài khoản
+    public void restoreUser(Integer id) {
+        // Lưu ý: Không dùng hàm findById cũ để kiểm tra,
+        // vì hàm findById cũ có điều kiện "WHERE TrangThai = 1" nên sẽ không tìm thấy user này.
+
+        // Gọi thẳng lệnh Update của Repo
+        nguoiDungRepository.restoreById(id);
     }
 }

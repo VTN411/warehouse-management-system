@@ -16,7 +16,7 @@ public class NguoiDung implements UserDetails {
     private String hoTen;
     private String email;
     private String sdt;
-
+    private Boolean trangThai = true;
     // NguoiDung sẽ chứa một đối tượng VaiTro
     private VaiTro vaiTro;
     private List<String> authorities;

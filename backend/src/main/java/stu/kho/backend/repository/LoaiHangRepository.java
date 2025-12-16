@@ -9,4 +9,8 @@ public interface LoaiHangRepository {
     List<LoaiHang> findAll();
     int save(LoaiHang loaiHang);
     int update(LoaiHang loaiHang);
-    int deleteById(Integer id);}
+    int deleteById(Integer id);
+
+    // BỔ SUNG: Hàm tìm kiếm
+    List<LoaiHang> search(String keyword);
+}

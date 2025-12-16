@@ -11,4 +11,5 @@ public class NhaCungCap {
     private String sdt;
     private String diaChi;
     private String email;
+    private Boolean daXoa = false; // Mặc định là false (0 - Chưa xóa)
 }

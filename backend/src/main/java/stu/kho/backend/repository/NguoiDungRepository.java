@@ -35,4 +35,6 @@ public interface NguoiDungRepository {
 
     // Lấy danh sách ID quyền riêng của User
     List<Integer> findDirectPermissionIdsByUserId(Integer maNguoiDung);
+    void restoreById(Integer id);           // Khôi phục user
+    List<NguoiDung> findAllDeleted();
 }

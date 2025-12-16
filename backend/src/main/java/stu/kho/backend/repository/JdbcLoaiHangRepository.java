@@ -18,7 +18,6 @@ public class JdbcLoaiHangRepository implements LoaiHangRepository {
 
     private final JdbcTemplate jdbcTemplate;
 
-    // RowMapper để ánh xạ
     private final RowMapper<LoaiHang> loaiHangRowMapper = (rs, rowNum) -> {
         LoaiHang loai = new LoaiHang();
         loai.setMaLoai(rs.getInt("MaLoai"));
@@ -33,7 +32,8 @@ public class JdbcLoaiHangRepository implements LoaiHangRepository {
 
     @Override
     public Optional<LoaiHang> findById(Integer id) {
-        String sql = "SELECT * FROM loaihang WHERE MaLoai = ?";
+        // SỬA LỖI: Thêm điều kiện AND DaXoa = 0
+        String sql = "SELECT * FROM loaihang WHERE MaLoai = ? AND DaXoa = 0";
         try {
             LoaiHang loai = jdbcTemplate.queryForObject(sql, loaiHangRowMapper, id);
             return Optional.ofNullable(loai);
@@ -44,13 +44,14 @@ public class JdbcLoaiHangRepository implements LoaiHangRepository {
 
     @Override
     public List<LoaiHang> findAll() {
-        String sql = "SELECT * FROM loaihang";
+        String sql = "SELECT * FROM loaihang WHERE DaXoa = 0";
         return jdbcTemplate.query(sql, loaiHangRowMapper);
     }
 
     @Override
     public int save(LoaiHang loaiHang) {
-        String sql = "INSERT INTO loaihang (TenLoai, MoTa) VALUES (?, ?)";
+        // Mặc định DaXoa là 0
+        String sql = "INSERT INTO loaihang (TenLoai, MoTa, DaXoa) VALUES (?, ?, 0)";
         KeyHolder keyHolder = new GeneratedKeyHolder();
 
         jdbcTemplate.update(connection -> {
@@ -75,7 +76,16 @@ public class JdbcLoaiHangRepository implements LoaiHangRepository {
 
     @Override
     public int deleteById(Integer id) {
-        String sql = "DELETE FROM loaihang WHERE MaLoai = ?";
+        // Soft Delete: Cập nhật cờ xóa
+        String sql = "UPDATE loaihang SET DaXoa = 1 WHERE MaLoai = ?";
         return jdbcTemplate.update(sql, id);
+    }
+
+    // BỔ SUNG: Hàm tìm kiếm
+    @Override
+    public List<LoaiHang> search(String keyword) {
+        String sql = "SELECT * FROM loaihang WHERE (TenLoai LIKE ? OR MoTa LIKE ?) AND DaXoa = 0";
+        String searchArg = "%" + keyword + "%";
+        return jdbcTemplate.query(sql, loaiHangRowMapper, searchArg, searchArg);
     }
 }

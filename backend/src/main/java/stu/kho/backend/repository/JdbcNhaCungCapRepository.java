@@ -36,7 +36,7 @@ public class JdbcNhaCungCapRepository implements NhaCungCapRepository {
 
     @Override
     public Optional<NhaCungCap> findById(Integer id) {
-        String sql = "SELECT * FROM nhacungcap WHERE MaNCC = ?";
+        String sql = "SELECT * FROM nhacungcap WHERE MaNCC = ? AND DaXoa = 0";
         try {
             NhaCungCap ncc = jdbcTemplate.queryForObject(sql, nccRowMapper, id);
             return Optional.ofNullable(ncc);
@@ -47,7 +47,7 @@ public class JdbcNhaCungCapRepository implements NhaCungCapRepository {
 
     @Override
     public List<NhaCungCap> findAll() {
-        String sql = "SELECT * FROM nhacungcap";
+        String sql = "SELECT * FROM nhacungcap WHERE DaXoa = 0";
         return jdbcTemplate.query(sql, nccRowMapper);
     }
 
@@ -94,13 +94,15 @@ public class JdbcNhaCungCapRepository implements NhaCungCapRepository {
     @Override
     public int deleteById(Integer id) {
         // Lưu ý: Việc xóa có thể thất bại nếu NCC này đang được tham chiếu ở bảng khác (khóa ngoại)
-        String sql = "DELETE FROM nhacungcap WHERE MaNCC = ?";
+        String sql = "UPDATE nhacungcap SET DaXoa = 1 WHERE MaNCC = ?";
         return jdbcTemplate.update(sql, id);
     }
 
     @Override
     public List<NhaCungCap> search(String keyword) {
-        String sql = "SELECT * FROM nhacungcap WHERE TenNCC LIKE ? OR NguoiLienHe LIKE ? OR SDT LIKE ?";
+        // SỬA LẠI: Thêm dấu ngoặc đơn bao quanh các điều kiện OR
+        String sql = "SELECT * FROM nhacungcap WHERE (TenNCC LIKE ? OR NguoiLienHe LIKE ? OR SDT LIKE ?) AND DaXoa = 0";
+
         String searchArg = "%" + keyword + "%";
         return jdbcTemplate.query(sql, nccRowMapper, searchArg, searchArg, searchArg);
     }

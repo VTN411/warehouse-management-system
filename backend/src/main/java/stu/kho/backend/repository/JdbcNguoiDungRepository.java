@@ -13,15 +13,12 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @Repository
-    public class JdbcNguoiDungRepository implements NguoiDungRepository {
+public class JdbcNguoiDungRepository implements NguoiDungRepository {
 
     private final JdbcTemplate jdbcTemplate;
     private final VaiTroRepository vaiTroRepository;
-
-    // Khai báo RowMapper là final, nhưng KHÔNG khởi tạo nó ở đây
     private final RowMapper<NguoiDung> nguoiDungRowMapper;
 
-    // Constructor: Nơi khởi tạo tất cả các trường final
     public JdbcNguoiDungRepository(JdbcTemplate jdbcTemplate, VaiTroRepository vaiTroRepository) {
         this.jdbcTemplate = jdbcTemplate;
         this.vaiTroRepository = vaiTroRepository;
@@ -34,69 +31,45 @@ import java.util.stream.Stream;
             user.setHoTen(rs.getString("HoTen"));
             user.setEmail(rs.getString("Email"));
             user.setSdt(rs.getString("SDT"));
+
+            // --- THÊM: Map cột TrangThai ---
+            // Giả sử trong Entity NguoiDung bạn đã thêm field 'Boolean trangThai'
+            user.setTrangThai(rs.getBoolean("TrangThai"));
+
             int maVaiTro = rs.getInt("MaVaiTro");
             VaiTro vaiTro = this.vaiTroRepository.findById(maVaiTro).orElse(null);
             user.setVaiTro(vaiTro);
 
-            // --- CẬP NHẬT LOGIC LẤY QUYỀN (AUTHORITIES) ---
-
-            // 1. Lấy quyền theo Vai Trò (từ bảng PhanQuyen)
-            List<String> roleAuthorities = List.of(); // Danh sách rỗng mặc định
+            // ... (Logic lấy quyền giữ nguyên)
+            List<String> roleAuthorities = List.of();
             if (vaiTro != null) {
                 roleAuthorities = getAuthoritiesByRoleId(vaiTro.getMaVaiTro());
             }
-
-            // 2. Lấy quyền gán trực tiếp (từ bảng NguoiDung_ChucNang)
             List<String> directAuthorities = getDirectAuthoritiesByUserId(user.getMaNguoiDung());
-
-            // 3. Gộp hai danh sách quyền và loại bỏ trùng lặp
-            List<String> allAuthorities = Stream.concat(
-                            roleAuthorities.stream(),
-                            directAuthorities.stream()
-                    )
-                    .distinct() // Loại bỏ quyền trùng lặp
+            List<String> allAuthorities = Stream.concat(roleAuthorities.stream(), directAuthorities.stream())
+                    .distinct()
                     .collect(Collectors.toList());
-
-            user.setAuthorities(allAuthorities); // Gán danh sách quyền đã gộp
+            user.setAuthorities(allAuthorities);
 
             return user;
         };
     }
-    public List<String> getUserRolesByUsername(String tenDangNhap) {
-        String sql = "SELECT vt.TenVaiTro FROM nguoidung nd JOIN vaitro vt ON nd.MaVaiTro = vt.MaVaiTro WHERE nd.TenDangNhap = ?";
 
-        // queryForList se tra ve List<String> cac TenVaiTro
-        try {
-            return jdbcTemplate.queryForList(sql, new Object[]{tenDangNhap}, String.class);
-        } catch (Exception e) {
-            return List.of();
-        }
-    }
+    // --- CÁC PHƯƠNG THỨC SELECT (READ) ---
+
     @Override
-    public List<String> getDirectAuthoritiesByUserId(Integer maNguoiDung) {
-        String sql = "SELECT cn.TenChucNang " +
-                "FROM nguoidung_chucnang ndcn " +
-                "JOIN chucnang cn ON ndcn.MaChucNang = cn.MaChucNang " +
-                "WHERE ndcn.MaNguoiDung = ?";
-
-        return jdbcTemplate.queryForList(sql, String.class, maNguoiDung);
+    public List<NguoiDung> findAll() {
+        // CHỈ LẤY NGƯỜI DÙNG ĐANG HOẠT ĐỘNG
+        String sql = "SELECT * FROM nguoidung WHERE TrangThai = 1";
+        return jdbcTemplate.query(sql, this.nguoiDungRowMapper);
     }
 
-    // --- Các phương thức @Override sử dụng RowMapper ---
-    public List<String> getAuthoritiesByRoleId(Integer maVaiTro) {
-        String sql = "SELECT cn.TenChucNang FROM phanquyen pq " +
-                "JOIN chucnang cn ON pq.MaChucNang = cn.MaChucNang " +
-                "WHERE pq.MaVaiTro = ?";
-
-        // queryForList trả về một danh sách các String (tên quyền)
-        return jdbcTemplate.queryForList(sql, new Object[]{maVaiTro}, String.class);
-    }
     @Override
-    public Optional<NguoiDung> findByTenDangNhap(String tenDangNhap) {
-        String sql = "SELECT * FROM nguoidung WHERE TenDangNhap = ?";
+    public Optional<NguoiDung> findById(Integer id) {
+        // CHỈ TÌM THẤY NẾU CHƯA BỊ KHÓA
+        String sql = "SELECT * FROM nguoidung WHERE MaNguoiDung = ? AND TrangThai = 1";
         try {
-            // Sử dụng this.nguoiDungRowMapper đã được khởi tạo
-            NguoiDung user = jdbcTemplate.queryForObject(sql, this.nguoiDungRowMapper, tenDangNhap);
+            NguoiDung user = jdbcTemplate.queryForObject(sql, this.nguoiDungRowMapper, id);
             return Optional.ofNullable(user);
         } catch (EmptyResultDataAccessException e) {
             return Optional.empty();
@@ -104,9 +77,32 @@ import java.util.stream.Stream;
     }
 
     @Override
+    public Optional<NguoiDung> findByTenDangNhap(String tenDangNhap) {
+        // ĐĂNG NHẬP: CHỈ CHO PHÉP NẾU TÀI KHOẢN ACTIVE
+        String sql = "SELECT * FROM nguoidung WHERE TenDangNhap = ? AND TrangThai = 1";
+        try {
+            NguoiDung user = jdbcTemplate.queryForObject(sql, this.nguoiDungRowMapper, tenDangNhap);
+            return Optional.ofNullable(user);
+        } catch (EmptyResultDataAccessException e) {
+            return Optional.empty();
+        }
+    }
+
+    // --- PHƯƠNG THỨC DELETE (XÓA MỀM) ---
+
+    @Override
+    public int deleteById(Integer id) {
+        // THAY VÌ XÓA, TA CẬP NHẬT TRANG THÁI = 0 (INACTIVE)
+        String sql = "UPDATE nguoidung SET TrangThai = 0 WHERE MaNguoiDung = ?";
+        return jdbcTemplate.update(sql, id);
+    }
+
+    // --- CÁC PHƯƠNG THỨC KHÁC ---
+
+    @Override
     public int save(NguoiDung nguoiDung) {
-        // ... (Logic save không đổi)
-        String sql = "INSERT INTO nguoidung (TenDangNhap, MatKhau, HoTen, Email, SDT, MaVaiTro) VALUES (?, ?, ?, ?, ?, ?)";
+        // THÊM MỚI: MẶC ĐỊNH TRẠNG THÁI LÀ 1 (ACTIVE)
+        String sql = "INSERT INTO nguoidung (TenDangNhap, MatKhau, HoTen, Email, SDT, MaVaiTro, TrangThai) VALUES (?, ?, ?, ?, ?, ?, 1)";
         return jdbcTemplate.update(sql,
                 nguoiDung.getTenDangNhap(),
                 nguoiDung.getMatKhau(),
@@ -118,32 +114,8 @@ import java.util.stream.Stream;
     }
 
     @Override
-    public boolean existsByTenDangNhap(String tenDangNhap) {
-        String sql = "SELECT COUNT(*) FROM nguoidung WHERE TenDangNhap = ?";
-        Integer count = jdbcTemplate.queryForObject(sql, Integer.class, tenDangNhap);
-        return count != null && count > 0;
-    }
-    @Override
-    public List<NguoiDung> findAll() {
-        String sql = "SELECT * FROM nguoidung";
-        // Dùng RowMapper đã định nghĩa trong constructor
-        return jdbcTemplate.query(sql, this.nguoiDungRowMapper);
-    }
-
-    @Override
-    public Optional<NguoiDung> findById(Integer id) {
-        String sql = "SELECT * FROM nguoidung WHERE MaNguoiDung = ?";
-        try {
-            NguoiDung user = jdbcTemplate.queryForObject(sql, this.nguoiDungRowMapper, id);
-            return Optional.ofNullable(user);
-        } catch (EmptyResultDataAccessException e) {
-            return Optional.empty();
-        }
-    }
-
-    @Override
     public int update(NguoiDung nguoiDung) {
-        // Chỉ cập nhật thông tin, không cập nhật mật khẩu
+        // Cập nhật thông tin cơ bản (không cập nhật password và status ở đây)
         String sql = "UPDATE nguoidung SET HoTen = ?, Email = ?, SDT = ?, MaVaiTro = ? WHERE MaNguoiDung = ?";
         return jdbcTemplate.update(sql,
                 nguoiDung.getHoTen(),
@@ -155,11 +127,34 @@ import java.util.stream.Stream;
     }
 
     @Override
-    public int deleteById(Integer id) {
-        // Cần xóa các tham chiếu khóa ngoại trước (nếu có) hoặc set ON DELETE CASCADE
-        String sql = "DELETE FROM nguoidung WHERE MaNguoiDung = ?";
-        return jdbcTemplate.update(sql, id);
+    public boolean existsByTenDangNhap(String tenDangNhap) {
+        // Kiểm tra tồn tại (Kể cả đã xóa cũng tính là tồn tại để không tạo trùng tên đăng nhập)
+        String sql = "SELECT COUNT(*) FROM nguoidung WHERE TenDangNhap = ?";
+        Integer count = jdbcTemplate.queryForObject(sql, Integer.class, tenDangNhap);
+        return count != null && count > 0;
     }
+
+    public List<String> getUserRolesByUsername(String tenDangNhap) {
+        // Chỉ lấy role nếu user đang active
+        String sql = "SELECT vt.TenVaiTro FROM nguoidung nd JOIN vaitro vt ON nd.MaVaiTro = vt.MaVaiTro WHERE nd.TenDangNhap = ? AND nd.TrangThai = 1";
+        try {
+            return jdbcTemplate.queryForList(sql, new Object[]{tenDangNhap}, String.class);
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    @Override
+    public List<String> getDirectAuthoritiesByUserId(Integer maNguoiDung) {
+        String sql = "SELECT cn.TenChucNang FROM nguoidung_chucnang ndcn JOIN chucnang cn ON ndcn.MaChucNang = cn.MaChucNang WHERE ndcn.MaNguoiDung = ?";
+        return jdbcTemplate.queryForList(sql, String.class, maNguoiDung);
+    }
+
+    public List<String> getAuthoritiesByRoleId(Integer maVaiTro) {
+        String sql = "SELECT cn.TenChucNang FROM phanquyen pq JOIN chucnang cn ON pq.MaChucNang = cn.MaChucNang WHERE pq.MaVaiTro = ?";
+        return jdbcTemplate.queryForList(sql, new Object[]{maVaiTro}, String.class);
+    }
+
     @Override
     public List<Integer> findPermissionIdsByRoleId(Integer maVaiTro) {
         String sql = "SELECT MaChucNang FROM phanquyen WHERE MaVaiTro = ?";
@@ -170,7 +165,6 @@ import java.util.stream.Stream;
         }
     }
 
-    // 2. Lấy ID quyền từ bảng NGUOIDUNG_CHUCNANG (theo User)
     @Override
     public List<Integer> findDirectPermissionIdsByUserId(Integer maNguoiDung) {
         String sql = "SELECT MaChucNang FROM nguoidung_chucnang WHERE MaNguoiDung = ?";
@@ -179,5 +173,21 @@ import java.util.stream.Stream;
         } catch (Exception e) {
             return List.of();
         }
+    }
+
+    @Override
+    public void restoreById(Integer id) {
+        // Logic ngược lại với delete: Set TrangThai = 1 (Active)
+        String sql = "UPDATE nguoidung SET TrangThai = 1 WHERE MaNguoiDung = ?";
+        jdbcTemplate.update(sql, id);
+    }
+
+    @Override
+    public List<NguoiDung> findAllDeleted() {
+        // Chỉ lấy những user có TrangThai = 0
+        String sql = "SELECT * FROM nguoidung WHERE TrangThai = 0";
+
+        // Tái sử dụng nguoiDungRowMapper bạn đã viết trong Constructor
+        return jdbcTemplate.query(sql, this.nguoiDungRowMapper);
     }
 }
