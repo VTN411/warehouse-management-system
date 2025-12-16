@@ -93,4 +93,13 @@ public class KhachHangService {
     public List<KhachHang> search(String keyword) {
         return khachHangRepository.search(keyword);
     }
+    public List<KhachHang> getTrash() {
+        return khachHangRepository.findAllDeleted();
+    }
+
+    // THÊM: Khôi phục khách hàng
+    public void restoreKhachHang(Integer id) {
+        // Có thể thêm kiểm tra tồn tại nếu muốn
+        khachHangRepository.restoreById(id);
+    }
 }

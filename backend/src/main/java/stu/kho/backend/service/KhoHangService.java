@@ -100,4 +100,12 @@ public class KhoHangService {
     public List<KhoHang> search(String keyword) {
         return khoHangRepository.search(keyword);
     }
+    public List<KhoHang> getTrash() {
+        return khoHangRepository.findAllDeleted();
+    }
+
+    // THÊM: Khôi phục kho hàng
+    public void restoreKhoHang(Integer id) {
+        khoHangRepository.restoreById(id);
+    }
 }

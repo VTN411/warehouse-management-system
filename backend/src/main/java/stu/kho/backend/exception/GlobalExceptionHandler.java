@@ -1,5 +1,6 @@
 package stu.kho.backend.exception;
 
+import lombok.extern.slf4j.Slf4j; // Import Lombok
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -10,11 +11,14 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RestControllerAdvice
+@Slf4j // 1. Thêm log vào đây
 public class GlobalExceptionHandler {
 
-    // 1. Xử lý lỗi RuntimeException (Lỗi logic nghiệp vụ do bạn ném ra)
+    // Xử lý RuntimeException (Lỗi nghiệp vụ: Trùng tên, không tìm thấy ID...)
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Object> handleRuntimeException(RuntimeException ex) {
+        log.error("Lỗi nghiệp vụ (Bad Request): {}", ex.getMessage()); // Log lỗi ngắn gọn
+
         Map<String, Object> body = new HashMap<>();
         body.put("timestamp", LocalDateTime.now());
         body.put("status", 400);
@@ -24,9 +28,11 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
-    // 2. Xử lý các lỗi khác không mong muốn (Ví dụ: NullPointer, SQL Error...)
+    // Xử lý các lỗi hệ thống không mong muốn (NullPointer, SQL...)
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Object> handleGeneralException(Exception ex) {
+        log.error("Lỗi hệ thống (Internal Server Error): ", ex); // Log full stack trace để debug
+
         Map<String, Object> body = new HashMap<>();
         body.put("timestamp", LocalDateTime.now());
         body.put("status", 500);

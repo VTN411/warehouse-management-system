@@ -1,5 +1,6 @@
 package stu.kho.backend.controller;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -16,6 +17,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/sanpham")
 @CrossOrigin(origins = "*")
+@Slf4j
 public class SanPhamController {
 
     private final SanPhamService sanPhamService;
@@ -24,80 +26,76 @@ public class SanPhamController {
         this.sanPhamService = sanPhamService;
     }
 
-    // 1. LẤY DANH SÁCH (Ai đăng nhập cũng xem được, hoặc gán quyền VIEW)
     @GetMapping
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<SanPham>> getAllSanPham() {
         return ResponseEntity.ok(sanPhamService.getAllSanPham());
     }
 
-    // 2. LẤY CHI TIẾT
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<SanPham> getSanPhamById(@PathVariable Integer id) {
         return ResponseEntity.ok(sanPhamService.getSanPhamById(id));
     }
-    // =================================================================
-    // 1. THÊM SẢN PHẨM (CÓ ẢNH) - SỬA LỖI TẠI ĐÂY
-    // =================================================================
-    @PostMapping(consumes = { MediaType.MULTIPART_FORM_DATA_VALUE }) // Bắt buộc dùng multipart
+
+    // --- KHÔNG CÒN TRY-CATCH ---
+
+    @PostMapping(consumes = { MediaType.MULTIPART_FORM_DATA_VALUE })
     @PreAuthorize("hasAuthority('PERM_PRODUCT_CREATE')")
-    public ResponseEntity<?> createSanPham(
-            // Dùng @RequestPart thay vì @RequestBody
+    public ResponseEntity<SanPham> createSanPham(
             @RequestPart("data") SanPhamRequest request,
             @RequestPart(value = "image", required = false) MultipartFile image,
             Authentication authentication) {
-        try {
-            // Truyền đủ 3 tham số vào Service
-            SanPham sp = sanPhamService.createSanPham(request, image, authentication.getName());
-            return ResponseEntity.ok(sp);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+
+        String username = authentication.getName();
+        log.info("Request create SanPham: {}, User: {}", request.getTenSP(), username);
+
+        // Cứ gọi bình thường. Nếu lỗi, GlobalExceptionHandler sẽ bắt.
+        return ResponseEntity.ok(sanPhamService.createSanPham(request, image, username));
     }
 
-    // =================================================================
-    // 2. SỬA SẢN PHẨM (CÓ ẢNH) - CŨNG CẦN SỬA TƯƠNG TỰ
-    // =================================================================
     @PutMapping(value = "/{id}", consumes = { MediaType.MULTIPART_FORM_DATA_VALUE })
     @PreAuthorize("hasAuthority('PERM_PRODUCT_EDIT')")
-    public ResponseEntity<?> updateSanPham(
+    public ResponseEntity<SanPham> updateSanPham(
             @PathVariable Integer id,
             @RequestPart("data") SanPhamRequest request,
             @RequestPart(value = "image", required = false) MultipartFile image,
             Authentication authentication) {
-        try {
-            // Truyền đủ 4 tham số vào Service
-            SanPham sp = sanPhamService.updateSanPham(id, request, image, authentication.getName());
-            return ResponseEntity.ok(sp);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+
+        String username = authentication.getName();
+        log.info("Request update SanPham ID: {}, User: {}", id, username);
+
+        return ResponseEntity.ok(sanPhamService.updateSanPham(id, request, image, username));
     }
-    // 5. XÓA SẢN PHẨM
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('PERM_PRODUCT_DELETE')")
-    public ResponseEntity<?> deleteSanPham(@PathVariable Integer id, Authentication authentication) {
-        try {
-            sanPhamService.deleteSanPham(id, authentication.getName());
-            return ResponseEntity.ok("Đã xóa sản phẩm thành công.");
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<String> deleteSanPham(@PathVariable Integer id, Authentication authentication) {
+        String username = authentication.getName();
+        log.info("Request delete SanPham ID: {}, User: {}", id, username);
+
+        sanPhamService.deleteSanPham(id, username);
+        return ResponseEntity.ok("Đã xóa sản phẩm thành công.");
     }
 
     @PostMapping("/filter")
-    @PreAuthorize("isAuthenticated()") // Ai đăng nhập cũng tìm được
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<SanPham>> filter(@RequestBody SanPhamFilterRequest request) {
         return ResponseEntity.ok(sanPhamService.filterSanPham(request));
     }
+
     @GetMapping("/trash")
+    @PreAuthorize("hasAuthority('PERM_PRODUCT_DELETE')")
     public ResponseEntity<List<SanPham>> getTrash() {
         return ResponseEntity.ok(sanPhamService.getTrash());
     }
 
     @PutMapping("/{id}/restore")
-    public ResponseEntity<String> restore(@PathVariable int id) {
+    @PreAuthorize("hasAuthority('PERM_PRODUCT_DELETE')")
+    public ResponseEntity<String> restore(@PathVariable Integer id) {
+        log.info("Request restore SanPham ID: {}", id);
+
+        // Không cần try-catch nữa
         sanPhamService.restoreSanPham(id);
         return ResponseEntity.ok("Khôi phục sản phẩm thành công!");
     }

@@ -28,6 +28,7 @@ public class JdbcKhachHangRepository implements KhachHangRepository {
             kh.setSdt(rs.getString("SDT"));
             kh.setDiaChi(rs.getString("DiaChi"));
             kh.setEmail(rs.getString("Email"));
+            kh.setDaXoa(rs.getBoolean("DaXoa"));
             return kh;
         };
     }
@@ -84,7 +85,7 @@ public class JdbcKhachHangRepository implements KhachHangRepository {
 
     @Override
     public int deleteById(Integer id) {
-        String sql = "DELETE FROM khachhang WHERE MaKH = ?";
+        String sql = "UPDATE khachhang SET DaXoa = 1 WHERE MaKH = ?";
         return jdbcTemplate.update(sql, id);
     }
 
@@ -93,5 +94,18 @@ public class JdbcKhachHangRepository implements KhachHangRepository {
         String sql = "SELECT * FROM khachhang WHERE TenKH LIKE ? OR SDT LIKE ? OR Email LIKE ?";
         String searchArg = "%" + keyword + "%";
         return jdbcTemplate.query(sql, khachHangRowMapper, searchArg, searchArg, searchArg);
+    }
+
+    @Override
+    public void restoreById(Integer id) {
+        String sql = "UPDATE khachhang SET DaXoa = 0 WHERE MaKH = ?";
+        jdbcTemplate.update(sql, id);
+    }
+
+    // 3. TRIỂN KHAI LOGIC LẤY THÙNG RÁC
+    @Override
+    public List<KhachHang> findAllDeleted() {
+        String sql = "SELECT * FROM khachhang WHERE DaXoa = 1";
+        return jdbcTemplate.query(sql, khachHangRowMapper);
     }
 }

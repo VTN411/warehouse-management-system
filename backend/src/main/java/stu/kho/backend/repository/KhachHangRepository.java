@@ -13,4 +13,6 @@ public interface KhachHangRepository {
     int update(KhachHang kh);
     int deleteById(Integer id);
     List<KhachHang> search(String keyword);
+    void restoreById(Integer id);           // Khôi phục
+    List<KhachHang> findAllDeleted();
 }

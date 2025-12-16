@@ -9,4 +9,6 @@ public class KhoHang {
     private String tenKho;
     private String diaChi;
     private String ghiChu;
+    private Boolean daXoa = false; // Mặc định là false (0 - Chưa xóa)
+
 }

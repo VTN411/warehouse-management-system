@@ -83,7 +83,7 @@ public class JdbcKhoHangRepository implements KhoHangRepository {
 
     @Override
     public int deleteById(Integer id) {
-        String sql = "DELETE FROM khohang WHERE MaKho = ?";
+        String sql = "UPDATE khohang SET DaXoa = 1 WHERE MaKho = ?";
         return jdbcTemplate.update(sql, id);
     }
 
@@ -92,5 +92,19 @@ public class JdbcKhoHangRepository implements KhoHangRepository {
         String sql = "SELECT * FROM khohang WHERE TenKho LIKE ? OR DiaChi LIKE ?";
         String searchArg = "%" + keyword + "%";
         return jdbcTemplate.query(sql, khoHangRowMapper, searchArg, searchArg);
+    }
+
+    // 2. LOGIC KHÔI PHỤC
+    @Override
+    public void restoreById(Integer id) {
+        String sql = "UPDATE khohang SET DaXoa = 0 WHERE MaKho = ?";
+        jdbcTemplate.update(sql, id);
+    }
+
+    // 3. LOGIC LẤY THÙNG RÁC
+    @Override
+    public List<KhoHang> findAllDeleted() {
+        String sql = "SELECT * FROM khohang WHERE DaXoa = 1";
+        return jdbcTemplate.query(sql, khoHangRowMapper);
     }
 }
