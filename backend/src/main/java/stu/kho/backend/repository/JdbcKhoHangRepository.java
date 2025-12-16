@@ -33,7 +33,7 @@ public class JdbcKhoHangRepository implements KhoHangRepository {
 
     @Override
     public Optional<KhoHang> findById(Integer id) {
-        String sql = "SELECT * FROM khohang WHERE MaKho = ?";
+        String sql = "SELECT * FROM khohang WHERE DaXoa = 0 ORDER BY MaKho DESC";
         try {
             KhoHang kho = jdbcTemplate.queryForObject(sql, khoHangRowMapper, id);
             return Optional.ofNullable(kho);

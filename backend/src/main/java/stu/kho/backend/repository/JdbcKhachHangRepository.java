@@ -46,7 +46,7 @@ public class JdbcKhachHangRepository implements KhachHangRepository {
 
     @Override
     public List<KhachHang> findAll() {
-        String sql = "SELECT * FROM khachhang";
+        String sql = "SELECT * FROM khachhang WHERE DaXoa = 0 ORDER BY MaKH DESC";
         return jdbcTemplate.query(sql, khachHangRowMapper);
     }
 
