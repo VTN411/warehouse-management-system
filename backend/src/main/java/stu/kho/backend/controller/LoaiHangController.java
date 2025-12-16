@@ -6,6 +6,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import stu.kho.backend.dto.LoaiHangRequest;
 import stu.kho.backend.entity.LoaiHang;
+import stu.kho.backend.entity.NhaCungCap;
 import stu.kho.backend.service.LoaiHangService;
 
 import java.util.List;
@@ -50,5 +51,20 @@ public class LoaiHangController {
     public ResponseEntity<?> delete(@PathVariable Integer id, Authentication auth) {
         loaiHangService.deleteLoaiHang(id, auth.getName());
         return ResponseEntity.ok("Đã xóa loại hàng thành công.");
+    }
+    @GetMapping("/search")
+    @PreAuthorize("hasAuthority('PERM_CATEGORY_VIEW')")
+    public ResponseEntity<List<LoaiHang>> search(@RequestParam String query) {
+        return ResponseEntity.ok(loaiHangService.search(query));
+    }
+    @GetMapping("/trash")
+    public ResponseEntity<List<LoaiHang>> getTrash() {
+        return ResponseEntity.ok(loaiHangService.getTrash());
+    }
+
+    @PutMapping("/{id}/restore")
+    public ResponseEntity<String> restore(@PathVariable int id) {
+        loaiHangService.restoreLoaiHang(id);
+        return ResponseEntity.ok("Khôi phục loại hàng thành công!");
     }
 }

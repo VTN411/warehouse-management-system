@@ -13,4 +13,6 @@ public interface NhaCungCapRepository {
     int update(NhaCungCap ncc);   // Thêm mới
     int deleteById(Integer id);
     List<NhaCungCap> search(String keyword);
+    void restoreById(Integer id);           // Khôi phục
+    List<NhaCungCap> findAllDeleted();
 }

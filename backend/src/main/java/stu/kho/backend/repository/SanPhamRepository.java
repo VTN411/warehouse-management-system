@@ -12,5 +12,8 @@ public interface SanPhamRepository {
     int update(SanPham sanPham);
     int deleteById(Integer id);
     List<SanPham> filter(SanPhamFilterRequest criteria);
-    List<SanPham> findByTenSP(String tenSP);// <-- THÊM MỚI
+    List<SanPham> findByTenSP(String tenSP);
+    void restoreById(Integer id);
+    List<SanPham> findAllDeleted();
+    Optional<SanPham> findByIdIncludingDeleted(Integer id);// <-- THÊM MỚI
 }

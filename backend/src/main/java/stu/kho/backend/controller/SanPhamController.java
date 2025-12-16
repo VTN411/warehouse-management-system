@@ -91,4 +91,14 @@ public class SanPhamController {
     public ResponseEntity<List<SanPham>> filter(@RequestBody SanPhamFilterRequest request) {
         return ResponseEntity.ok(sanPhamService.filterSanPham(request));
     }
+    @GetMapping("/trash")
+    public ResponseEntity<List<SanPham>> getTrash() {
+        return ResponseEntity.ok(sanPhamService.getTrash());
+    }
+
+    @PutMapping("/{id}/restore")
+    public ResponseEntity<String> restore(@PathVariable int id) {
+        sanPhamService.restoreSanPham(id);
+        return ResponseEntity.ok("Khôi phục sản phẩm thành công!");
+    }
 }

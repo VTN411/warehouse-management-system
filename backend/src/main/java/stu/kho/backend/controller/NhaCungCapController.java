@@ -74,4 +74,14 @@ public class NhaCungCapController {
     public ResponseEntity<List<NhaCungCap>> search(@RequestParam String query) {
         return ResponseEntity.ok(nhaCungCapService.search(query));
     }
+    @GetMapping("/trash")
+    public ResponseEntity<List<NhaCungCap>> getTrash() {
+        return ResponseEntity.ok(nhaCungCapService.getTrash());
+    }
+
+    @PutMapping("/{id}/restore")
+    public ResponseEntity<String> restore(@PathVariable int id) {
+        nhaCungCapService.restoreNhaCungCap(id);
+        return ResponseEntity.ok("Khôi phục nhà cung cấp thành công!");
+    }
 }

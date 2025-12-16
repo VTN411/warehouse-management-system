@@ -18,18 +18,20 @@ public class SanPhamService {
     private final NccSanPhamRepository nccSanPhamRepository;
     private final HoatDongRepository hoatDongRepository;
     private final NguoiDungRepository nguoiDungRepository;
-    private final CloudinaryService cloudinaryService; // Service upload ảnh
+    private final CloudinaryService cloudinaryService;
+    private final LoaiHangRepository loaiHangRepository; // Cần inject thêm cái này// Service upload ảnh
 
     public SanPhamService(SanPhamRepository sanPhamRepository,
                           NccSanPhamRepository nccSanPhamRepository,
                           HoatDongRepository hoatDongRepository,
                           NguoiDungRepository nguoiDungRepository,
-                          CloudinaryService cloudinaryService) {
+                          CloudinaryService cloudinaryService, LoaiHangRepository loaiHangRepository) {
         this.sanPhamRepository = sanPhamRepository;
         this.nccSanPhamRepository = nccSanPhamRepository;
         this.hoatDongRepository = hoatDongRepository;
         this.nguoiDungRepository = nguoiDungRepository;
         this.cloudinaryService = cloudinaryService;
+        this.loaiHangRepository = loaiHangRepository;
     }
 
     // =================================================================
@@ -196,7 +198,24 @@ public class SanPhamService {
                 }
             }
         }
-
         // Nếu chạy hết vòng lặp mà không ném lỗi -> Hợp lệ
+    }
+    public List<SanPham> getTrash() {
+        return sanPhamRepository.findAllDeleted();
+    }
+
+    public void restoreSanPham(int id) {
+        // 1. Tìm sản phẩm trong thùng rác để lấy MaLoai
+        SanPham sp = sanPhamRepository.findByIdIncludingDeleted(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm ID: " + id));
+
+        // 2. Kiểm tra xem Loại hàng của nó có bị xóa không?
+        if (loaiHangRepository.isDeleted(sp.getMaLoai())) {
+            // NẾU CÓ: Chặn lại và báo lỗi
+            throw new RuntimeException("Không thể khôi phục! Loại hàng của sản phẩm này đang bị xóa. Vui lòng khôi phục Loại hàng trước.");
+        }
+
+        // 3. Nếu Loại hàng vẫn Active, thì cho phép khôi phục sản phẩm
+        sanPhamRepository.restoreById(id);
     }
 }

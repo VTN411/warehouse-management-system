@@ -7,6 +7,7 @@ import stu.kho.backend.dto.LoaiHangRequest;
 import stu.kho.backend.entity.HoatDong;
 import stu.kho.backend.entity.LoaiHang;
 import stu.kho.backend.entity.NguoiDung;
+import stu.kho.backend.entity.NhaCungCap;
 import stu.kho.backend.repository.HoatDongRepository;
 import stu.kho.backend.repository.LoaiHangRepository;
 import stu.kho.backend.repository.NguoiDungRepository;
@@ -81,4 +82,15 @@ public class LoaiHangService {
             hoatDongRepository.save(log);
         }
     }
+    public List<LoaiHang> search(String keyword) {
+        return loaiHangRepository.search(keyword);
+    }
+    public List<LoaiHang> getTrash() {
+        return loaiHangRepository.findAllDeleted();
+    }
+
+    public void restoreLoaiHang(int id) {
+        loaiHangRepository.restoreById(id);
+    }
+
 }

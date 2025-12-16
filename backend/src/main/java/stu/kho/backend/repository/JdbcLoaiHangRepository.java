@@ -88,4 +88,29 @@ public class JdbcLoaiHangRepository implements LoaiHangRepository {
         String searchArg = "%" + keyword + "%";
         return jdbcTemplate.query(sql, loaiHangRowMapper, searchArg, searchArg);
     }
+
+    @Override
+    public void restoreById(Integer id) {
+        String sql = "UPDATE loaihang SET DaXoa = 0 WHERE MaLoai = ?";
+        jdbcTemplate.update(sql, id);
+    }
+
+    @Override
+    public List<LoaiHang> findAllDeleted() {
+        String sql = "SELECT * FROM loaihang WHERE DaXoa = 1";
+        return jdbcTemplate.query(sql, loaiHangRowMapper);
+    }
+
+    @Override
+    public boolean isDeleted(Integer id) {
+        // Lấy trạng thái DaXoa của loại hàng theo ID
+        String sql = "SELECT DaXoa FROM loaihang WHERE MaLoai = ?";
+        try {
+            // queryForObject trả về true/false (bit 1/0)
+            Boolean daXoa = jdbcTemplate.queryForObject(sql, Boolean.class, id);
+            return daXoa != null && daXoa; // Trả về true nếu DaXoa = 1
+        } catch (EmptyResultDataAccessException e) {
+            return false;
+        }
+    }
 }

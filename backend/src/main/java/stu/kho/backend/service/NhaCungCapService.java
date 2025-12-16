@@ -101,4 +101,12 @@ public class NhaCungCapService {
     public List<NhaCungCap> search(String keyword) {
         return nhaCungCapRepository.search(keyword);
     }
+    public List<NhaCungCap> getTrash() {
+        return nhaCungCapRepository.findAllDeleted();
+    }
+
+    // Khôi phục
+    public void restoreNhaCungCap(int id) {
+        nhaCungCapRepository.restoreById(id);
+    }
 }

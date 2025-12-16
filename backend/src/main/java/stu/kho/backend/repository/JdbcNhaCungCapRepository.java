@@ -106,4 +106,19 @@ public class JdbcNhaCungCapRepository implements NhaCungCapRepository {
         String searchArg = "%" + keyword + "%";
         return jdbcTemplate.query(sql, nccRowMapper, searchArg, searchArg, searchArg);
     }
+
+    @Override
+    public void restoreById(Integer id) {
+        // Khôi phục: Set DaXoa về 0
+        String sql = "UPDATE nhacungcap SET DaXoa = 0 WHERE MaNCC = ?";
+        jdbcTemplate.update(sql, id);
+    }
+
+    @Override
+    public List<NhaCungCap> findAllDeleted() {
+        // Lấy danh sách đã xóa: DaXoa = 1
+        String sql = "SELECT * FROM nhacungcap WHERE DaXoa = 1";
+        // Tái sử dụng RowMapper bạn đã khai báo
+        return jdbcTemplate.query(sql, nccRowMapper);
+    }
 }

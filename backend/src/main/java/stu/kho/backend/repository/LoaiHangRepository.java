@@ -13,4 +13,7 @@ public interface LoaiHangRepository {
 
     // BỔ SUNG: Hàm tìm kiếm
     List<LoaiHang> search(String keyword);
+    void restoreById(Integer id);
+    List<LoaiHang> findAllDeleted();
+    boolean isDeleted(Integer id); // Kiểm tra xem ID này có bị xóa không
 }

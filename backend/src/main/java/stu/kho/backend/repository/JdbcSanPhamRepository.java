@@ -177,4 +177,29 @@ public class JdbcSanPhamRepository implements SanPhamRepository {
         String sql = "SELECT * FROM sanpham WHERE TenSP = ? AND DaXoa = 0";
         return jdbcTemplate.query(sql, sanPhamRowMapper, tenSP);
     }
+
+    @Override
+    public void restoreById(Integer id) {
+        String sql = "UPDATE sanpham SET DaXoa = 0 WHERE MaSP = ?";
+        jdbcTemplate.update(sql, id);
+    }
+
+    @Override
+    public List<SanPham> findAllDeleted() {
+        // Lưu ý: Cần join với bảng LoaiHang nếu bạn muốn hiện tên loại trong thùng rác
+        String sql = "SELECT * FROM sanpham WHERE DaXoa = 1";
+        return jdbcTemplate.query(sql, sanPhamRowMapper);
+    }
+
+    @Override
+    public Optional<SanPham> findByIdIncludingDeleted(Integer id) {
+        // SELECT bình thường, KHÔNG có điều kiện "WHERE DaXoa = 0"
+        String sql = "SELECT * FROM sanpham WHERE MaSP = ?";
+        try {
+            SanPham sp = jdbcTemplate.queryForObject(sql, sanPhamRowMapper, id);
+            return Optional.ofNullable(sp);
+        } catch (EmptyResultDataAccessException e) {
+            return Optional.empty();
+        }
+    }
 }
