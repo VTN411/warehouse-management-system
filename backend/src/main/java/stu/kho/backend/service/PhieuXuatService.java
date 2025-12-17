@@ -201,6 +201,7 @@ public class PhieuXuatService {
         HoatDong hd = new HoatDong();
         hd.setMaNguoiDung(maUser);
         hd.setHanhDong(act);
+        hd.setThoiGianThucHien(java.time.LocalDateTime.now());
         hoatDongRepository.save(hd);
     }
     // =================================================================

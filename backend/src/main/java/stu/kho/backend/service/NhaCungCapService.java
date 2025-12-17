@@ -95,6 +95,7 @@ public class NhaCungCapService {
             HoatDong log = new HoatDong();
             log.setMaNguoiDung(user.getMaNguoiDung());
             log.setHanhDong(hanhDong);
+            log.setThoiGianThucHien(java.time.LocalDateTime.now()); // Lấy giờ Java (đã set UTC+7)
             hoatDongRepository.save(log);
         }
     }

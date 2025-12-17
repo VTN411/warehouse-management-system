@@ -309,6 +309,7 @@ public class PhieuNhapService {
         HoatDong log = new HoatDong();
         log.setMaNguoiDung(maNguoiDung);
         log.setHanhDong(hanhDong);
+        log.setThoiGianThucHien(java.time.LocalDateTime.now()); // Lấy giờ Java (đã set UTC+7)
         hoatDongRepository.save(log);
     }
     public List<PhieuNhapHang> searchPhieuNhap(String chungTu) {

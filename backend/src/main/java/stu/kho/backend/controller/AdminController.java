@@ -177,6 +177,7 @@ public class AdminController {
         HoatDong dbLog = new HoatDong();
         dbLog.setMaNguoiDung(user.getMaNguoiDung());
         dbLog.setHanhDong(hanhDong);
+        dbLog.setThoiGianThucHien(java.time.LocalDateTime.now());
 
         // Lưu ý: Cột ThoiGian thường được DB tự sinh (Default CURRENT_TIMESTAMP)
         // Nếu không, bạn cần set: dbLog.setThoiGian(LocalDateTime.now());

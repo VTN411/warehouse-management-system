@@ -297,6 +297,7 @@ public class PhieuDieuChuyenService {
         HoatDong hd = new HoatDong();
         hd.setMaNguoiDung(maUser);
         hd.setHanhDong(act);
+        hd.setThoiGianThucHien(java.time.LocalDateTime.now()); // Lấy giờ Java (đã set UTC+7)
         hoatDongRepo.save(hd);
     }
 }

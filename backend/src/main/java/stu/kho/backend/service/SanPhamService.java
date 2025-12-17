@@ -162,6 +162,7 @@ public class SanPhamService {
             HoatDong log = new HoatDong();
             log.setMaNguoiDung(user.getMaNguoiDung());
             log.setHanhDong(hanhDong);
+
             hoatDongRepository.save(log);
         }
     }
