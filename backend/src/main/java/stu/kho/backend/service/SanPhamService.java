@@ -122,19 +122,24 @@ public class SanPhamService {
     // =================================================================
     @Transactional
     public void deleteSanPham(Integer id, String tenNguoiXoa) {
-        if (!sanPhamRepository.findById(id).isPresent()) {
-            throw new RuntimeException("Sản phẩm không tồn tại.");
-        }
+        // 1. Kiểm tra tồn tại
+        SanPham sp = sanPhamRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Sản phẩm không tồn tại."));
 
-        // 1. Xóa liên kết N:M trước
-        List<Integer> nccIds = nccSanPhamRepository.findNccIdsByMaSP(id);
-        for (Integer nccId : nccIds) {
-            nccSanPhamRepository.unlinkNccFromSanPham(nccId, id);
-        }
+        // --- BỔ SUNG: CHECK TỒN KHO TRƯỚC KHI XÓA ---
+        // (Yêu cầu phải có hàm countTotalInventory trong Repository như đã hướng dẫn trước đó)
+        int tongTon = sanPhamRepository.countTotalInventory(id);
 
-        // 2. Xóa sản phẩm
+        if (tongTon > 0) {
+            throw new RuntimeException(
+                    "CHẶN XÓA: Sản phẩm '" + sp.getTenSP() + "' đang còn tồn kho (" + tongTon + "). " +
+                            "Vui lòng xuất kho hoặc điều chỉnh về 0 trước khi xóa."
+            );
+        }
+        // 3. Xóa sản phẩm (Soft Delete: DaXoa = 1)
         sanPhamRepository.deleteById(id);
 
+        // 4. Ghi log
         logActivity(tenNguoiXoa, "Xóa sản phẩm ID: " + id);
     }
 

@@ -15,5 +15,6 @@ public interface SanPhamRepository {
     List<SanPham> findByTenSP(String tenSP);
     void restoreById(Integer id);
     List<SanPham> findAllDeleted();
-    Optional<SanPham> findByIdIncludingDeleted(Integer id);// <-- THÊM MỚI
+    Optional<SanPham> findByIdIncludingDeleted(Integer id);
+    int countTotalInventory(Integer maSP);// <-- THÊM MỚI
 }

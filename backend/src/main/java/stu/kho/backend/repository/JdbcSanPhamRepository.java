@@ -202,4 +202,15 @@ public class JdbcSanPhamRepository implements SanPhamRepository {
             return Optional.empty();
         }
     }
+    @Override
+    public int countTotalInventory(Integer maSP) {
+        // COALESCE để nếu không tìm thấy dòng nào (null) thì trả về 0
+        String sql = "SELECT COALESCE(SUM(SoLuongTon), 0) FROM chitietkho WHERE MaSP = ?";
+
+        try {
+            return jdbcTemplate.queryForObject(sql, Integer.class, maSP);
+        } catch (Exception e) {
+            return 0;
+        }
+    }
 }
