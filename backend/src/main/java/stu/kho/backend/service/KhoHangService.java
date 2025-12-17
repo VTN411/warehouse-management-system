@@ -43,6 +43,9 @@ public class KhoHangService {
 
     @Transactional
     public KhoHang createKhoHang(KhoHangRequest request, String tenNguoiTao) {
+        if (khoHangRepository.existsByTenKho(request.getTenKho(), null)) {
+            throw new RuntimeException("Tên kho hàng '" + request.getTenKho() + "' đã tồn tại! Vui lòng chọn tên khác.");
+        }
         KhoHang kho = new KhoHang();
         kho.setTenKho(request.getTenKho());
         kho.setDiaChi(request.getDiaChi());
@@ -57,15 +60,28 @@ public class KhoHangService {
 
     @Transactional
     public KhoHang updateKhoHang(Integer id, KhoHangRequest request, String tenNguoiSua) {
-        KhoHang kho = getKhoHangById(id);
-        kho.setTenKho(request.getTenKho());
-        kho.setDiaChi(request.getDiaChi());
-        kho.setGhiChu(request.getGhiChu());
+        // 1. Kiểm tra tồn tại và lấy dữ liệu cũ lên (Lần gọi DB thứ 1)
+        KhoHang existing = khoHangRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Kho hàng không tồn tại!"));
 
-        khoHangRepository.update(kho);
+        // 2. Kiểm tra trùng tên (Lần gọi DB thứ 2 - count)
+        if (khoHangRepository.existsByTenKho(request.getTenKho(), id)) {
+            throw new RuntimeException("Tên kho hàng '" + request.getTenKho() + "' đã được sử dụng!");
+        }
 
+        // 3. Cập nhật thông tin trực tiếp vào đối tượng 'existing'
+        // (KHÔNG CẦN gọi getKhoHangById(id) nữa)
+        existing.setTenKho(request.getTenKho());
+        existing.setDiaChi(request.getDiaChi());
+        existing.setGhiChu(request.getGhiChu());
+
+        // 4. Lưu xuống DB
+        khoHangRepository.update(existing);
+
+        // 5. Ghi log
         logActivity(tenNguoiSua, "Cập nhật kho hàng ID: " + id);
-        return kho;
+
+        return existing;
     }
 
     @Transactional

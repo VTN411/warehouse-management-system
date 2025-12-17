@@ -15,4 +15,5 @@ public interface KhoHangRepository {
     List<KhoHang> search(String keyword);
     void restoreById(Integer id);
     List<KhoHang> findAllDeleted();
+    boolean existsByTenKho(String tenKho, Integer idNgoaiTru);
 }

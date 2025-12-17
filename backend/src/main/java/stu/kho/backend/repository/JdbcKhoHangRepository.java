@@ -115,4 +115,21 @@ public class JdbcKhoHangRepository implements KhoHangRepository {
         String sql = "SELECT * FROM khohang WHERE DaXoa = 1";
         return jdbcTemplate.query(sql, khoHangRowMapper);
     }
+    @Override
+    public boolean existsByTenKho(String tenKho, Integer idNgoaiTru) {
+        String sql;
+        Integer count; // Dùng Integer để tránh lỗi null
+
+        if (idNgoaiTru == null) {
+            // THÊM MỚI: Check tên + chưa xóa
+            sql = "SELECT COUNT(*) FROM khohang WHERE TenKho = ? AND DaXoa = 0";
+            count = jdbcTemplate.queryForObject(sql, Integer.class, tenKho);
+        } else {
+            // CẬP NHẬT: Check tên + chưa xóa + Khác ID hiện tại
+            sql = "SELECT COUNT(*) FROM khohang WHERE TenKho = ? AND MaKho <> ? AND DaXoa = 0";
+            count = jdbcTemplate.queryForObject(sql, Integer.class, tenKho, idNgoaiTru);
+        }
+
+        return count != null && count > 0;
+    }
 }

@@ -64,13 +64,12 @@ public class LoaiHangService {
         if (loaiHangRepository.existsByTenLoai(request.getTenLoai(), id)) {
             throw new RuntimeException("Tên loại hàng '" + request.getTenLoai() + "' đã được sử dụng bởi loại hàng khác!");
         }
-        LoaiHang lh = getLoaiHangById(id);
-        lh.setTenLoai(request.getTenLoai());
-        lh.setMoTa(request.getMoTa());
+        existing.setTenLoai(request.getTenLoai());
+        existing.setMoTa(request.getMoTa());
 
-        loaiHangRepository.update(lh);
+        loaiHangRepository.update(existing);
         logActivity(tenNguoiSua, "Cập nhật loại hàng ID: " + id);
-        return lh;
+        return existing;
     }
 
     @Transactional
