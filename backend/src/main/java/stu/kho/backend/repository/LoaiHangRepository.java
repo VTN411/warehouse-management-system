@@ -15,5 +15,8 @@ public interface LoaiHangRepository {
     List<LoaiHang> search(String keyword);
     void restoreById(Integer id);
     List<LoaiHang> findAllDeleted();
-    boolean isDeleted(Integer id); // Kiểm tra xem ID này có bị xóa không
+    boolean isDeleted(Integer id);
+
+    boolean existsByTenLoai(String tenLoai, Integer idNgoaiTru);
+
 }

@@ -113,4 +113,23 @@ public class JdbcLoaiHangRepository implements LoaiHangRepository {
             return false;
         }
     }
+
+    @Override
+    public boolean existsByTenLoai(String tenLoai, Integer idNgoaiTru) {
+        String sql;
+        int count;
+
+        if (idNgoaiTru == null) {
+            // Trường hợp THÊM MỚI: Chỉ cần check tên và chưa xóa
+            sql = "SELECT COUNT(*) FROM loaihang WHERE TenLoai = ? AND DaXoa = 0";
+            count = jdbcTemplate.queryForObject(sql, Integer.class, tenLoai);
+        } else {
+            // Trường hợp CẬP NHẬT: Check tên, chưa xóa VÀ không phải chính nó (MaLoai <> id)
+            sql = "SELECT COUNT(*) FROM loaihang WHERE TenLoai = ? AND MaLoai <> ? AND DaXoa = 0";
+            count = jdbcTemplate.queryForObject(sql, Integer.class, tenLoai, idNgoaiTru);
+        }
+
+        return count != null && count > 0;
+
+    }
 }

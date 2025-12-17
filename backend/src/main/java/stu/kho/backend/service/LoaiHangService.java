@@ -40,6 +40,9 @@ public class LoaiHangService {
 
     @Transactional
     public LoaiHang createLoaiHang(LoaiHangRequest request, String tenNguoiTao) {
+        if (loaiHangRepository.existsByTenLoai(request.getTenLoai(), null)) {
+            throw new RuntimeException("Tên loại hàng '" + request.getTenLoai() + "' đã tồn tại! Vui lòng chọn tên khác.");
+        }
         LoaiHang lh = new LoaiHang();
         lh.setTenLoai(request.getTenLoai());
         lh.setMoTa(request.getMoTa());
@@ -53,6 +56,14 @@ public class LoaiHangService {
 
     @Transactional
     public LoaiHang updateLoaiHang(Integer id, LoaiHangRequest request, String tenNguoiSua) {
+        // Kiểm tra tồn tại
+        LoaiHang existing = loaiHangRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Loại hàng không tồn tại!"));
+
+        // --- CHECK TRÙNG TÊN (Truyền ID hiện tại để loại trừ) ---
+        if (loaiHangRepository.existsByTenLoai(request.getTenLoai(), id)) {
+            throw new RuntimeException("Tên loại hàng '" + request.getTenLoai() + "' đã được sử dụng bởi loại hàng khác!");
+        }
         LoaiHang lh = getLoaiHangById(id);
         lh.setTenLoai(request.getTenLoai());
         lh.setMoTa(request.getMoTa());
