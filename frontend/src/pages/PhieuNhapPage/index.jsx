@@ -42,14 +42,14 @@ import dayjs from "dayjs";
 const { Option } = Select;
 const { RangePicker } = DatePicker;
 
-// --- CẤU HÌNH ID QUYỀN (CHUẨN THEO BẠN GỬI) ---
-const PERM_VIEW = 26; // Xem danh sách
-const PERM_CREATE = 20; // Tạo mới
-const PERM_EDIT = 21; // Cập nhật (Sửa phiếu chờ duyệt)
-const PERM_DELETE = 22; // Xóa
-const PERM_APPROVE = 40; // Duyệt phiếu
-const PERM_CANCEL = 41; // Hủy phiếu
-const PERM_EDIT_APPROVED = 120; // Sửa phiếu (đã duyệt)
+// --- CẤU HÌNH ID QUYỀN ---
+const PERM_VIEW = 26;
+const PERM_CREATE = 20;
+const PERM_EDIT = 21;
+const PERM_DELETE = 22;
+const PERM_APPROVE = 40;
+const PERM_CANCEL = 41;
+const PERM_EDIT_APPROVED = 120;
 
 const PhieuNhapPage = () => {
   const [listData, setListData] = useState([]);
@@ -77,6 +77,9 @@ const PhieuNhapPage = () => {
   const [listSanPham, setListSanPham] = useState([]);
   const [listNhaCungCap, setListNhaCungCap] = useState([]);
   const [listUser, setListUser] = useState([]);
+
+  // [THÊM] State lưu NCC đang chọn trong Modal
+  const [selectedNCC, setSelectedNCC] = useState(null);
 
   // State xử lý form
   const [loading, setLoading] = useState(false);
@@ -181,7 +184,6 @@ const PhieuNhapPage = () => {
     }
   }, []);
 
-  // --- 2. KHỞI TẠO VÀ PHÂN QUYỀN (QUAN TRỌNG) ---
   useEffect(() => {
     const storedUser = localStorage.getItem("user_info");
     if (storedUser) {
@@ -201,19 +203,15 @@ const PhieuNhapPage = () => {
         let rawPerms = user.dsQuyenSoHuu || user.quyen || [];
         if (!Array.isArray(rawPerms)) rawPerms = [];
 
-        // Chuyển đổi ID quyền sang số nguyên
         const parsedPerms = rawPerms.map((p) => {
           if (typeof p === "object" && p !== null)
             return parseInt(p.maQuyen || p.id);
           return parseInt(p);
         });
 
-        // [!] LƯU QUYỀN VÀO STATE (Bắt buộc để nút hiển thị)
         setPermissions(parsedPerms);
 
-        // Check quyền Xem danh sách (ID 26)
         const hasViewPerm = parsedPerms.includes(PERM_VIEW);
-
         if (roleName === "ADMIN" || hasViewPerm) {
           fetchData(1, 5, filter);
         } else {
@@ -227,7 +225,6 @@ const PhieuNhapPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // --- HANDLERS ---
   const handleSearch = () => fetchData(1, pagination.pageSize, filter);
   const handleResetFilter = () => {
     const empty = {
@@ -243,20 +240,12 @@ const PhieuNhapPage = () => {
   const handleTableChange = (newPag) =>
     fetchData(newPag.current, newPag.pageSize, filter);
 
-  // Hàm check quyền nhanh
   const checkPerm = (id) => isAdmin || permissions.includes(id);
 
-  // Logic hiển thị nút Sửa (dựa trên trạng thái và ID quyền)
   const isEditable = (record) => {
-    // Admin luôn sửa được (trừ khi đã Hủy)
     if (isAdmin && record.trangThai !== 3) return true;
-
-    // Chờ duyệt (Status 1) -> Cần quyền 21 (Cập nhật)
     if (record.trangThai === 1) return checkPerm(PERM_EDIT);
-
-    // Đã duyệt (Status 2) -> Cần quyền 120 (Sửa phiếu đã duyệt)
     if (record.trangThai === 2) return checkPerm(PERM_EDIT_APPROVED);
-
     return false;
   };
 
@@ -272,16 +261,24 @@ const PhieuNhapPage = () => {
     return s;
   };
 
+  // --- [THÊM] HÀM XỬ LÝ KHI CHỌN NCC ---
+  const handleNCCChange = (value) => {
+    setSelectedNCC(value);
+    // Khi đổi NCC, xóa danh sách sản phẩm đã chọn bên dưới để tránh lỗi
+    form.setFieldsValue({ chiTiet: [] });
+    
+  };
+
   // --- MODAL HANDLERS ---
   const handleOpenModal = () => {
     setEditingRecord(null);
+    setSelectedNCC(null); // Reset NCC
     form.resetFields();
     setIsModalVisible(true);
   };
 
   const handleEdit = async (record) => {
     if (record.trangThai === 2) {
-      // Nếu sửa phiếu đã duyệt, check lại lần nữa cho chắc
       if (!checkPerm(PERM_EDIT_APPROVED) && !isAdmin) {
         messageApi.warning("Bạn cần quyền 120 để sửa phiếu đã duyệt!");
         return;
@@ -290,6 +287,10 @@ const PhieuNhapPage = () => {
     try {
       const res = await phieuNhapService.getPhieuNhapById(record.maPhieuNhap);
       setEditingRecord(res.data);
+
+      // [QUAN TRỌNG] Set selectedNCC khi mở form sửa
+      setSelectedNCC(res.data.maNCC);
+
       form.setFieldsValue(res.data);
       setIsModalVisible(true);
     } catch (e) {
@@ -365,7 +366,7 @@ const PhieuNhapPage = () => {
     }
   };
 
-  // --- CẤU HÌNH CỘT VÀ HIỂN THỊ NÚT ---
+  // --- CẤU HÌNH CỘT ---
   const columns = [
     {
       title: "Ngày Lập",
@@ -404,17 +405,9 @@ const PhieuNhapPage = () => {
       width: "20%",
       render: (_, record) => {
         const isChoDuyet = record.trangThai === 1;
-
-        // 1. Logic nút Sửa (ID 21 hoặc 120)
         const allowEdit = isEditable(record);
-
-        // 2. Logic nút Xóa (ID 22)
         const allowDelete = checkPerm(PERM_DELETE);
-
-        // 3. Logic nút Duyệt (ID 40)
         const allowApprove = checkPerm(PERM_APPROVE);
-
-        // 4. Logic nút Hủy (ID 41)
         const allowCancel = checkPerm(PERM_CANCEL);
 
         return (
@@ -428,7 +421,6 @@ const PhieuNhapPage = () => {
                 onClick={() => handleViewDetail(record)}
               />
             </Tooltip>
-
             {allowEdit && (
               <Tooltip title="Sửa phiếu">
                 <Button
@@ -437,10 +429,8 @@ const PhieuNhapPage = () => {
                 />
               </Tooltip>
             )}
-
-            {/* Xóa: Chỉ hiện khi Chờ duyệt + Có quyền 22 */}
             {isChoDuyet && allowDelete && (
-              <Tooltip title="Xóa phiếu (Quyền 22)">
+              <Tooltip title="Xóa phiếu ">
                 <Button
                   icon={<DeleteOutlined />}
                   danger
@@ -448,10 +438,8 @@ const PhieuNhapPage = () => {
                 />
               </Tooltip>
             )}
-
-            {/* Duyệt: Chỉ hiện khi Chờ duyệt + Có quyền 40 */}
             {isChoDuyet && allowApprove && (
-              <Tooltip title="Duyệt phiếu (Quyền 40)">
+              <Tooltip title="Duyệt phiếu (">
                 <Button
                   icon={<CheckCircleOutlined />}
                   style={{ color: "green", borderColor: "green" }}
@@ -459,10 +447,8 @@ const PhieuNhapPage = () => {
                 />
               </Tooltip>
             )}
-
-            {/* Hủy: Chỉ hiện khi Chờ duyệt + Có quyền 41 */}
             {isChoDuyet && allowCancel && (
-              <Tooltip title="Hủy phiếu (Quyền 41)">
+              <Tooltip title="Hủy phiếu ">
                 <Button
                   icon={<CloseCircleOutlined />}
                   danger
@@ -476,9 +462,7 @@ const PhieuNhapPage = () => {
     },
   ];
 
-  // Chặn nếu không có quyền xem (ID 26)
   const hasViewRight = isAdmin || permissions.includes(PERM_VIEW);
-
   if (!loading && permissions.length > 0 && !hasViewRight) {
     return (
       <Card style={{ margin: 20, textAlign: "center" }}>
@@ -490,6 +474,20 @@ const PhieuNhapPage = () => {
       </Card>
     );
   }
+
+  // --- [THÊM] LOGIC LỌC SẢN PHẨM THEO NCC ---
+  // Lọc listSanPham dựa trên selectedNCC
+  const filteredProducts = listSanPham.filter((sp) => {
+    if (!selectedNCC) return false; // Chưa chọn NCC thì không hiện SP nào (hoặc hiện hết tùy logic, ở đây chọn cách ẩn để bắt buộc chọn NCC)
+
+    // Kiểm tra trong danhSachNCC (Array Object) hoặc danhSachMaNCC (Array ID)
+    const hasInListObject =
+      sp.danhSachNCC && sp.danhSachNCC.some((n) => n.maNCC === selectedNCC);
+    const hasInListId =
+      sp.danhSachMaNCC && sp.danhSachMaNCC.includes(selectedNCC);
+
+    return hasInListObject || hasInListId;
+  });
 
   return (
     <div>
@@ -599,7 +597,6 @@ const PhieuNhapPage = () => {
       </Card>
 
       <Space style={{ marginBottom: 16 }}>
-        {/* Nút Tạo Mới (ID 20) */}
         {(isAdmin || checkPerm(PERM_CREATE)) && (
           <Button
             type="primary"
@@ -646,12 +643,15 @@ const PhieuNhapPage = () => {
             <Form.Item
               name="maNCC"
               label="Nhà Cung Cấp"
-              rules={[{ required: true }]}
+              rules={[{ required: true, message: "Vui lòng chọn NCC trước" }]}
             >
+              {/* [CẬP NHẬT] Gắn hàm handleNCCChange */}
               <Select
                 style={{ width: 250 }}
                 showSearch
                 optionFilterProp="children"
+                onChange={handleNCCChange}
+                disabled={!!editingRecord} // Nếu muốn chặn sửa NCC khi đã tạo phiếu (logic thường gặp)
               >
                 {listNhaCungCap.map((n) => (
                   <Option
@@ -692,7 +692,6 @@ const PhieuNhapPage = () => {
             </Form.Item>
           </Space>
 
-          {/* Form List Chi Tiết */}
           <Row
             gutter={8}
             style={{
@@ -724,13 +723,17 @@ const PhieuNhapPage = () => {
                         rules={[{ required: true }]}
                         style={{ marginBottom: 0 }}
                       >
+                        {/* [CẬP NHẬT] Dropdown Sản phẩm sử dụng danh sách filteredProducts */}
                         <Select
                           showSearch
                           optionFilterProp="children"
                           style={{ width: "100%" }}
-                          placeholder="Chọn SP"
+                          placeholder={
+                            selectedNCC ? "Chọn SP" : "Vui lòng chọn NCC trước"
+                          }
+                          disabled={!selectedNCC} // Khóa nếu chưa chọn NCC
                         >
-                          {listSanPham.map((s) => (
+                          {filteredProducts.map((s) => (
                             <Option
                               key={s.maSP}
                               value={s.maSP}
@@ -788,6 +791,7 @@ const PhieuNhapPage = () => {
                     onClick={() => add()}
                     block
                     icon={<PlusOutlined />}
+                    disabled={!selectedNCC}
                   >
                     Thêm sản phẩm
                   </Button>

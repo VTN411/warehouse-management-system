@@ -80,31 +80,23 @@ const ProductPage = () => {
 
       // [FIX] Phân luồng gọi API dựa trên chế độ
       if (inTrashMode) {
-        // Gọi hàm getTrashProducts trong service của bạn
         response = await productService.getTrashProducts();
       } else {
-        // Gọi hàm getAllProducts
         response = await productService.getAllProducts();
       }
 
-      // [FIX] Xử lý cấu trúc dữ liệu trả về từ api wrapper
-      // Thường api wrapper trả về data trực tiếp hoặc trong response.data
       let data = response.data ? response.data : response;
 
       if (data && data.content) {
-        data = data.content; // Trường hợp trả về Page object
+        data = data.content;
       }
 
       if (Array.isArray(data)) {
-        // [QUAN TRỌNG] Chỉ lọc theo từ khóa tìm kiếm, KHÔNG lọc theo trạng thái xóa
-        // Vì API thùng rác đã trả về đúng item đã xóa rồi.
         const finalData = data.filter((item) => {
           const matchName =
             !filter.tenSP ||
             item.tenSP.toLowerCase().includes(filter.tenSP.toLowerCase());
           const matchLoai = !filter.maLoai || item.maLoai === filter.maLoai;
-
-          // Logic lọc NCC (nếu danhSachMaNCC là mảng hoặc string)
           const matchNCC =
             !filter.maNCC ||
             (item.danhSachMaNCC && item.danhSachMaNCC.includes(filter.maNCC));
@@ -129,7 +121,6 @@ const ProductPage = () => {
         supplierService.getAllSuppliers(),
         categoryService.getAllCategories(),
       ]);
-      // Xử lý data tùy theo api wrapper trả về
       setListNCC(resNCC.data || resNCC || []);
       setListLoaiHang(resLoai.data || resLoai || []);
     } catch (error) {
@@ -172,7 +163,6 @@ const ProductPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Tự động tải lại khi đổi chế độ (Trash/Main) hoặc filter
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
@@ -197,20 +187,17 @@ const ProductPage = () => {
     setIsModalVisible(true);
   };
 
-  // [FIX] Xử lý form submit tương thích với hàm createProduct(values, file)
   const handleOk = () => {
     form
       .validateFields()
       .then(async (values) => {
         try {
-          // Lấy file ảnh từ fileList
           let file = null;
           if (fileList.length > 0 && fileList[0].originFileObj) {
             file = fileList[0].originFileObj;
           }
 
           if (editingProduct) {
-            // Gọi hàm updateProduct(id, values, file)
             await productService.updateProduct(
               editingProduct.maSP,
               values,
@@ -218,7 +205,6 @@ const ProductPage = () => {
             );
             messageApi.success("Cập nhật thành công!");
           } else {
-            // Gọi hàm createProduct(values, file)
             await productService.createProduct(values, file);
             messageApi.success("Tạo mới thành công!");
           }
@@ -240,9 +226,13 @@ const ProductPage = () => {
     try {
       await productService.deleteProduct(deletingId);
       messageApi.success("Đã chuyển vào thùng rác!");
-      fetchProducts(); // Reload để item biến mất khỏi list chính
-    } catch (e) {
-      messageApi.error("Lỗi khi xóa!");
+      fetchProducts();
+    } catch (error) {
+      const errorMessage =
+        error.response?.data?.message ||
+        error.response?.data ||
+        "Không thể xóa!";
+      messageApi.error(errorMessage);
     }
     setIsDeleteModalOpen(false);
   };
@@ -251,7 +241,7 @@ const ProductPage = () => {
     try {
       await productService.restoreProduct(id);
       messageApi.success("Đã khôi phục sản phẩm!");
-      fetchProducts(); // Reload để item biến mất khỏi thùng rác
+      fetchProducts();
     } catch (e) {
       messageApi.error("Lỗi khôi phục!");
     }
@@ -260,7 +250,7 @@ const ProductPage = () => {
   const handleUploadChange = ({ fileList: newFileList }) =>
     setFileList(newFileList);
 
-  // --- CỘT BẢNG ---
+  // --- CỘT BẢNG (ĐÃ CẬP NHẬT THEO DB) ---
   const columns = [
     {
       title: "Ảnh",
@@ -292,22 +282,42 @@ const ProductPage = () => {
       dataIndex: "maLoai",
       render: (id) => listLoaiHang.find((l) => l.maLoai === id)?.tenLoai || id,
     },
+   {
+      title: "Nhà Cung Cấp",
+      key: "ncc",
+      width: 250,
+      render: (_, record) => {
+        // API trả về "danhSachNCC": [{ maNCC: 1, tenNCC: "..." }, ...]
+        const listNCC = record.danhSachNCC;
+
+        if (Array.isArray(listNCC) && listNCC.length > 0) {
+          return listNCC.map((ncc) => (
+            <Tag key={ncc.maNCC} color="blue" style={{ marginBottom: 4 }}>
+              {ncc.tenNCC}
+            </Tag>
+          ));
+        }
+
+        return <span style={{ color: "#ccc" }}>---</span>;
+      },
+    },
+    {
+      title: "ĐVT",
+      dataIndex: "donViTinh",
+      width: 80,
+      align: "center",
+    },
+    {
+      title: "Giá Nhập", // Đổi từ Giá Bán sang Giá Nhập
+      dataIndex: "giaNhap",
+      align: "right",
+      render: (v) => Number(v).toLocaleString() + " đ",
+    },
     {
       title: "Tồn Kho",
       dataIndex: "soLuongTon",
       align: "center",
       render: (v) => <Tag color={v > 10 ? "blue" : "red"}>{v}</Tag>,
-    },
-    {
-      title: "Trạng thái",
-      align: "center",
-      width: 120,
-      render: () =>
-        inTrashMode ? (
-          <Tag color="red">Đã xóa</Tag>
-        ) : (
-          <Tag color="green">Hoạt động</Tag>
-        ),
     },
     {
       title: "Hành động",
@@ -321,7 +331,6 @@ const ProductPage = () => {
         return (
           <Space size="middle">
             {inTrashMode ? (
-              // 1. THÙNG RÁC: Hiện nút Khôi Phục (Quyền 52)
               allowDelete && (
                 <Tooltip title="Khôi phục">
                   <Button
@@ -335,7 +344,6 @@ const ProductPage = () => {
                 </Tooltip>
               )
             ) : (
-              // 2. DANH SÁCH CHÍNH: Hiện Sửa / Xóa
               <>
                 {allowEdit && (
                   <Tooltip title="Cập nhật">
@@ -346,7 +354,7 @@ const ProductPage = () => {
                   </Tooltip>
                 )}
                 {allowDelete && (
-                  <Tooltip title="Xóa ">
+                  <Tooltip title="Xóa">
                     <Button
                       icon={<DeleteOutlined />}
                       danger
@@ -493,6 +501,7 @@ const ProductPage = () => {
         pagination={{ pageSize: 5 }}
       />
 
+      {/* --- MODAL FORM (ĐÃ SỬA THEO DB) --- */}
       <Modal
         title={editingProduct ? "Cập nhật sản phẩm" : "Thêm sản phẩm mới"}
         open={isModalVisible}
@@ -504,12 +513,13 @@ const ProductPage = () => {
           form={form}
           layout="vertical"
         >
+          {/* Hàng 1: Tên & Loại */}
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
                 name="tenSP"
                 label="Tên Sản Phẩm"
-                rules={[{ required: true }]}
+                rules={[{ required: true, message: "Vui lòng nhập tên!" }]}
               >
                 <Input />
               </Form.Item>
@@ -518,9 +528,9 @@ const ProductPage = () => {
               <Form.Item
                 name="maLoai"
                 label="Loại Hàng"
-                rules={[{ required: true }]}
+                rules={[{ required: true, message: "Chọn loại hàng!" }]}
               >
-                <Select>
+                <Select placeholder="Chọn loại hàng">
                   {listLoaiHang.map((l) => (
                     <Option
                       key={l.maLoai}
@@ -533,90 +543,89 @@ const ProductPage = () => {
               </Form.Item>
             </Col>
           </Row>
+
+          {/* Hàng 2: ĐVT & Giá Nhập */}
           <Row gutter={16}>
-            <Col span={8}>
-              <Form.Item
-                name="giaBan"
-                label="Giá Bán"
-                rules={[{ required: true }]}
-              >
-                <InputNumber
-                  style={{ width: "100%" }}
-                  min={0}
-                  formatter={(v) =>
-                    `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                  }
-                  parser={(v) => v.replace(/\$\s?|(,*)/g, "")}
-                />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item
-                name="giaNhap"
-                label="Giá Nhập"
-              >
-                <InputNumber
-                  style={{ width: "100%" }}
-                  min={0}
-                  formatter={(v) =>
-                    `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                  }
-                  parser={(v) => v.replace(/\$\s?|(,*)/g, "")}
-                />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item
-                name="soLuongTon"
-                label="Tồn Kho"
-                initialValue={0}
-              >
-                <InputNumber
-                  style={{ width: "100%" }}
-                  min={0}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col span={8}>
+            <Col span={12}>
               <Form.Item
                 name="donViTinh"
                 label="Đơn vị tính"
+                rules={[{ required: true, message: "Nhập ĐVT!" }]}
               >
-                <Input placeholder="Cái, Hộp..." />
+                <Input placeholder="Ví dụ: Cái, Hộp, Kg..." />
               </Form.Item>
             </Col>
-            <Col span={16}>
+            <Col span={12}>
               <Form.Item
-                name="danhSachMaNCC"
-                label="Nhà Cung Cấp"
-                rules={[{ required: true }]}
+                name="giaNhap"
+                label="Giá nhập ban đầu"
+                rules={[{ required: true, message: "Nhập giá!" }]}
               >
-                <Select
-                  mode="multiple"
+                <InputNumber
                   style={{ width: "100%" }}
-                  placeholder="Chọn NCC"
-                >
-                  {listNCC.map((ncc) => (
-                    <Option
-                      key={ncc.maNCC}
-                      value={ncc.maNCC}
-                    >
-                      {ncc.tenNCC}
-                    </Option>
-                  ))}
-                </Select>
+                  min={0}
+                  formatter={(v) =>
+                    `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                  }
+                  parser={(v) => v.replace(/\$\s?|(,*)/g, "")}
+                  addonAfter="VNĐ"
+                />
               </Form.Item>
             </Col>
           </Row>
+
+          {/* Hàng 3: Tồn Min & Max */}
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="mucTonToiThieu"
+                label="Mức tồn tối thiểu"
+                rules={[{ required: true }]}
+              >
+                <InputNumber
+                  style={{ width: "100%" }}
+                  min={0}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="mucTonToiDa"
+                label="Mức tồn tối đa"
+                rules={[{ required: true }]}
+              >
+                <InputNumber
+                  style={{ width: "100%" }}
+                  min={0}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {/* Hàng 4: Nhà Cung Cấp */}
           <Form.Item
-            name="moTa"
-            label="Mô Tả"
+            name="danhSachMaNCC"
+            label="Chọn Nhà Cung Cấp"
+            rules={[{ required: true, message: "Chọn ít nhất 1 NCC!" }]}
           >
-            <Input.TextArea rows={3} />
+            <Select
+              mode="multiple"
+              style={{ width: "100%" }}
+              placeholder="Chọn các nhà cung cấp..."
+            >
+              {listNCC.map((ncc) => (
+                <Option
+                  key={ncc.maNCC}
+                  value={ncc.maNCC}
+                >
+                  {ncc.tenNCC}
+                </Option>
+              ))}
+            </Select>
           </Form.Item>
-          <Form.Item label="Hình ảnh">
+
+          {/* Hàng 5: Hình Ảnh */}
+          <Form.Item label="Hình ảnh sản phẩm">
             <Upload
               listType="picture"
               fileList={fileList}
@@ -624,7 +633,7 @@ const ProductPage = () => {
               beforeUpload={() => false}
               maxCount={1}
             >
-              <Button icon={<UploadOutlined />}>Chọn ảnh</Button>
+              <Button icon={<UploadOutlined />}>Tải ảnh lên</Button>
             </Upload>
           </Form.Item>
         </Form>

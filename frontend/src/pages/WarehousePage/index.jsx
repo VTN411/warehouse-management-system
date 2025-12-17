@@ -198,7 +198,8 @@ const WarehousePage = () => {
       messageApi.success("Đã chuyển vào thùng rác!");
       fetchWarehouses(); // Reload để item biến mất khỏi list chính
     } catch (error) {
-      messageApi.error("Không thể xóa (có thể do ràng buộc dữ liệu)!");
+      const errorMessage = error.response?.data?.message || error.response?.data || "Không thể xóa (có thể do ràng buộc dữ liệu)!";
+      messageApi.error(errorMessage);
     }
     setIsDeleteModalOpen(false);
   };
