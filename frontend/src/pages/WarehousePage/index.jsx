@@ -27,6 +27,7 @@ import {
   ArrowLeftOutlined, // Icon quay lại
   ClearOutlined,
 } from "@ant-design/icons";
+// Import service
 import * as warehouseService from "../../services/warehouse.service";
 
 // --- CẤU HÌNH ID QUYỀN (KHO HÀNG) ---
@@ -65,26 +66,28 @@ const WarehousePage = () => {
   // State bộ lọc tìm kiếm
   const [keyword, setKeyword] = useState("");
 
-  // --- 1. TẢI DỮ LIỆU ---
+  // --- 1. TẢI DỮ LIỆU (ĐÃ SỬA) ---
   const fetchWarehouses = useCallback(async () => {
     setLoading(true);
     try {
       let res;
-      // Nếu có API thùng rác riêng thì gọi, tạm thời dùng logic lọc client
-      res = await warehouseService.getAllWarehouses();
 
-      let data = res.data;
-      if (data.content) data = data.content; // Nếu trả về Page object
+      // [QUAN TRỌNG] Phân luồng gọi API
+      if (inTrashMode) {
+        // Gọi API thùng rác (đã có trong service bạn cung cấp)
+        res = await warehouseService.getTrashWarehouses();
+      } else {
+        // Gọi API danh sách chính
+        res = await warehouseService.getAllWarehouses();
+      }
+
+      let data = res.data ? res.data : res; // Xử lý tùy wrapper api trả về
+      if (data && data.content) data = data.content;
 
       if (Array.isArray(data)) {
-        // Lọc Client-side theo chế độ Thùng rác
-        let filtered = data.filter((item) => {
-          // Giả sử logic: daXoa=1 hoặc trangThai=0 là đã xóa
-          const isDeleted = item.daXoa === 1 || item.trangThai === 0;
-          return inTrashMode ? isDeleted : !isDeleted;
-        });
+        // Chỉ lọc theo từ khóa tìm kiếm (bỏ lọc daXoa vì API đã trả về đúng loại rồi)
+        let filtered = data;
 
-        // Lọc theo từ khóa tìm kiếm
         if (keyword) {
           filtered = filtered.filter(
             (item) =>
@@ -99,10 +102,12 @@ const WarehousePage = () => {
         setWarehouses([]);
       }
     } catch (error) {
-      messageApi.error("Không thể tải danh sách kho!");
+      console.error(error);
+      // messageApi.error("Không thể tải danh sách kho!");
+      setWarehouses([]);
     }
     setLoading(false);
-  }, [inTrashMode, keyword, messageApi]);
+  }, [inTrashMode, keyword]);
 
   // --- 2. KHỞI TẠO & PHÂN QUYỀN ---
   useEffect(() => {
@@ -124,41 +129,25 @@ const WarehousePage = () => {
         let rawPerms = user.dsQuyenSoHuu || user.quyen || [];
         if (!Array.isArray(rawPerms)) rawPerms = [];
 
-        // Chuyển quyền về dạng số nguyên
         const parsedPerms = rawPerms.map((p) => {
           if (typeof p === "object" && p !== null)
             return parseInt(p.maQuyen || p.id);
           return parseInt(p);
         });
 
-        // [!] LƯU QUYỀN VÀO STATE
         setPermissions(parsedPerms);
-
-        // Check quyền Xem (ID 70)
-        const hasViewPerm = parsedPerms.includes(PERM_VIEW);
-
-        if (roleName === "ADMIN" || hasViewPerm) {
-          fetchWarehouses();
-        } else {
-          setLoading(false);
-        }
       } catch (e) {
         setPermissions([]);
       }
-    } else {
-      setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Gọi lại API khi thay đổi chế độ hoặc keyword
   useEffect(() => {
-    // Gọi lại khi đổi chế độ trash hoặc keyword, nhưng chỉ khi đã có quyền
-    if (isAdmin || permissions.includes(PERM_VIEW)) {
-      fetchWarehouses();
-    }
-  }, [fetchWarehouses, inTrashMode, isAdmin, permissions]);
+    fetchWarehouses();
+  }, [fetchWarehouses]);
 
-  // Hàm check quyền nhanh
   const checkPerm = (id) => isAdmin || permissions.includes(id);
 
   // --- HANDLERS ---
@@ -207,19 +196,19 @@ const WarehousePage = () => {
     try {
       await warehouseService.deleteWarehouse(deletingId);
       messageApi.success("Đã chuyển vào thùng rác!");
-      fetchWarehouses();
+      fetchWarehouses(); // Reload để item biến mất khỏi list chính
     } catch (error) {
       messageApi.error("Không thể xóa (có thể do ràng buộc dữ liệu)!");
     }
     setIsDeleteModalOpen(false);
   };
 
-  // Giả sử có hàm restore
+  // [SỬA] Kích hoạt chức năng khôi phục
   const handleRestore = async (id) => {
     try {
-      // await warehouseService.restoreWarehouse(id);
-      messageApi.info("Chức năng khôi phục đang phát triển (Backend)");
-      // fetchWarehouses();
+      await warehouseService.restoreWarehouse(id);
+      messageApi.success("Đã khôi phục kho!");
+      fetchWarehouses(); // Reload để item biến mất khỏi thùng rác
     } catch (e) {
       messageApi.error("Lỗi khôi phục");
     }
@@ -228,7 +217,7 @@ const WarehousePage = () => {
   const handleViewInventory = async (record) => {
     try {
       const res = await warehouseService.getInventoryByWarehouse(record.maKho);
-      setInventoryList(res.data || []);
+      setInventoryList(res.data || res || []);
       setCurrentWarehouseName(record.tenKho);
       setIsDetailModalOpen(true);
     } catch (error) {
@@ -257,17 +246,26 @@ const WarehousePage = () => {
         ),
     },
     {
+          title: "Trạng thái",
+          align: "center",
+          width: 120,
+          render: () =>
+            inTrashMode ? (
+              <Tag color="red">Đã xóa</Tag>
+            ) : (
+              <Tag color="green">Hoạt động</Tag>
+            ),
+        },
+    {
       title: "Hành động",
       key: "action",
       width: 200,
       render: (_, record) => {
-        // [CHECK QUYỀN]
         const allowEdit = checkPerm(PERM_EDIT); // 72
         const allowDelete = checkPerm(PERM_DELETE); // 73
 
         return (
           <Space size="small">
-            {/* Nút Xem tồn kho: Ai có quyền xem danh sách (70) đều xem được */}
             <Tooltip title="Xem tồn kho">
               <Button
                 icon={<EyeOutlined />}
@@ -278,7 +276,7 @@ const WarehousePage = () => {
             {inTrashMode ? (
               // Thùng rác: Hiện Khôi Phục nếu có quyền Xóa (73)
               allowDelete && (
-                <Tooltip title="Khôi phục (Quyền 73)">
+                <Tooltip title="Khôi phục ">
                   <Button
                     type="primary"
                     ghost
@@ -290,10 +288,10 @@ const WarehousePage = () => {
                 </Tooltip>
               )
             ) : (
-              // Danh sách chính: Hiện Sửa (72) / Xóa (73)
+              // Danh sách chính: Hiện Sửa / Xóa
               <>
                 {allowEdit && (
-                  <Tooltip title="Cập nhật (Quyền 72)">
+                  <Tooltip title="Cập nhật ">
                     <Button
                       icon={<EditOutlined />}
                       onClick={() => handleEdit(record)}
@@ -302,7 +300,7 @@ const WarehousePage = () => {
                 )}
 
                 {allowDelete && (
-                  <Tooltip title="Xóa (Quyền 73)">
+                  <Tooltip title="Xóa ">
                     <Button
                       icon={<DeleteOutlined />}
                       danger
@@ -376,7 +374,6 @@ const WarehousePage = () => {
                 </Button>
               ) : (
                 <>
-                  {/* Nút Thùng rác (Quyền 73 hoặc Admin) */}
                   {(isAdmin || checkPerm(PERM_DELETE)) && (
                     <Button
                       icon={<RestOutlined />}
@@ -387,7 +384,6 @@ const WarehousePage = () => {
                     </Button>
                   )}
 
-                  {/* Nút Tạo Mới (Quyền 71) */}
                   {checkPerm(PERM_CREATE) && (
                     <Button
                       type="primary"
@@ -406,7 +402,7 @@ const WarehousePage = () => {
 
       {inTrashMode && (
         <h3 style={{ color: "red", marginLeft: 10 }}>
-          Đang xem: Kho hàng đã xóa
+          Thùng rác kho hàng
         </h3>
       )}
 
@@ -419,7 +415,6 @@ const WarehousePage = () => {
         pagination={{ pageSize: 5 }}
       />
 
-      {/* Modal Thêm/Sửa */}
       <Modal
         title={editingWarehouse ? "Cập nhật Kho" : "Tạo Kho mới"}
         open={isModalVisible}
@@ -453,7 +448,6 @@ const WarehousePage = () => {
         </Form>
       </Modal>
 
-      {/* Modal Xóa */}
       <Modal
         title="Xác nhận xóa"
         open={isDeleteModalOpen}
@@ -464,12 +458,8 @@ const WarehousePage = () => {
         okType="danger"
       >
         <p>Bạn có chắc muốn xóa kho này không?</p>
-        <p style={{ fontSize: 12, color: "#888" }}>
-          Dữ liệu sẽ được chuyển vào thùng rác.
-        </p>
       </Modal>
 
-      {/* Modal Chi tiết tồn kho */}
       <Modal
         title={`Chi tiết tồn kho: ${currentWarehouseName}`}
         open={isDetailModalOpen}

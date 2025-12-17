@@ -13,6 +13,7 @@ import {
   Row,
   Col,
   Tooltip,
+  Tag,
 } from "antd";
 import {
   PlusOutlined,
@@ -227,6 +228,17 @@ const SupplierPage = () => {
     { title: "SĐT", dataIndex: "sdt", key: "sdt" },
     { title: "Email", dataIndex: "email", key: "email" },
     {
+      title: "Trạng thái",
+      align: "center",
+      width: 120,
+      render: () =>
+        inTrashMode ? (
+          <Tag color="red">Đã xóa</Tag>
+        ) : (
+          <Tag color="green">Hoạt động</Tag>
+        ),
+    },
+    {
       title: "Hành động",
       key: "action",
       width: 150,
@@ -240,7 +252,7 @@ const SupplierPage = () => {
             {inTrashMode ? (
               // 1. TRONG THÙNG RÁC: Chỉ hiện Khôi phục (Cần quyền Xóa 63)
               allowDelete && (
-                <Tooltip title="Khôi phục hoạt động (Quyền 63)">
+                <Tooltip title="Khôi phục hoạt động ">
                   <Button
                     type="primary"
                     ghost
@@ -255,7 +267,7 @@ const SupplierPage = () => {
               // 2. DANH SÁCH CHÍNH: Hiện Sửa (62) / Xóa (63)
               <>
                 {allowEdit && (
-                  <Tooltip title="Cập nhật (Quyền 62)">
+                  <Tooltip title="Cập nhật ">
                     <Button
                       icon={<EditOutlined />}
                       onClick={() => handleEdit(record)}
@@ -264,7 +276,7 @@ const SupplierPage = () => {
                 )}
 
                 {allowDelete && (
-                  <Tooltip title="Xóa tạm thời (Quyền 63)">
+                  <Tooltip title="Xóa tạm thời ">
                     <Button
                       icon={<DeleteOutlined />}
                       danger
@@ -335,7 +347,7 @@ const SupplierPage = () => {
               </Space>
             ) : (
               <h3 style={{ margin: 0, color: "#ff4d4f" }}>
-                <RestOutlined /> Thùng rác (Nhà cung cấp đã xóa)
+                <RestOutlined /> Thùng rác
               </h3>
             )}
           </Col>

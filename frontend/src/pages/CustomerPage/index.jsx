@@ -261,7 +261,7 @@ const CustomerPage = () => {
             {inTrashMode ? (
               // 1. TRONG THÙNG RÁC: Chỉ hiện Khôi phục (Cần quyền Xóa 93)
               allowDelete && (
-                <Tooltip title="Khôi phục (Quyền 93)">
+                <Tooltip title="Khôi phục ">
                   <Button
                     type="primary"
                     ghost
@@ -276,7 +276,7 @@ const CustomerPage = () => {
               // 2. DANH SÁCH CHÍNH: Hiện Sửa (92) / Xóa (93)
               <>
                 {allowEdit && (
-                  <Tooltip title="Sửa thông tin (Quyền 92)">
+                  <Tooltip title="Sửa thông tin ">
                     <Button
                       icon={<EditOutlined />}
                       onClick={() => handleEdit(record)}
@@ -284,7 +284,7 @@ const CustomerPage = () => {
                   </Tooltip>
                 )}
                 {allowDelete && (
-                  <Tooltip title="Xóa tạm thời (Quyền 93)">
+                  <Tooltip title="Xóa tạm thời ">
                     <Button
                       icon={<DeleteOutlined />}
                       danger
@@ -328,7 +328,7 @@ const CustomerPage = () => {
           <Col span={12}>
             {inTrashMode ? (
               <h3 style={{ margin: 0, color: "#ff4d4f" }}>
-                <RestOutlined /> Thùng rác (Khách hàng đã xóa)
+                <RestOutlined /> Thùng rác 
               </h3>
             ) : (
               <Input

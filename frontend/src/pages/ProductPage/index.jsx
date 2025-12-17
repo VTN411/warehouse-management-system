@@ -26,24 +26,24 @@ import {
   ReloadOutlined,
   SearchOutlined,
   ClearOutlined,
-  RestOutlined, // Icon thùng rác
-  UndoOutlined, // Icon khôi phục
-  ArrowLeftOutlined, // Icon quay lại
+  RestOutlined,
+  UndoOutlined,
+  ArrowLeftOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
+// [QUAN TRỌNG] Import đúng service của bạn
 import * as productService from "../../services/product.service";
 import * as supplierService from "../../services/supplier.service";
 import * as categoryService from "../../services/category.service";
 
 const { Option } = Select;
 
-// --- CẤU HÌNH ID QUYỀN (SẢN PHẨM) ---
-const PERM_CREATE = 50; // Tạo mới
-const PERM_EDIT = 51; // Cập nhật
-const PERM_DELETE = 52; // Xóa (kiêm Khôi phục / Xem thùng rác)
+// --- CẤU HÌNH QUYỀN ---
+const PERM_CREATE = 50;
+const PERM_EDIT = 51;
+const PERM_DELETE = 52;
 
 const ProductPage = () => {
-  // --- STATE ---
   const [products, setProducts] = useState([]);
   const [listNCC, setListNCC] = useState([]);
   const [listLoaiHang, setListLoaiHang] = useState([]);
@@ -69,7 +69,6 @@ const ProductPage = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
-  // State Quyền hạn
   const [permissions, setPermissions] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -78,39 +77,51 @@ const ProductPage = () => {
     setLoading(true);
     try {
       let response;
-      // [LOGIC] Nếu có API thùng rác riêng thì gọi, ở đây tạm dùng getAll và lọc
-      response = await productService.getAllProducts();
 
-      let data = response.data;
-      if (data.content) data = data.content; // Nếu trả về Page object
+      // [FIX] Phân luồng gọi API dựa trên chế độ
+      if (inTrashMode) {
+        // Gọi hàm getTrashProducts trong service của bạn
+        response = await productService.getTrashProducts();
+      } else {
+        // Gọi hàm getAllProducts
+        response = await productService.getAllProducts();
+      }
+
+      // [FIX] Xử lý cấu trúc dữ liệu trả về từ api wrapper
+      // Thường api wrapper trả về data trực tiếp hoặc trong response.data
+      let data = response.data ? response.data : response;
+
+      if (data && data.content) {
+        data = data.content; // Trường hợp trả về Page object
+      }
 
       if (Array.isArray(data)) {
-        // Lọc Client-side (nếu Backend trả về hết)
-        // Nếu Backend đã lọc sẵn thì bỏ đoạn filter này
-        const filtered = data.filter((item) => {
-          // Giả sử logic: daXoa=1 hoặc trangThai=0 là đã xóa
-          const isDeleted = item.daXoa === 1 || item.trangThai === 0;
-          return inTrashMode ? isDeleted : !isDeleted;
-        });
-
-        // Lọc theo bộ lọc tìm kiếm
-        const finalData = filtered.filter((item) => {
+        // [QUAN TRỌNG] Chỉ lọc theo từ khóa tìm kiếm, KHÔNG lọc theo trạng thái xóa
+        // Vì API thùng rác đã trả về đúng item đã xóa rồi.
+        const finalData = data.filter((item) => {
           const matchName =
             !filter.tenSP ||
             item.tenSP.toLowerCase().includes(filter.tenSP.toLowerCase());
           const matchLoai = !filter.maLoai || item.maLoai === filter.maLoai;
+
+          // Logic lọc NCC (nếu danhSachMaNCC là mảng hoặc string)
           const matchNCC =
-            !filter.maNCC || item.danhSachMaNCC?.includes(filter.maNCC);
+            !filter.maNCC ||
+            (item.danhSachMaNCC && item.danhSachMaNCC.includes(filter.maNCC));
+
           return matchName && matchLoai && matchNCC;
         });
 
         setProducts(finalData);
+      } else {
+        setProducts([]);
       }
     } catch (error) {
-      messageApi.error("Không thể tải danh sách sản phẩm!");
+      console.error("Lỗi tải dữ liệu:", error);
+      setProducts([]);
     }
     setLoading(false);
-  }, [inTrashMode, filter, messageApi]);
+  }, [inTrashMode, filter]);
 
   const fetchCommonData = useCallback(async () => {
     try {
@@ -118,14 +129,15 @@ const ProductPage = () => {
         supplierService.getAllSuppliers(),
         categoryService.getAllCategories(),
       ]);
-      setListNCC(resNCC.data || []);
-      setListLoaiHang(resLoai.data || []); // Cần đảm bảo data trả về đúng mảng
+      // Xử lý data tùy theo api wrapper trả về
+      setListNCC(resNCC.data || resNCC || []);
+      setListLoaiHang(resLoai.data || resLoai || []);
     } catch (error) {
       console.error("Lỗi tải danh mục:", error);
     }
   }, []);
 
-  // --- 2. KHỞI TẠO & PHÂN QUYỀN ---
+  // --- 2. KHỞI TẠO ---
   useEffect(() => {
     const storedUser = localStorage.getItem("user_info");
     if (storedUser) {
@@ -151,27 +163,20 @@ const ProductPage = () => {
           return parseInt(p);
         });
 
-        // [!] LƯU QUYỀN
         setPermissions(parsedPerms);
-
-        // [!] KHÔNG CHECK QUYỀN XEM Ở ĐÂY
-        // (Role nào cũng được fetch dữ liệu)
       } catch (e) {
         setPermissions([]);
       }
     }
-
-    // Luôn tải dữ liệu
     fetchCommonData();
-    fetchProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Tự động tải lại khi đổi chế độ (Trash/Main) hoặc filter
   useEffect(() => {
     fetchProducts();
-  }, [fetchProducts]); // Reload khi filter hoặc chế độ thùng rác đổi
+  }, [fetchProducts]);
 
-  // Hàm check quyền
   const checkPerm = (id) => isAdmin || permissions.includes(id);
 
   // --- HANDLERS ---
@@ -184,41 +189,37 @@ const ProductPage = () => {
 
   const handleEdit = (record) => {
     setEditingProduct(record);
-
-    // Xử lý ảnh để hiển thị trong Upload
     const images = record.hinhAnh
-      ? [
-          {
-            uid: "-1",
-            name: "image.png",
-            status: "done",
-            url: record.hinhAnh, // Giả sử BE trả về link ảnh hoặc base64
-          },
-        ]
+      ? [{ uid: "-1", name: "image.png", status: "done", url: record.hinhAnh }]
       : [];
     setFileList(images);
-
-    form.setFieldsValue({
-      ...record,
-      // Map các trường đặc biệt nếu cần
-    });
+    form.setFieldsValue(record);
     setIsModalVisible(true);
   };
 
+  // [FIX] Xử lý form submit tương thích với hàm createProduct(values, file)
   const handleOk = () => {
     form
       .validateFields()
       .then(async (values) => {
-        // Xử lý upload ảnh (nếu có logic upload riêng thì gọi ở đây)
-        // Giả sử values đã có đủ info
         try {
-          // [Lưu ý]: Nếu có file ảnh, cần chuyển sang FormData
-          // Ở đây demo gửi JSON cơ bản
+          // Lấy file ảnh từ fileList
+          let file = null;
+          if (fileList.length > 0 && fileList[0].originFileObj) {
+            file = fileList[0].originFileObj;
+          }
+
           if (editingProduct) {
-            await productService.updateProduct(editingProduct.maSP, values);
+            // Gọi hàm updateProduct(id, values, file)
+            await productService.updateProduct(
+              editingProduct.maSP,
+              values,
+              file
+            );
             messageApi.success("Cập nhật thành công!");
           } else {
-            await productService.createProduct(values);
+            // Gọi hàm createProduct(values, file)
+            await productService.createProduct(values, file);
             messageApi.success("Tạo mới thành công!");
           }
           setIsModalVisible(false);
@@ -239,21 +240,20 @@ const ProductPage = () => {
     try {
       await productService.deleteProduct(deletingId);
       messageApi.success("Đã chuyển vào thùng rác!");
-      fetchProducts();
+      fetchProducts(); // Reload để item biến mất khỏi list chính
     } catch (e) {
       messageApi.error("Lỗi khi xóa!");
     }
     setIsDeleteModalOpen(false);
   };
 
-  // Giả sử có hàm restore
   const handleRestore = async (id) => {
     try {
-      // await productService.restoreProduct(id);
-      messageApi.info("Backend cần API khôi phục (Restore)");
-      // fetchProducts();
+      await productService.restoreProduct(id);
+      messageApi.success("Đã khôi phục sản phẩm!");
+      fetchProducts(); // Reload để item biến mất khỏi thùng rác
     } catch (e) {
-      messageApi.error("Lỗi khôi phục");
+      messageApi.error("Lỗi khôi phục!");
     }
   };
 
@@ -266,6 +266,7 @@ const ProductPage = () => {
       title: "Ảnh",
       dataIndex: "hinhAnh",
       width: 80,
+      align: "center",
       render: (src) =>
         src ? (
           <Image
@@ -273,7 +274,14 @@ const ProductPage = () => {
             width={50}
           />
         ) : (
-          <div style={{ width: 50, height: 50, background: "#f0f0f0" }}>
+          <div
+            style={{
+              width: 50,
+              height: 50,
+              background: "#f0f0f0",
+              margin: "auto",
+            }}
+          >
             No IMG
           </div>
         ),
@@ -285,16 +293,21 @@ const ProductPage = () => {
       render: (id) => listLoaiHang.find((l) => l.maLoai === id)?.tenLoai || id,
     },
     {
-      title: "Giá Bán",
-      dataIndex: "giaBan",
-      align: "right",
-      render: (v) => Number(v).toLocaleString() + " đ",
-    },
-    {
       title: "Tồn Kho",
       dataIndex: "soLuongTon",
       align: "center",
       render: (v) => <Tag color={v > 10 ? "blue" : "red"}>{v}</Tag>,
+    },
+    {
+      title: "Trạng thái",
+      align: "center",
+      width: 120,
+      render: () =>
+        inTrashMode ? (
+          <Tag color="red">Đã xóa</Tag>
+        ) : (
+          <Tag color="green">Hoạt động</Tag>
+        ),
     },
     {
       title: "Hành động",
@@ -302,14 +315,13 @@ const ProductPage = () => {
       width: 150,
       align: "center",
       render: (_, record) => {
-        // [CHECK QUYỀN]
-        const allowEdit = checkPerm(PERM_EDIT); // 51
-        const allowDelete = checkPerm(PERM_DELETE); // 52
+        const allowEdit = checkPerm(PERM_EDIT);
+        const allowDelete = checkPerm(PERM_DELETE);
 
         return (
           <Space size="middle">
             {inTrashMode ? (
-              // Thùng rác: Hiện Khôi Phục nếu có quyền Xóa (52)
+              // 1. THÙNG RÁC: Hiện nút Khôi Phục (Quyền 52)
               allowDelete && (
                 <Tooltip title="Khôi phục">
                   <Button
@@ -323,10 +335,10 @@ const ProductPage = () => {
                 </Tooltip>
               )
             ) : (
-              // Danh sách chính: Hiện Sửa (51) / Xóa (52)
+              // 2. DANH SÁCH CHÍNH: Hiện Sửa / Xóa
               <>
                 {allowEdit && (
-                  <Tooltip title="Cập nhật (Quyền 51)">
+                  <Tooltip title="Cập nhật">
                     <Button
                       icon={<EditOutlined />}
                       onClick={() => handleEdit(record)}
@@ -334,7 +346,7 @@ const ProductPage = () => {
                   </Tooltip>
                 )}
                 {allowDelete && (
-                  <Tooltip title="Xóa (Quyền 52)">
+                  <Tooltip title="Xóa ">
                     <Button
                       icon={<DeleteOutlined />}
                       danger
@@ -357,7 +369,6 @@ const ProductPage = () => {
         style={{ marginBottom: 16 }}
         bodyStyle={{ padding: "16px" }}
       >
-        {/* BỘ LỌC */}
         <Row
           gutter={[16, 16]}
           align="middle"
@@ -438,7 +449,6 @@ const ProductPage = () => {
         }}
       >
         <Space>
-          {/* Nút Tạo Mới: Cần quyền 50 */}
           {!inTrashMode && checkPerm(PERM_CREATE) && (
             <Button
               type="primary"
@@ -451,7 +461,6 @@ const ProductPage = () => {
         </Space>
 
         <Space>
-          {/* Nút Thùng Rác: Cần quyền Xóa (52) hoặc Admin */}
           {inTrashMode ? (
             <Button
               icon={<ArrowLeftOutlined />}
@@ -473,9 +482,7 @@ const ProductPage = () => {
         </Space>
       </div>
 
-      {inTrashMode && (
-        <h3 style={{ color: "red" }}>Đang xem: Thùng rác sản phẩm</h3>
-      )}
+      {inTrashMode && <h3 style={{ color: "red" }}>Thùng rác sản phẩm</h3>}
 
       <Table
         className="fixed-height-table"
@@ -486,7 +493,6 @@ const ProductPage = () => {
         pagination={{ pageSize: 5 }}
       />
 
-      {/* MODAL FORM */}
       <Modal
         title={editingProduct ? "Cập nhật sản phẩm" : "Thêm sản phẩm mới"}
         open={isModalVisible}
@@ -610,13 +616,12 @@ const ProductPage = () => {
           >
             <Input.TextArea rows={3} />
           </Form.Item>
-
           <Form.Item label="Hình ảnh">
             <Upload
               listType="picture"
               fileList={fileList}
               onChange={handleUploadChange}
-              beforeUpload={() => false} // Chặn auto upload
+              beforeUpload={() => false}
               maxCount={1}
             >
               <Button icon={<UploadOutlined />}>Chọn ảnh</Button>
@@ -625,7 +630,6 @@ const ProductPage = () => {
         </Form>
       </Modal>
 
-      {/* MODAL XÓA */}
       <Modal
         title="Xác nhận xóa"
         open={isDeleteModalOpen}
@@ -636,9 +640,6 @@ const ProductPage = () => {
         okType="danger"
       >
         <p>Bạn có chắc muốn xóa sản phẩm này?</p>
-        <p style={{ fontSize: 12, color: "#888" }}>
-          Sản phẩm sẽ được chuyển vào thùng rác.
-        </p>
       </Modal>
     </div>
   );

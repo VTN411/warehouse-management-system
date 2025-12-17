@@ -20,35 +20,31 @@ import {
   EditOutlined,
   DeleteOutlined,
   ReloadOutlined,
-  RestOutlined, // Icon thùng rác
-  UndoOutlined, // Icon khôi phục
-  ArrowLeftOutlined, // Icon quay lại
+  RestOutlined,
+  UndoOutlined,
+  ArrowLeftOutlined,
 } from "@ant-design/icons";
 import * as categoryService from "../../services/category.service";
 
-// --- CẤU HÌNH ID QUYỀN (LOẠI HÀNG) ---
-const PERM_VIEW = 140; // Xem danh sách
-const PERM_CREATE = 141; // Tạo mới
-const PERM_EDIT = 142; // Cập nhật
-const PERM_DELETE = 143; // Xóa (kiêm Khôi phục)
+// --- QUYỀN HẠN ---
+const PERM_VIEW = 140;
+const PERM_CREATE = 141;
+const PERM_EDIT = 142;
+const PERM_DELETE = 143; // Quyền Xóa & Khôi phục
 
 const CategoryPage = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  // State chế độ Thùng rác
-  const [inTrashMode, setInTrashMode] = useState(false);
+  const [inTrashMode, setInTrashMode] = useState(false); // State chuyển chế độ
 
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
-
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
   const [form] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
 
-  // State Quyền hạn
   const [permissions, setPermissions] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -57,38 +53,31 @@ const CategoryPage = () => {
     setLoading(true);
     try {
       let res;
+      // [QUAN TRỌNG] Phân luồng gọi API
       if (inTrashMode) {
-        // Nếu có API thùng rác riêng
-        // res = await categoryService.getTrashCategories();
-        // Nếu chưa có API thùng rác, tạm thời lọc client hoặc gọi API getAll
-        res = await categoryService.getAllCategories();
-        // Lưu ý: Bạn cần đảm bảo Backend có API hỗ trợ lọc DaXoa=1
+        // Gọi API lấy thùng rác
+        res = await categoryService.getTrashCategories();
       } else {
+        // Gọi API lấy danh sách chính
         res = await categoryService.getAllCategories();
       }
 
-      // Xử lý dữ liệu trả về
       let data = res.data;
-      // Nếu API trả về dạng Page object -> lấy content
       if (data.content) data = data.content;
 
-      // Lọc dữ liệu theo chế độ (Nếu Backend trả về tất cả)
       if (Array.isArray(data)) {
-        const filtered = data.filter((item) => {
-          const isDeleted = item.daXoa === 1 || item.trangThai === 0; // Tùy logic DB của bạn
-          return inTrashMode ? isDeleted : !isDeleted;
-        });
-        setCategories(filtered);
+        setCategories(data);
       } else {
         setCategories([]);
       }
     } catch (error) {
-      messageApi.error("Không thể tải danh sách loại hàng!");
+      // messageApi.error("Không thể tải dữ liệu!");
+      setCategories([]);
     }
     setLoading(false);
-  }, [inTrashMode, messageApi]);
+  }, [inTrashMode]);
 
-  // --- 2. KHỞI TẠO & PHÂN QUYỀN ---
+  // --- 2. CHECK QUYỀN ---
   useEffect(() => {
     const storedUser = localStorage.getItem("user_info");
     if (storedUser) {
@@ -102,39 +91,27 @@ const CategoryPage = () => {
           user = user.quyen;
         }
 
-        const roleName = (user.vaiTro || user.tenVaiTro || "").toUpperCase();
-        setIsAdmin(roleName === "ADMIN");
+        const role = (user.vaiTro || user.tenVaiTro || "").toUpperCase();
+        setIsAdmin(role === "ADMIN");
 
         let rawPerms = user.dsQuyenSoHuu || user.quyen || [];
         if (!Array.isArray(rawPerms)) rawPerms = [];
+        const parsedPerms = rawPerms.map((p) =>
+          typeof p === "object" ? parseInt(p.maQuyen || p.id) : parseInt(p)
+        );
 
-        const parsedPerms = rawPerms.map((p) => {
-          if (typeof p === "object" && p !== null)
-            return parseInt(p.maQuyen || p.id);
-          return parseInt(p);
-        });
-
-        // [!] LƯU QUYỀN VÀO STATE
         setPermissions(parsedPerms);
 
-        // Check quyền Xem (ID 140)
         const hasViewPerm = parsedPerms.includes(PERM_VIEW);
-
-        if (roleName === "ADMIN" || hasViewPerm) {
+        if (role === "ADMIN" || hasViewPerm) {
           fetchCategories();
-        } else {
-          setLoading(false);
         }
       } catch (e) {
         setPermissions([]);
       }
-    } else {
-      // Chưa đăng nhập
-      setLoading(false);
     }
-  }, [fetchCategories]); // Chạy lại khi hàm fetch thay đổi (do inTrashMode)
+  }, [fetchCategories]);
 
-  // Hàm check quyền nhanh
   const checkPerm = (id) => isAdmin || permissions.includes(id);
 
   // --- HANDLERS ---
@@ -168,12 +145,13 @@ const CategoryPage = () => {
           setIsModalVisible(false);
           fetchCategories();
         } catch (error) {
-          messageApi.error("Lỗi khi lưu!");
+          messageApi.error("Lỗi lưu dữ liệu!");
         }
       })
       .catch(() => {});
   };
 
+  // Xóa (Chuyển vào thùng rác)
   const handleDelete = (id) => {
     setDeletingId(id);
     setIsDeleteModalOpen(true);
@@ -183,35 +161,32 @@ const CategoryPage = () => {
     try {
       await categoryService.deleteCategory(deletingId);
       messageApi.success("Đã chuyển vào thùng rác!");
-      fetchCategories();
+      fetchCategories(); // Reload lại danh sách (bản ghi sẽ biến mất khỏi list chính)
     } catch (error) {
-      messageApi.error("Không thể xóa (có thể do ràng buộc dữ liệu)!");
+      messageApi.error("Lỗi khi xóa!");
     }
     setIsDeleteModalOpen(false);
   };
 
-  // Giả sử có hàm restore (Nếu chưa có trong service thì cần thêm)
+  // [MỚI] Khôi phục (Lấy lại từ thùng rác)
   const handleRestore = async (id) => {
     try {
-      // await categoryService.restoreCategory(id);
-      messageApi.info(
-        "Chức năng khôi phục đang phát triển (Backend cần API restore)"
-      );
-      // Sau khi có API thì bỏ comment dòng trên và fetch lại
-      // fetchCategories();
+      await categoryService.restoreCategory(id);
+      messageApi.success("Đã khôi phục loại hàng!");
+      fetchCategories(); // Reload lại list thùng rác (bản ghi sẽ biến mất khỏi đây)
     } catch (e) {
-      messageApi.error("Lỗi khôi phục");
+      messageApi.error("Lỗi khi khôi phục!");
     }
   };
 
-  // --- CỘT BẢNG ---
   const columns = [
-    { title: "Mã Loại", dataIndex: "maLoai", width: 100, align: "center" },
+    { title: "Mã Loại", dataIndex: "maLoai", width: 80, align: "center" },
     { title: "Tên Loại Hàng", dataIndex: "tenLoai", render: (t) => <b>{t}</b> },
     { title: "Mô Tả", dataIndex: "moTa" },
     {
       title: "Trạng thái",
       align: "center",
+      width: 120,
       render: () =>
         inTrashMode ? (
           <Tag color="red">Đã xóa</Tag>
@@ -225,14 +200,13 @@ const CategoryPage = () => {
       width: 150,
       align: "center",
       render: (_, record) => {
-        // Check quyền
-        const allowEdit = checkPerm(PERM_EDIT); // 142
-        const allowDelete = checkPerm(PERM_DELETE); // 143
+        const allowEdit = checkPerm(PERM_EDIT);
+        const allowDelete = checkPerm(PERM_DELETE);
 
         return (
           <Space size="middle">
             {inTrashMode ? (
-              // 1. TRONG THÙNG RÁC -> Hiện nút Khôi Phục (Cần quyền Xóa 143 hoặc Admin)
+              // Ở Thùng Rác: Nút Khôi Phục (Quyền 143)
               allowDelete && (
                 <Tooltip title="Khôi phục">
                   <Button
@@ -246,17 +220,16 @@ const CategoryPage = () => {
                 </Tooltip>
               )
             ) : (
-              // 2. DANH SÁCH CHÍNH -> Hiện Sửa / Xóa
+              // Ở Danh Sách Chính: Sửa / Xóa
               <>
                 {allowEdit && (
-                  <Tooltip title="Sửa thông tin">
+                  <Tooltip title="Sửa">
                     <Button
                       icon={<EditOutlined />}
                       onClick={() => handleEdit(record)}
                     />
                   </Tooltip>
                 )}
-
                 {allowDelete && (
                   <Tooltip title="Xóa">
                     <Button
@@ -274,12 +247,10 @@ const CategoryPage = () => {
     },
   ];
 
-  // Chặn nếu không có quyền xem
   if (!loading && permissions.length > 0 && !checkPerm(PERM_VIEW)) {
     return (
-      <Card style={{ margin: 20, textAlign: "center", color: "red" }}>
-        <h3>Quyền truy cập bị từ chối</h3>
-        <p>Bạn cần quyền "Xem danh sách loại hàng" (ID: {PERM_VIEW})</p>
+      <Card style={{ margin: 20, color: "red", textAlign: "center" }}>
+        Bạn không có quyền xem trang này (ID: {PERM_VIEW})
       </Card>
     );
   }
@@ -296,12 +267,11 @@ const CategoryPage = () => {
           align="middle"
         >
           <Col>
-            {/* TIÊU ĐỀ */}
-            <h3 style={{ margin: 0 }}>
+            <h3 style={{ margin: 0, color: inTrashMode ? "red" : "inherit" }}>
               {inTrashMode ? (
-                <span style={{ color: "red" }}>
+                <>
                   <RestOutlined /> Thùng rác Loại Hàng
-                </span>
+                </>
               ) : (
                 "Quản lý Loại Hàng"
               )}
@@ -316,7 +286,6 @@ const CategoryPage = () => {
                 Tải lại
               </Button>
 
-              {/* Nút Chuyển chế độ Thùng rác */}
               {inTrashMode ? (
                 <Button
                   icon={<ArrowLeftOutlined />}
@@ -326,7 +295,6 @@ const CategoryPage = () => {
                 </Button>
               ) : (
                 <>
-                  {/* Nút Thùng rác (Ai có quyền xóa hoặc Admin thì xem được thùng rác) */}
                   {(isAdmin || checkPerm(PERM_DELETE)) && (
                     <Button
                       icon={<RestOutlined />}
@@ -336,15 +304,13 @@ const CategoryPage = () => {
                       Thùng rác
                     </Button>
                   )}
-
-                  {/* Nút Thêm Mới (Cần quyền 141) */}
                   {checkPerm(PERM_CREATE) && (
                     <Button
                       type="primary"
                       icon={<PlusOutlined />}
                       onClick={handleOpenModal}
                     >
-                      Thêm Loại Hàng
+                      Thêm Mới
                     </Button>
                   )}
                 </>
@@ -363,7 +329,6 @@ const CategoryPage = () => {
         pagination={{ pageSize: 10 }}
       />
 
-      {/* Modal Form */}
       <Modal
         title={editingCategory ? "Sửa Loại Hàng" : "Thêm Loại Hàng"}
         open={isModalVisible}
@@ -377,23 +342,19 @@ const CategoryPage = () => {
           <Form.Item
             name="tenLoai"
             label="Tên Loại Hàng"
-            rules={[{ required: true, message: "Vui lòng nhập tên loại!" }]}
+            rules={[{ required: true }]}
           >
-            <Input placeholder="Ví dụ: Điện tử, Gia dụng..." />
+            <Input />
           </Form.Item>
           <Form.Item
             name="moTa"
             label="Mô Tả"
           >
-            <Input.TextArea
-              rows={3}
-              placeholder="Mô tả chi tiết..."
-            />
+            <Input.TextArea rows={3} />
           </Form.Item>
         </Form>
       </Modal>
 
-      {/* Modal Xóa */}
       <Modal
         title="Xác nhận xóa"
         open={isDeleteModalOpen}
@@ -403,10 +364,7 @@ const CategoryPage = () => {
         cancelText="Hủy"
         okType="danger"
       >
-        <p>Bạn có chắc muốn xóa loại hàng này không?</p>
-        <p style={{ fontSize: 12, color: "#888" }}>
-          Dữ liệu sẽ được chuyển vào thùng rác.
-        </p>
+        <p>Bạn có chắc muốn chuyển loại hàng này vào thùng rác?</p>
       </Modal>
     </div>
   );
