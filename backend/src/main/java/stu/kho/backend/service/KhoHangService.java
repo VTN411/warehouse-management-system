@@ -85,16 +85,26 @@ public class KhoHangService {
     }
 
     @Transactional
-    public void deleteKhoHang(Integer id, String tenNguoiXoa) {
-        if (!khoHangRepository.findById(id).isPresent()) {
-            throw new RuntimeException("Kho hàng không tồn tại.");
+    public void deleteKhoHang(Integer id, String username) {
+        // 1. Kiểm tra tồn tại
+        KhoHang kho = khoHangRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Kho hàng không tồn tại!"));
+
+        // 2. CHECK TỒN KHO (Logic chặn xóa)
+        int tongHang = khoHangRepository.countTotalItemsByKho(id);
+
+        if (tongHang > 0) {
+            throw new RuntimeException(
+                    "CHẶN XÓA: Kho '" + kho.getTenKho() + "' đang chứa " + tongHang + " sản phẩm. " +
+                            "Vui lòng thực hiện Phiếu Điều Chuyển để dọn sạch kho trước khi xóa."
+            );
         }
-        try {
-            khoHangRepository.deleteById(id);
-            logActivity(tenNguoiXoa, "Xóa kho hàng ID: " + id);
-        } catch (DataIntegrityViolationException e) {
-            throw new RuntimeException("Không thể xóa kho này vì đang chứa hàng hoặc có phiếu nhập/xuất liên quan.");
-        }
+
+        // 3. Nếu kho trống (tồn = 0) thì mới cho phép xóa mềm
+        khoHangRepository.deleteById(id);
+
+        // Ghi log
+        logActivity(username, "Xóa kho hàng ID: " + id);
     }
 
     private void logActivity(String tenDangNhap, String hanhDong) {

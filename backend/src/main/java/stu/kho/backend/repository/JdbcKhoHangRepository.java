@@ -132,4 +132,15 @@ public class JdbcKhoHangRepository implements KhoHangRepository {
 
         return count != null && count > 0;
     }
+    @Override
+    public int countTotalItemsByKho(Integer maKho) {
+        // Tính tổng số lượng tồn của tất cả sản phẩm trong kho này
+        String sql = "SELECT COALESCE(SUM(SoLuongTon), 0) FROM chitietkho WHERE MaKho = ?";
+
+        try {
+            return jdbcTemplate.queryForObject(sql, Integer.class, maKho);
+        } catch (Exception e) {
+            return 0; // Lỗi hoặc null thì coi như bằng 0
+        }
+    }
 }

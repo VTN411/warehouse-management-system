@@ -16,4 +16,5 @@ public interface KhoHangRepository {
     void restoreById(Integer id);
     List<KhoHang> findAllDeleted();
     boolean existsByTenKho(String tenKho, Integer idNgoaiTru);
+    int countTotalItemsByKho(Integer maKho);
 }
