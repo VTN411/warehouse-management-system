@@ -17,7 +17,8 @@ import {
   Card,
   Row,
   Col,
-  DatePicker, // [!] Import thêm
+  DatePicker,
+  Tooltip, // [!] Thêm Tooltip
 } from "antd";
 import {
   PlusOutlined,
@@ -29,7 +30,7 @@ import {
   EditOutlined,
   SearchOutlined,
   ClearOutlined,
-  MinusCircleOutlined, // [!] Import Icon tìm kiếm
+  MinusCircleOutlined,
 } from "@ant-design/icons";
 import * as transferService from "../../services/transfer.service";
 import * as warehouseService from "../../services/warehouse.service";
@@ -40,16 +41,19 @@ import dayjs from "dayjs";
 const { Option } = Select;
 const { RangePicker } = DatePicker;
 
-// ID Quyền
-const PERM_CREATE = 111;
-const PERM_APPROVE = 112;
-const PERM_CANCEL = 113;
-const PERM_EDIT_APPROVED = 114;
+// --- [CẬP NHẬT] CẤU HÌNH ID QUYỀN ĐIỀU CHUYỂN ---
+const PERM_VIEW = 110; // Xem danh sách
+const PERM_CREATE = 111; // Tạo mới
+const PERM_EDIT = 114; // Cập nhật (Sửa phiếu chờ duyệt)
+const PERM_DELETE = 115; // Xóa
+const PERM_APPROVE = 112; // Duyệt phiếu
+const PERM_CANCEL = 113; // Hủy phiếu
+const PERM_EDIT_APPROVED = 116; // Sửa phiếu (đã duyệt)
 
 const TransferPage = () => {
   const [listData, setListData] = useState([]);
 
-  // [!] 1. STATE BỘ LỌC
+  // State bộ lọc
   const [filter, setFilter] = useState({
     chungTu: "",
     trangThai: null,
@@ -88,7 +92,7 @@ const TransferPage = () => {
   const [permissions, setPermissions] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // [!] 2. HÀM TẢI DỮ LIỆU (CÓ TÌM KIẾM)
+  // --- 1. HÀM TẢI DỮ LIỆU ---
   const fetchData = useCallback(
     async (page = 1, pageSize = 5, currentFilter = {}) => {
       setLoading(true);
@@ -133,7 +137,9 @@ const TransferPage = () => {
             total: data.totalElements,
           }));
         } else if (Array.isArray(data)) {
-          // Fallback client-side pagination
+          // Sort giảm dần theo ngày
+          data.sort((a, b) => new Date(b.ngayChuyen) - new Date(a.ngayChuyen));
+
           const startIndex = (page - 1) * pageSize;
           const endIndex = startIndex + pageSize;
           setListData(data.slice(startIndex, endIndex));
@@ -169,35 +175,54 @@ const TransferPage = () => {
     }
   }, []);
 
-  // [!] 3. KHỞI TẠO
+  // --- 2. KHỞI TẠO & PHÂN QUYỀN (QUAN TRỌNG) ---
   useEffect(() => {
-    fetchData(1, 5, filter);
-    fetchCommonData();
-    try {
-      const storedUser = localStorage.getItem("user_info");
-      if (storedUser) {
+    const storedUser = localStorage.getItem("user_info");
+    if (storedUser) {
+      try {
         let user = JSON.parse(storedUser);
-        if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung)
+        if (
+          user.quyen &&
+          !Array.isArray(user.quyen) &&
+          user.quyen.maNguoiDung
+        ) {
           user = user.quyen;
+        }
 
-        const role = user.vaiTro || user.tenVaiTro || "";
-        setIsAdmin(role.toUpperCase() === "ADMIN");
+        const role = (user.vaiTro || user.tenVaiTro || "").toUpperCase();
+        setIsAdmin(role === "ADMIN");
 
-        let perms = user.dsQuyenSoHuu || user.quyen;
-        if (!Array.isArray(perms)) perms = [];
-        setPermissions(perms);
+        let rawPerms = user.dsQuyenSoHuu || user.quyen || [];
+        if (!Array.isArray(rawPerms)) rawPerms = [];
+
+        // Chuyển quyền về số nguyên
+        const parsedPerms = rawPerms.map((p) => {
+          if (typeof p === "object" && p !== null)
+            return parseInt(p.maQuyen || p.id);
+          return parseInt(p);
+        });
+
+        // [!] LƯU QUYỀN VÀO STATE
+        setPermissions(parsedPerms);
+
+        // Check quyền Xem (ID 110)
+        const hasViewPerm = parsedPerms.includes(PERM_VIEW);
+
+        if (role === "ADMIN" || hasViewPerm) {
+          fetchData(1, 5, filter);
+        } else {
+          setLoading(false);
+        }
+      } catch (e) {
+        setPermissions([]);
       }
-    } catch (e) {
-      setPermissions([]);
     }
+    fetchCommonData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Xử lý tìm kiếm
-  const handleSearch = () => {
-    fetchData(1, pagination.pageSize, filter);
-  };
-
+  // Handlers tìm kiếm
+  const handleSearch = () => fetchData(1, pagination.pageSize, filter);
   const handleResetFilter = () => {
     const emptyFilter = {
       chungTu: "",
@@ -209,17 +234,12 @@ const TransferPage = () => {
     setFilter(emptyFilter);
     fetchData(1, 5, emptyFilter);
   };
-
   const handleTableChange = (newPagination) => {
     fetchData(newPagination.current, newPagination.pageSize, filter);
   };
 
-  // Logic quyền & Helper
+  // Helper check quyền
   const checkPerm = (id) => isAdmin || permissions.includes(id);
-  const canCreate = checkPerm(PERM_CREATE);
-  const canApprove = checkPerm(PERM_APPROVE);
-  const canCancel = checkPerm(PERM_CANCEL);
-  const canEditApproved = checkPerm(PERM_EDIT_APPROVED);
 
   const getUserName = (id) =>
     listUser.find((u) => u.maNguoiDung === id)?.hoTen || `ID: ${id}`;
@@ -235,14 +255,21 @@ const TransferPage = () => {
     return status;
   };
 
+  // --- LOGIC HIỂN THỊ NÚT SỬA ---
   const isEditable = (record) => {
+    // Admin luôn sửa được (trừ khi đã hủy)
     if (isAdmin && record.trangThai !== 3) return true;
-    if (record.trangThai === 1 && canCreate) return true;
-    if (record.trangThai === 2) return canEditApproved;
+
+    // Status 1 (Chờ duyệt) -> Cần quyền 114 (Cập nhật)
+    if (record.trangThai === 1) return checkPerm(PERM_EDIT);
+
+    // Status 2 (Đã duyệt) -> Cần quyền 116 (Sửa đã duyệt)
+    if (record.trangThai === 2) return checkPerm(PERM_EDIT_APPROVED);
+
     return false;
   };
 
-  // --- HANDLERS FORM ---
+  // --- HANDLERS ---
   const handleOpenModal = () => {
     setEditingRecord(null);
     form.resetFields();
@@ -263,11 +290,7 @@ const TransferPage = () => {
   };
 
   const handleEdit = async (record) => {
-    if (record.trangThai === 3) {
-      messageApi.warning("Không thể sửa phiếu đã hủy!");
-      return;
-    }
-
+    // Logic check chặn sửa phiếu đã duyệt quá hạn
     if (record.trangThai === 2) {
       const createdDate = dayjs(record.ngayChuyen);
       const diffDays = dayjs().diff(createdDate, "day");
@@ -276,10 +299,13 @@ const TransferPage = () => {
         messageApi.error(`Không thể sửa: Phiếu đã quá hạn 30 ngày.`);
         return;
       }
-      if (!canEditApproved && !isAdmin) {
-        messageApi.warning("Không có quyền sửa phiếu đã duyệt!");
+      if (!checkPerm(PERM_EDIT_APPROVED) && !isAdmin) {
+        messageApi.warning("Bạn cần quyền 116 để sửa phiếu đã duyệt!");
         return;
       }
+    } else if (record.trangThai === 3) {
+      messageApi.warning("Không thể sửa phiếu đã hủy!");
+      return;
     }
 
     try {
@@ -316,15 +342,11 @@ const TransferPage = () => {
         }
         try {
           if (editingRecord) {
-            if (transferService.updateTransfer) {
-              await transferService.updateTransfer(
-                editingRecord.maPhieuDC,
-                values
-              );
-              messageApi.success("Cập nhật thành công!");
-            } else {
-              messageApi.error("Chưa hỗ trợ cập nhật API");
-            }
+            await transferService.updateTransfer(
+              editingRecord.maPhieuDC,
+              values
+            );
+            messageApi.success("Cập nhật thành công!");
           } else {
             await transferService.createTransfer(values);
             messageApi.success("Tạo phiếu thành công!");
@@ -383,6 +405,7 @@ const TransferPage = () => {
     setIsDeleteModalOpen(false);
   };
 
+  // --- CẤU HÌNH CỘT & NÚT BẤM ---
   const columns = [
     {
       title: "Ngày Chuyển",
@@ -419,51 +442,68 @@ const TransferPage = () => {
       key: "action",
       width: "20%",
       render: (_, record) => {
-        const isPending = record.trangThai === 1;
-        const allowEdit = isEditable(record);
+        const isPending = record.trangThai === 1; // Chờ duyệt
+
+        // Check quyền từng nút
+        const allowEdit = isEditable(record); // Logic (114 hoặc 116)
+        const allowDelete = checkPerm(PERM_DELETE); // Quyền 115
+        const allowApprove = checkPerm(PERM_APPROVE); // Quyền 112
+        const allowCancel = checkPerm(PERM_CANCEL); // Quyền 113
 
         return (
           <Space
             size="small"
             wrap={false}
           >
-            <Button
-              icon={<EyeOutlined />}
-              onClick={() => handleViewDetail(record)}
-              title="Xem"
-            />
+            {/* Nút Xem: Luôn hiện nếu vào được trang */}
+            <Tooltip title="Xem chi tiết">
+              <Button
+                icon={<EyeOutlined />}
+                onClick={() => handleViewDetail(record)}
+              />
+            </Tooltip>
 
+            {/* Nút Sửa: Dựa trên isEditable (114/116) */}
             {allowEdit && (
-              <Button
-                icon={<EditOutlined />}
-                onClick={() => handleEdit(record)}
-                title="Sửa"
-              />
+              <Tooltip title="Sửa phiếu">
+                <Button
+                  icon={<EditOutlined />}
+                  onClick={() => handleEdit(record)}
+                />
+              </Tooltip>
             )}
 
-            {isPending && canApprove && (
-              <Button
-                icon={<CheckCircleOutlined />}
-                onClick={() => handleApprove(record.maPhieuDC)}
-                style={{ color: "green", borderColor: "green" }}
-                title="Duyệt"
-              />
+            {/* Nút Duyệt: Status 1 + Quyền 112 */}
+            {isPending && allowApprove && (
+              <Tooltip title="Duyệt phiếu (Quyền 112)">
+                <Button
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => handleApprove(record.maPhieuDC)}
+                  style={{ color: "green", borderColor: "green" }}
+                />
+              </Tooltip>
             )}
-            {isPending && canCancel && (
-              <Button
-                icon={<CloseCircleOutlined />}
-                onClick={() => handleReject(record.maPhieuDC)}
-                danger
-                title="Hủy"
-              />
+
+            {/* Nút Hủy: Status 1 + Quyền 113 */}
+            {isPending && allowCancel && (
+              <Tooltip title="Hủy phiếu (Quyền 113)">
+                <Button
+                  icon={<CloseCircleOutlined />}
+                  onClick={() => handleReject(record.maPhieuDC)}
+                  danger
+                />
+              </Tooltip>
             )}
-            {isPending && isAdmin && (
-              <Button
-                icon={<DeleteOutlined />}
-                danger
-                onClick={() => handleDelete(record.maPhieuDC)}
-                title="Xóa"
-              />
+
+            {/* Nút Xóa: Status 1 + Quyền 115 */}
+            {isPending && allowDelete && (
+              <Tooltip title="Xóa phiếu (Quyền 115)">
+                <Button
+                  icon={<DeleteOutlined />}
+                  danger
+                  onClick={() => handleDelete(record.maPhieuDC)}
+                />
+              </Tooltip>
             )}
           </Space>
         );
@@ -471,11 +511,25 @@ const TransferPage = () => {
     },
   ];
 
+  // Chặn nếu không có quyền xem
+  const hasViewRight = isAdmin || permissions.includes(PERM_VIEW);
+  if (!loading && permissions.length > 0 && !hasViewRight) {
+    return (
+      <Card style={{ margin: 20, textAlign: "center" }}>
+        <h2 style={{ color: "red" }}>Truy cập bị từ chối</h2>
+        <p>Bạn không có quyền xem danh sách Điều chuyển.</p>
+        <p>
+          Vui lòng liên hệ Admin cấp quyền mã: <b>{PERM_VIEW}</b>
+        </p>
+      </Card>
+    );
+  }
+
   return (
     <div>
       {contextHolder}
 
-      {/* [!] 4. THANH TÌM KIẾM ĐIỀU CHUYỂN */}
+      {/* THANH TÌM KIẾM */}
       <Card
         style={{ marginBottom: 16 }}
         bodyStyle={{ padding: "16px" }}
@@ -582,7 +636,8 @@ const TransferPage = () => {
       </Card>
 
       <Space style={{ marginBottom: 16 }}>
-        {canCreate && (
+        {/* Nút Tạo Mới: Quyền 111 */}
+        {checkPerm(PERM_CREATE) && (
           <Button
             type="primary"
             icon={<PlusOutlined />}

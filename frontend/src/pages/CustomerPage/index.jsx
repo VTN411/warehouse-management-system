@@ -19,17 +19,19 @@ import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
-  ReloadOutlined,
   SearchOutlined,
   RestOutlined, // Icon thùng rác
   UndoOutlined, // Icon khôi phục
   ArrowLeftOutlined, // Icon quay lại
+  ClearOutlined,
 } from "@ant-design/icons";
 import * as customerService from "../../services/customer.service";
 
-const PERM_CREATE = 91;
-const PERM_EDIT = 92;
-const PERM_DELETE = 93;
+// --- CẤU HÌNH ID QUYỀN (KHÁCH HÀNG) ---
+const PERM_VIEW = 90; // Xem danh sách
+const PERM_CREATE = 91; // Tạo mới
+const PERM_EDIT = 92; // Cập nhật
+const PERM_DELETE = 93; // Xóa (kiêm Khôi phục / Thùng rác)
 
 const CustomerPage = () => {
   const [customers, setCustomers] = useState([]);
@@ -44,25 +46,24 @@ const CustomerPage = () => {
   const [form] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
 
+  // State Quyền hạn
   const [permissions, setPermissions] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
+
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
   const [keyword, setKeyword] = useState("");
 
-  // 1. LẤY DỮ LIỆU (Theo chế độ)
+  // 1. LẤY DỮ LIỆU
   const fetchCustomers = useCallback(
     async (searchKey = "") => {
       setLoading(true);
       try {
         let response;
-
         if (inTrashMode) {
-          // A. CHẾ ĐỘ THÙNG RÁC
           response = await customerService.getTrashCustomers();
         } else {
-          // B. CHẾ ĐỘ DANH SÁCH CHÍNH
           if (searchKey) {
             response = await customerService.searchCustomers(searchKey);
           } else {
@@ -70,7 +71,6 @@ const CustomerPage = () => {
           }
         }
 
-        // Xử lý dữ liệu trả về (mảng hoặc object phân trang)
         const data = Array.isArray(response.data)
           ? response.data
           : response.data?.content || [];
@@ -83,11 +83,11 @@ const CustomerPage = () => {
     [messageApi, inTrashMode]
   );
 
+  // 2. KHỞI TẠO & PHÂN QUYỀN
   useEffect(() => {
-    fetchCustomers(keyword);
-    try {
-      const storedUser = localStorage.getItem("user_info");
-      if (storedUser) {
+    const storedUser = localStorage.getItem("user_info");
+    if (storedUser) {
+      try {
         let user = JSON.parse(storedUser);
         if (
           user.quyen &&
@@ -96,29 +96,51 @@ const CustomerPage = () => {
         ) {
           user = user.quyen;
         }
-        const role = user.vaiTro || user.tenVaiTro || "";
-        setIsAdmin(role === "ADMIN");
-        let perms = user.dsQuyenSoHuu || user.quyen;
-        if (!Array.isArray(perms)) perms = [];
-        setPermissions(perms);
-      }
-    } catch (e) {
-      setPermissions([]);
-    }
-  }, [fetchCustomers, keyword, inTrashMode]);
 
-  const handleSearch = () => {
-    fetchCustomers(keyword);
-  };
+        const roleName = (user.vaiTro || user.tenVaiTro || "").toUpperCase();
+        setIsAdmin(roleName === "ADMIN");
+
+        let rawPerms = user.dsQuyenSoHuu || user.quyen || [];
+        if (!Array.isArray(rawPerms)) rawPerms = [];
+
+        // Chuyển quyền về dạng số nguyên
+        const parsedPerms = rawPerms.map((p) => {
+          if (typeof p === "object" && p !== null)
+            return parseInt(p.maQuyen || p.id);
+          return parseInt(p);
+        });
+
+        // [!] LƯU QUYỀN VÀO STATE
+        setPermissions(parsedPerms);
+
+        // Check quyền Xem (ID 90)
+        const hasViewPerm = parsedPerms.includes(PERM_VIEW);
+
+        if (roleName === "ADMIN" || hasViewPerm) {
+          // Chỉ fetch nếu có quyền Xem
+          fetchCustomers(keyword);
+        } else {
+          setLoading(false);
+        }
+      } catch (e) {
+        setPermissions([]);
+      }
+    } else {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inTrashMode]); // Re-fetch khi đổi chế độ
+
+  const handleSearch = () => fetchCustomers(keyword);
   const handleReset = () => {
     setKeyword("");
     fetchCustomers("");
   };
 
-  const canCreate = isAdmin || permissions.includes(PERM_CREATE);
-  const canEdit = isAdmin || permissions.includes(PERM_EDIT);
-  const canDelete = isAdmin || permissions.includes(PERM_DELETE);
+  // Hàm check quyền nhanh
+  const checkPerm = (id) => isAdmin || permissions.includes(id);
 
+  // --- HANDLERS MODAL ---
   const handleOpenModal = () => {
     setEditingCustomer(null);
     form.resetFields();
@@ -131,18 +153,16 @@ const CustomerPage = () => {
     setIsModalVisible(true);
   };
 
-  // --- HÀM KHÔI PHỤC (RESTORE) ---
   const handleRestore = async (record) => {
     try {
       await customerService.restoreCustomer(record.maKH);
       messageApi.success("Khôi phục thành công!");
-      fetchCustomers(); // Tải lại danh sách thùng rác (item sẽ biến mất)
+      fetchCustomers();
     } catch (error) {
       messageApi.error(error.response?.data?.message || "Lỗi khi khôi phục!");
     }
   };
 
-  // --- XỬ LÝ LƯU (THÊM/SỬA) ---
   const handleOk = () => {
     form
       .validateFields()
@@ -150,12 +170,13 @@ const CustomerPage = () => {
         const inputName = values.tenKH.trim().toLowerCase();
         const inputPhone = (values.sdt || "").trim();
 
-        // Check trùng lặp Client-side
+        // Check trùng lặp Client-side (nếu cần)
         const isDuplicate = customers.some((kh) => {
           if (editingCustomer && kh.maKH === editingCustomer.maKH) return false;
-          const currentName = kh.tenKH.trim().toLowerCase();
-          const currentPhone = (kh.sdt || "").trim();
-          return currentName === inputName && currentPhone === inputPhone;
+          return (
+            kh.tenKH.trim().toLowerCase() === inputName &&
+            (kh.sdt || "").trim() === inputPhone
+          );
         });
 
         if (isDuplicate) {
@@ -185,7 +206,6 @@ const CustomerPage = () => {
       .catch(() => {});
   };
 
-  // --- XỬ LÝ XÓA (SOFT DELETE) ---
   const handleDelete = (id) => {
     setDeletingId(id);
     setIsDeleteModalOpen(true);
@@ -197,13 +217,8 @@ const CustomerPage = () => {
       messageApi.success("Đã chuyển vào thùng rác!");
       fetchCustomers(keyword);
     } catch (error) {
-      const errorMsg =
-        error.response?.data?.message || error.response?.data || "Lỗi khi xóa!";
-      if (errorMsg.includes("foreign key") || errorMsg.includes("constraint")) {
-        messageApi.error("Không thể xóa! Khách hàng đã có giao dịch.");
-      } else {
-        messageApi.error(errorMsg);
-      }
+      const errorMsg = error.response?.data?.message || "Lỗi khi xóa!";
+      messageApi.error(errorMsg);
     }
     setIsDeleteModalOpen(false);
     setDeletingId(null);
@@ -214,16 +229,14 @@ const CustomerPage = () => {
     {
       title: "Tên Khách Hàng",
       dataIndex: "tenKH",
-      key: "tenKH",
       width: 200,
       render: (t) => <b>{t}</b>,
     },
-    { title: "SĐT", dataIndex: "sdt", key: "sdt" },
-    { title: "Email", dataIndex: "email", key: "email" },
-    { title: "Địa Chỉ", dataIndex: "diaChi", key: "diaChi" },
+    { title: "SĐT", dataIndex: "sdt" },
+    { title: "Email", dataIndex: "email" },
+    { title: "Địa Chỉ", dataIndex: "diaChi" },
     {
       title: "Trạng thái",
-      key: "status",
       align: "center",
       width: 120,
       render: () =>
@@ -238,46 +251,67 @@ const CustomerPage = () => {
       key: "action",
       width: 150,
       align: "center",
-      render: (_, record) => (
-        <Space size="middle">
-          {inTrashMode ? (
-            // 1. TRONG THÙNG RÁC -> CHỈ HIỆN KHÔI PHỤC
-            <Tooltip title="Khôi phục khách hàng">
-              <Button
-                type="primary"
-                ghost
-                icon={<UndoOutlined />}
-                onClick={() => handleRestore(record)}
-              >
-                Khôi phục
-              </Button>
-            </Tooltip>
-          ) : (
-            // 2. DANH SÁCH CHÍNH -> HIỆN SỬA/XÓA
-            <>
-              {canEdit && (
-                <Tooltip title="Sửa thông tin">
+      render: (_, record) => {
+        // [CHECK QUYỀN]
+        const allowEdit = checkPerm(PERM_EDIT); // 92
+        const allowDelete = checkPerm(PERM_DELETE); // 93
+
+        return (
+          <Space size="middle">
+            {inTrashMode ? (
+              // 1. TRONG THÙNG RÁC: Chỉ hiện Khôi phục (Cần quyền Xóa 93)
+              allowDelete && (
+                <Tooltip title="Khôi phục (Quyền 93)">
                   <Button
-                    icon={<EditOutlined />}
-                    onClick={() => handleEdit(record)}
-                  />
+                    type="primary"
+                    ghost
+                    icon={<UndoOutlined />}
+                    onClick={() => handleRestore(record)}
+                  >
+                    Khôi phục
+                  </Button>
                 </Tooltip>
-              )}
-              {canDelete && (
-                <Tooltip title="Xóa tạm thời">
-                  <Button
-                    icon={<DeleteOutlined />}
-                    danger
-                    onClick={() => handleDelete(record.maKH)}
-                  />
-                </Tooltip>
-              )}
-            </>
-          )}
-        </Space>
-      ),
+              )
+            ) : (
+              // 2. DANH SÁCH CHÍNH: Hiện Sửa (92) / Xóa (93)
+              <>
+                {allowEdit && (
+                  <Tooltip title="Sửa thông tin (Quyền 92)">
+                    <Button
+                      icon={<EditOutlined />}
+                      onClick={() => handleEdit(record)}
+                    />
+                  </Tooltip>
+                )}
+                {allowDelete && (
+                  <Tooltip title="Xóa tạm thời (Quyền 93)">
+                    <Button
+                      icon={<DeleteOutlined />}
+                      danger
+                      onClick={() => handleDelete(record.maKH)}
+                    />
+                  </Tooltip>
+                )}
+              </>
+            )}
+          </Space>
+        );
+      },
     },
   ];
+
+  // Chặn truy cập nếu không có quyền Xem (90)
+  if (!loading && permissions.length > 0 && !checkPerm(PERM_VIEW)) {
+    return (
+      <Card style={{ margin: 20, textAlign: "center" }}>
+        <h2 style={{ color: "red" }}>Truy cập bị từ chối</h2>
+        <p>Bạn không có quyền xem danh sách Khách hàng.</p>
+        <p>
+          Vui lòng liên hệ Admin để cấp quyền mã: <b>{PERM_VIEW}</b>
+        </p>
+      </Card>
+    );
+  }
 
   return (
     <div>
@@ -320,10 +354,10 @@ const CustomerPage = () => {
               )}
 
               <Button
-                icon={<ReloadOutlined />}
+                icon={<ClearOutlined />}
                 onClick={handleReset}
               >
-                Tải lại
+                Xóa tìm
               </Button>
 
               {/* Logic Nút Chuyển Đổi */}
@@ -339,18 +373,22 @@ const CustomerPage = () => {
                 </Button>
               ) : (
                 <>
-                  <Button
-                    icon={<RestOutlined />}
-                    danger
-                    onClick={() => {
-                      setInTrashMode(true);
-                      setKeyword("");
-                    }}
-                  >
-                    Thùng rác
-                  </Button>
+                  {/* Nút Thùng rác: Chỉ hiện khi có quyền Xóa (93) hoặc Admin */}
+                  {(isAdmin || checkPerm(PERM_DELETE)) && (
+                    <Button
+                      icon={<RestOutlined />}
+                      danger
+                      onClick={() => {
+                        setInTrashMode(true);
+                        setKeyword("");
+                      }}
+                    >
+                      Thùng rác
+                    </Button>
+                  )}
 
-                  {canCreate && (
+                  {/* Nút Tạo mới: Chỉ hiện khi có quyền Tạo (91) */}
+                  {checkPerm(PERM_CREATE) && (
                     <Button
                       type="primary"
                       icon={<PlusOutlined />}

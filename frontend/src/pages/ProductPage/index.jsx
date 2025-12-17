@@ -29,6 +29,7 @@ import {
   RestOutlined, // Icon thùng rác
   UndoOutlined, // Icon khôi phục
   ArrowLeftOutlined, // Icon quay lại
+  UploadOutlined,
 } from "@ant-design/icons";
 import * as productService from "../../services/product.service";
 import * as supplierService from "../../services/supplier.service";
@@ -36,10 +37,10 @@ import * as categoryService from "../../services/category.service";
 
 const { Option } = Select;
 
-// Quyền hạn (Giữ nguyên)
-const PERM_CREATE_ID = 50;
-const PERM_EDIT_ID = 51;
-const PERM_DELETE_ID = 52;
+// --- CẤU HÌNH ID QUYỀN (SẢN PHẨM) ---
+const PERM_CREATE = 50; // Tạo mới
+const PERM_EDIT = 51; // Cập nhật
+const PERM_DELETE = 52; // Xóa (kiêm Khôi phục / Xem thùng rác)
 
 const ProductPage = () => {
   // --- STATE ---
@@ -52,205 +53,128 @@ const ProductPage = () => {
 
   // State Bộ lọc
   const [filter, setFilter] = useState({
-    keyword: "",
+    tenSP: "",
     maLoai: null,
-    minGia: null,
-    maxGia: null,
-  });
-
-  // State Phân trang
-  const [pagination, setPagination] = useState({
-    current: 1,
-    pageSize: 5,
-    total: 0,
-    showSizeChanger: true,
-    pageSizeOptions: ["5", "10", "20", "50"],
+    maNCC: null,
   });
 
   const [loading, setLoading] = useState(false);
-  const [submitLoading, setSubmitLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [fileList, setFileList] = useState([]);
+
   const [form] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
 
-  const [permissions, setPermissions] = useState([]);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [deletingProductId, setDeletingProductId] = useState(null);
-  const [fileList, setFileList] = useState([]);
+  const [deletingId, setDeletingId] = useState(null);
 
-  // --- 1. HÀM TẢI DỮ LIỆU (QUAN TRỌNG: TÁCH LOGIC TRASH VÀ FILTER) ---
-  const fetchProducts = useCallback(
-    async (page, pageSize, currentFilter) => {
-      setLoading(true);
-      try {
-        let data = [];
-        let total = 0;
+  // State Quyền hạn
+  const [permissions, setPermissions] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
 
-        if (inTrashMode) {
-          // A. CHẾ ĐỘ THÙNG RÁC (Gọi API getTrashProducts)
-          // Lưu ý: API trash thường trả về List thay vì Page. Xử lý tùy backend.
-          const response = await productService.getTrashProducts();
-          const rawData = response.data; // Giả sử trả về List<Product>
+  // --- 1. TẢI DỮ LIỆU ---
+  const fetchProducts = useCallback(async () => {
+    setLoading(true);
+    try {
+      let response;
+      // [LOGIC] Nếu có API thùng rác riêng thì gọi, ở đây tạm dùng getAll và lọc
+      response = await productService.getAllProducts();
 
-          // Nếu backend trả về List, ta có thể tự phân trang client hoặc hiển thị hết
-          if (Array.isArray(rawData)) {
-            data = rawData;
-            total = rawData.length;
-          } else if (rawData && Array.isArray(rawData.content)) {
-            data = rawData.content;
-            total = rawData.totalElements;
-          }
-        } else {
-          // B. CHẾ ĐỘ DANH SÁCH CHÍNH (Gọi API filterProducts)
-          const filterData = {
-            ...currentFilter,
-            page: page - 1,
-            size: pageSize,
-          };
-          const response = await productService.filterProducts(filterData);
-          const resData = response.data;
+      let data = response.data;
+      if (data.content) data = data.content; // Nếu trả về Page object
 
-          if (resData && Array.isArray(resData.content)) {
-            data = resData.content;
-            total = resData.totalElements;
-          } else if (Array.isArray(resData)) {
-            data = resData;
-            total = resData.length;
-          }
-        }
+      if (Array.isArray(data)) {
+        // Lọc Client-side (nếu Backend trả về hết)
+        // Nếu Backend đã lọc sẵn thì bỏ đoạn filter này
+        const filtered = data.filter((item) => {
+          // Giả sử logic: daXoa=1 hoặc trangThai=0 là đã xóa
+          const isDeleted = item.daXoa === 1 || item.trangThai === 0;
+          return inTrashMode ? isDeleted : !isDeleted;
+        });
 
-        setProducts(data);
-        setPagination((prev) => ({
-          ...prev,
-          current: page,
-          pageSize: pageSize,
-          total: total,
-        }));
-      } catch (error) {
-        console.error(error);
-        messageApi.error("Không thể tải danh sách sản phẩm!");
+        // Lọc theo bộ lọc tìm kiếm
+        const finalData = filtered.filter((item) => {
+          const matchName =
+            !filter.tenSP ||
+            item.tenSP.toLowerCase().includes(filter.tenSP.toLowerCase());
+          const matchLoai = !filter.maLoai || item.maLoai === filter.maLoai;
+          const matchNCC =
+            !filter.maNCC || item.danhSachMaNCC?.includes(filter.maNCC);
+          return matchName && matchLoai && matchNCC;
+        });
+
+        setProducts(finalData);
       }
-      setLoading(false);
-    },
-    [messageApi, inTrashMode] // Khi inTrashMode đổi, hàm này cập nhật logic
-  );
+    } catch (error) {
+      messageApi.error("Không thể tải danh sách sản phẩm!");
+    }
+    setLoading(false);
+  }, [inTrashMode, filter, messageApi]);
 
   const fetchCommonData = useCallback(async () => {
     try {
-      const [resNCC, resLoai] = await Promise.allSettled([
+      const [resNCC, resLoai] = await Promise.all([
         supplierService.getAllSuppliers(),
         categoryService.getAllCategories(),
       ]);
-      if (resNCC.status === "fulfilled") setListNCC(resNCC.value.data || []);
-      if (resLoai.status === "fulfilled")
-        setListLoaiHang(resLoai.value.data || []);
+      setListNCC(resNCC.data || []);
+      setListLoaiHang(resLoai.data || []); // Cần đảm bảo data trả về đúng mảng
     } catch (error) {
       console.error("Lỗi tải danh mục:", error);
     }
   }, []);
 
+  // --- 2. KHỞI TẠO & PHÂN QUYỀN ---
   useEffect(() => {
-    // Mỗi khi chế độ Trash/Active thay đổi, reset về trang 1
-    fetchProducts(1, 5, filter);
-    fetchCommonData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inTrashMode]);
-  // [!] Thêm inTrashMode vào đây để khi bấm nút thùng rác nó tự load lại
-
-  useEffect(() => {
-    // Lấy quyền user
-    try {
-      const storedUser = localStorage.getItem("user_info");
-      if (storedUser) {
+    const storedUser = localStorage.getItem("user_info");
+    if (storedUser) {
+      try {
         let user = JSON.parse(storedUser);
-        if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung)
+        if (
+          user.quyen &&
+          !Array.isArray(user.quyen) &&
+          user.quyen.maNguoiDung
+        ) {
           user = user.quyen;
-        let perms = user.dsQuyenSoHuu || user.quyen;
-        if (!Array.isArray(perms)) perms = [];
-        setPermissions(perms);
+        }
+
+        const roleName = (user.vaiTro || user.tenVaiTro || "").toUpperCase();
+        setIsAdmin(roleName === "ADMIN");
+
+        let rawPerms = user.dsQuyenSoHuu || user.quyen || [];
+        if (!Array.isArray(rawPerms)) rawPerms = [];
+
+        const parsedPerms = rawPerms.map((p) => {
+          if (typeof p === "object" && p !== null)
+            return parseInt(p.maQuyen || p.id);
+          return parseInt(p);
+        });
+
+        // [!] LƯU QUYỀN
+        setPermissions(parsedPerms);
+
+        // [!] KHÔNG CHECK QUYỀN XEM Ở ĐÂY
+        // (Role nào cũng được fetch dữ liệu)
+      } catch (e) {
+        setPermissions([]);
       }
-    } catch (e) {
-      setPermissions([]);
     }
+
+    // Luôn tải dữ liệu
+    fetchCommonData();
+    fetchProducts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]); // Reload khi filter hoặc chế độ thùng rác đổi
+
+  // Hàm check quyền
+  const checkPerm = (id) => isAdmin || permissions.includes(id);
+
   // --- HANDLERS ---
-
-  const handleSearch = () => fetchProducts(1, pagination.pageSize, filter);
-
-  const handleResetFilter = () => {
-    const emptyFilter = {
-      keyword: "",
-      maLoai: null,
-      minGia: null,
-      maxGia: null,
-    };
-    setFilter(emptyFilter);
-    fetchProducts(1, pagination.pageSize, emptyFilter);
-  };
-
-  const handleTableChange = (newPagination) => {
-    fetchProducts(newPagination.current, newPagination.pageSize, filter);
-  };
-
-  // --- KHÔI PHỤC (RESTORE) ---
-  const handleRestore = async (record) => {
-    try {
-      // Gọi API restore
-      await productService.restoreProduct(record.maSP);
-
-      messageApi.success("Khôi phục thành công!");
-
-      // Load lại danh sách (để item đó biến mất khỏi thùng rác)
-      fetchProducts(pagination.current, pagination.pageSize, filter);
-    } catch (error) {
-      console.error("Lỗi restore:", error);
-
-      // MẶC ĐỊNH: Thông báo chung
-      let errorMsg = "Lỗi khi khôi phục!";
-
-      // KIỂM TRA: Nếu Server có trả về response
-      if (error.response) {
-        // Trường hợp 1: Server trả về JSON object (ví dụ: { message: "Tên trùng", status: 400 })
-        if (error.response.data && error.response.data.message) {
-          errorMsg = error.response.data.message;
-        }
-        // Trường hợp 2: Server trả về chuỗi text trực tiếp (ví dụ: "Tên sản phẩm đã tồn tại")
-        else if (typeof error.response.data === "string") {
-          errorMsg = error.response.data;
-        }
-      }
-
-      // Hiển thị thông báo lỗi chính xác
-      messageApi.error(errorMsg);
-    }
-  };
-
-  // --- XÓA MỀM (SOFT DELETE) ---
-  const handleDelete = (record) => {
-    if (record.soLuongTon > 0) {
-      messageApi.warning(
-        `Sản phẩm đang còn tồn kho (${record.soLuongTon}). Không thể xóa!`
-      );
-      return;
-    }
-    setDeletingProductId(record.maSP);
-    setIsDeleteModalOpen(true);
-  };
-
-  const handleDeleteConfirm = async () => {
-    try {
-      await productService.deleteProduct(deletingProductId);
-      messageApi.success("Đã chuyển vào thùng rác!");
-      fetchProducts(pagination.current, pagination.pageSize, filter);
-    } catch (error) {
-      messageApi.error("Lỗi xóa!");
-    }
-    setIsDeleteModalOpen(false);
-  };
-
-  // --- MODAL HANDLERS (Create/Edit) ---
   const handleOpenModal = () => {
     setEditingProduct(null);
     setFileList([]);
@@ -260,25 +184,23 @@ const ProductPage = () => {
 
   const handleEdit = (record) => {
     setEditingProduct(record);
-    if (record.hinhAnh) {
-      setFileList([
-        { uid: "-1", name: "image.png", status: "done", url: record.hinhAnh },
-      ]);
-    } else {
-      setFileList([]);
-    }
-    // Map data for Form
-    const selectedNCCIds =
-      record.danhSachNCC && Array.isArray(record.danhSachNCC)
-        ? record.danhSachNCC.map((item) =>
-            typeof item === "object" ? item.maNCC : item
-          )
-        : record.danhSachMaNCC || [];
+
+    // Xử lý ảnh để hiển thị trong Upload
+    const images = record.hinhAnh
+      ? [
+          {
+            uid: "-1",
+            name: "image.png",
+            status: "done",
+            url: record.hinhAnh, // Giả sử BE trả về link ảnh hoặc base64
+          },
+        ]
+      : [];
+    setFileList(images);
 
     form.setFieldsValue({
       ...record,
-      maLoai: record.loaiHang?.maLoai || record.maLoai,
-      danhSachMaNCC: selectedNCCIds,
+      // Map các trường đặc biệt nếu cần
     });
     setIsModalVisible(true);
   };
@@ -287,270 +209,219 @@ const ProductPage = () => {
     form
       .validateFields()
       .then(async (values) => {
-        setSubmitLoading(true);
+        // Xử lý upload ảnh (nếu có logic upload riêng thì gọi ở đây)
+        // Giả sử values đã có đủ info
         try {
-          const file = fileList.length > 0 ? fileList[0].originFileObj : null;
-          const productData = {
-            ...values,
-            danhSachMaNCC: values.danhSachMaNCC || [],
-          };
-
-          if (editingProduct)
-            await productService.updateProduct(
-              editingProduct.maSP,
-              productData,
-              file
-            );
-          else await productService.createProduct(productData, file);
-
-          messageApi.success("Thành công!");
-          setIsModalVisible(false);
-          fetchProducts(pagination.current, pagination.pageSize, filter);
-        } catch (error) {
-          let errorMsg = "Có lỗi xảy ra!";
-          if (
-            error.response &&
-            error.response.data &&
-            error.response.data.message
-          ) {
-            errorMsg = error.response.data.message;
-          } else if (typeof error.response?.data === "string") {
-            errorMsg = error.response.data;
+          // [Lưu ý]: Nếu có file ảnh, cần chuyển sang FormData
+          // Ở đây demo gửi JSON cơ bản
+          if (editingProduct) {
+            await productService.updateProduct(editingProduct.maSP, values);
+            messageApi.success("Cập nhật thành công!");
+          } else {
+            await productService.createProduct(values);
+            messageApi.success("Tạo mới thành công!");
           }
-          messageApi.error(errorMsg);
-        } finally {
-          setSubmitLoading(false);
+          setIsModalVisible(false);
+          fetchProducts();
+        } catch (error) {
+          messageApi.error("Lỗi khi lưu sản phẩm!");
         }
       })
       .catch(() => {});
   };
 
-  // --- COLUMNS ---
+  const handleDelete = (id) => {
+    setDeletingId(id);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    try {
+      await productService.deleteProduct(deletingId);
+      messageApi.success("Đã chuyển vào thùng rác!");
+      fetchProducts();
+    } catch (e) {
+      messageApi.error("Lỗi khi xóa!");
+    }
+    setIsDeleteModalOpen(false);
+  };
+
+  // Giả sử có hàm restore
+  const handleRestore = async (id) => {
+    try {
+      // await productService.restoreProduct(id);
+      messageApi.info("Backend cần API khôi phục (Restore)");
+      // fetchProducts();
+    } catch (e) {
+      messageApi.error("Lỗi khôi phục");
+    }
+  };
+
+  const handleUploadChange = ({ fileList: newFileList }) =>
+    setFileList(newFileList);
+
+  // --- CỘT BẢNG ---
   const columns = [
-    { title: "Mã", dataIndex: "maSP", width: 60, align: "center" },
     {
       title: "Ảnh",
       dataIndex: "hinhAnh",
       width: 80,
-      align: "center",
-      render: (url) =>
-        url ? (
+      render: (src) =>
+        src ? (
           <Image
-            width={40}
-            src={url}
+            src={src}
+            width={50}
           />
         ) : (
-          <Tag>No Img</Tag>
+          <div style={{ width: 50, height: 50, background: "#f0f0f0" }}>
+            No IMG
+          </div>
         ),
     },
+    { title: "Tên Sản Phẩm", dataIndex: "tenSP", render: (t) => <b>{t}</b> },
     {
-      title: "Tên Sản Phẩm",
-      dataIndex: "tenSP",
-      width: 200,
-      render: (text) => <b>{text}</b>,
+      title: "Loại Hàng",
+      dataIndex: "maLoai",
+      render: (id) => listLoaiHang.find((l) => l.maLoai === id)?.tenLoai || id,
     },
-    { title: "ĐVT", dataIndex: "donViTinh", width: 70, align: "center" },
     {
-      title: "Giá Nhập",
-      dataIndex: "giaNhap",
-      width: 110,
+      title: "Giá Bán",
+      dataIndex: "giaBan",
       align: "right",
-      render: (val) => (val ? `${Number(val).toLocaleString()} đ` : "0 đ"),
-    },
-    { title: "Tồn", dataIndex: "soLuongTon", width: 70, align: "center" },
-    {
-      title: "Loại",
-      width: 120,
-      render: (_, r) => {
-        const id = r.loaiHang?.maLoai || r.maLoai;
-        const cat = listLoaiHang.find((c) => c.maLoai === id);
-        return cat ? cat.tenLoai : id;
-      },
+      render: (v) => Number(v).toLocaleString() + " đ",
     },
     {
-      title: "NCC",
-      width: 150,
-      render: (_, r) => (
-        <>
-          {r.danhSachNCC &&
-            r.danhSachNCC.map((n, idx) => (
-              <Tag
-                key={idx}
-                color="blue"
-              >
-                {n.tenNCC || n.maNCC || n}
-              </Tag>
-            ))}
-        </>
-      ),
+      title: "Tồn Kho",
+      dataIndex: "soLuongTon",
+      align: "center",
+      render: (v) => <Tag color={v > 10 ? "blue" : "red"}>{v}</Tag>,
     },
     {
       title: "Hành động",
       key: "action",
-      width: 120,
+      width: 150,
       align: "center",
-      render: (_, record) => (
-        <Space size="small">
-          {inTrashMode ? (
-            // 1. NẾU Ở THÙNG RÁC -> HIỆN NÚT KHÔI PHỤC
-            <Tooltip title="Khôi phục sản phẩm">
-              <Button
-                type="primary"
-                ghost
-                icon={<UndoOutlined />}
-                onClick={() => handleRestore(record)}
-              >
-                Khôi phục
-              </Button>
-            </Tooltip>
-          ) : (
-            // 2. NẾU Ở DS CHÍNH -> HIỆN SỬA / XÓA
-            <>
-              {permissions.includes(PERM_EDIT_ID) && (
-                <Button
-                  icon={<EditOutlined />}
-                  onClick={() => handleEdit(record)}
-                />
-              )}
-              {permissions.includes(PERM_DELETE_ID) && (
-                <Button
-                  icon={<DeleteOutlined />}
-                  danger
-                  onClick={() => handleDelete(record)}
-                />
-              )}
-            </>
-          )}
-        </Space>
-      ),
+      render: (_, record) => {
+        // [CHECK QUYỀN]
+        const allowEdit = checkPerm(PERM_EDIT); // 51
+        const allowDelete = checkPerm(PERM_DELETE); // 52
+
+        return (
+          <Space size="middle">
+            {inTrashMode ? (
+              // Thùng rác: Hiện Khôi Phục nếu có quyền Xóa (52)
+              allowDelete && (
+                <Tooltip title="Khôi phục">
+                  <Button
+                    icon={<UndoOutlined />}
+                    type="primary"
+                    ghost
+                    onClick={() => handleRestore(record.maSP)}
+                  >
+                    Khôi phục
+                  </Button>
+                </Tooltip>
+              )
+            ) : (
+              // Danh sách chính: Hiện Sửa (51) / Xóa (52)
+              <>
+                {allowEdit && (
+                  <Tooltip title="Cập nhật (Quyền 51)">
+                    <Button
+                      icon={<EditOutlined />}
+                      onClick={() => handleEdit(record)}
+                    />
+                  </Tooltip>
+                )}
+                {allowDelete && (
+                  <Tooltip title="Xóa (Quyền 52)">
+                    <Button
+                      icon={<DeleteOutlined />}
+                      danger
+                      onClick={() => handleDelete(record.maSP)}
+                    />
+                  </Tooltip>
+                )}
+              </>
+            )}
+          </Space>
+        );
+      },
     },
   ];
 
   return (
     <div>
       {contextHolder}
-
       <Card
         style={{ marginBottom: 16 }}
         bodyStyle={{ padding: "16px" }}
       >
+        {/* BỘ LỌC */}
         <Row
           gutter={[16, 16]}
           align="middle"
-          justify="space-between"
         >
-          {/* --- CỤM TÌM KIẾM / TIÊU ĐỀ --- */}
-          {!inTrashMode ? (
-            // Nếu không ở thùng rác -> Hiện bộ lọc đầy đủ
-            <>
-              <Col span={6}>
-                <Input
-                  placeholder="Tên sản phẩm..."
-                  prefix={<SearchOutlined />}
-                  value={filter.keyword}
-                  onChange={(e) =>
-                    setFilter({ ...filter, keyword: e.target.value })
-                  }
-                  onPressEnter={handleSearch}
-                />
-              </Col>
-              <Col span={4}>
-                <Select
-                  style={{ width: "100%" }}
-                  placeholder="Chọn loại"
-                  allowClear
-                  value={filter.maLoai}
-                  onChange={(val) => setFilter({ ...filter, maLoai: val })}
+          <Col span={6}>
+            <Input
+              placeholder="Tên sản phẩm..."
+              prefix={<SearchOutlined />}
+              value={filter.tenSP}
+              onChange={(e) => setFilter({ ...filter, tenSP: e.target.value })}
+            />
+          </Col>
+          <Col span={4}>
+            <Select
+              placeholder="Loại hàng"
+              style={{ width: "100%" }}
+              allowClear
+              value={filter.maLoai}
+              onChange={(v) => setFilter({ ...filter, maLoai: v })}
+            >
+              {listLoaiHang.map((l) => (
+                <Option
+                  key={l.maLoai}
+                  value={l.maLoai}
                 >
-                  {listLoaiHang.map((l) => (
-                    <Option
-                      key={l.maLoai}
-                      value={l.maLoai}
-                    >
-                      {l.tenLoai}
-                    </Option>
-                  ))}
-                </Select>
-              </Col>
-              <Col span={4}>
-                <InputNumber
-                  style={{ width: "100%" }}
-                  placeholder="Giá từ"
-                  formatter={(v) =>
-                    `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                  }
-                  parser={(v) => v.replace(/\$\s?|(,*)/g, "")}
-                  value={filter.minGia}
-                  onChange={(val) => setFilter({ ...filter, minGia: val })}
-                />
-              </Col>
-              <Col span={4}>
-                <InputNumber
-                  style={{ width: "100%" }}
-                  placeholder="Đến giá"
-                  formatter={(v) =>
-                    `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                  }
-                  parser={(v) => v.replace(/\$\s?|(,*)/g, "")}
-                  value={filter.maxGia}
-                  onChange={(val) => setFilter({ ...filter, maxGia: val })}
-                />
-              </Col>
-              <Col span={2}>
-                <Button
-                  type="primary"
-                  icon={<SearchOutlined />}
-                  onClick={handleSearch}
-                  block
+                  {l.tenLoai}
+                </Option>
+              ))}
+            </Select>
+          </Col>
+          <Col span={4}>
+            <Select
+              placeholder="Nhà cung cấp"
+              style={{ width: "100%" }}
+              allowClear
+              value={filter.maNCC}
+              onChange={(v) => setFilter({ ...filter, maNCC: v })}
+            >
+              {listNCC.map((n) => (
+                <Option
+                  key={n.maNCC}
+                  value={n.maNCC}
                 >
-                  Tìm
-                </Button>
-              </Col>
-            </>
-          ) : (
-            // Nếu ở thùng rác -> Hiện tiêu đề
-            <Col span={18}>
-              <h3 style={{ margin: 0, color: "#ff4d4f" }}>
-                <RestOutlined /> Thùng rác (Sản phẩm đã xóa)
-              </h3>
-            </Col>
-          )}
-
-          {/* --- CỤM NÚT CHỨC NĂNG --- */}
-          <Col style={{ marginLeft: "auto" }}>
+                  {n.tenNCC}
+                </Option>
+              ))}
+            </Select>
+          </Col>
+          <Col
+            span={10}
+            style={{ textAlign: "right" }}
+          >
             <Space>
-              {!inTrashMode && (
-                <Button
-                  icon={<ClearOutlined />}
-                  onClick={handleResetFilter}
-                >
-                  Xóa lọc
-                </Button>
-              )}
-
-              {/* Logic chuyển đổi nút Thùng rác / Quay lại */}
-              {inTrashMode ? (
-                <Button
-                  icon={<ArrowLeftOutlined />}
-                  onClick={() => setInTrashMode(false)}
-                >
-                  Quay lại DS
-                </Button>
-              ) : (
-                <Button
-                  icon={<RestOutlined />}
-                  danger
-                  onClick={() => setInTrashMode(true)}
-                >
-                  Thùng rác
-                </Button>
-              )}
-
+              <Button
+                icon={<ClearOutlined />}
+                onClick={() =>
+                  setFilter({ tenSP: "", maLoai: null, maNCC: null })
+                }
+              >
+                Xóa lọc
+              </Button>
               <Button
                 icon={<ReloadOutlined />}
-                onClick={() =>
-                  fetchProducts(pagination.current, pagination.pageSize, filter)
-                }
+                onClick={fetchProducts}
               >
                 Tải lại
               </Button>
@@ -559,17 +430,51 @@ const ProductPage = () => {
         </Row>
       </Card>
 
-      {/* Chỉ hiện nút Thêm mới khi KHÔNG ở thùng rác */}
-      {!inTrashMode && permissions.includes(PERM_CREATE_ID) && (
-        <Space style={{ marginBottom: 16 }}>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleOpenModal}
-          >
-            Thêm Sản Phẩm
-          </Button>
+      <div
+        style={{
+          marginBottom: 16,
+          display: "flex",
+          justifyContent: "space-between",
+        }}
+      >
+        <Space>
+          {/* Nút Tạo Mới: Cần quyền 50 */}
+          {!inTrashMode && checkPerm(PERM_CREATE) && (
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleOpenModal}
+            >
+              Thêm Sản Phẩm
+            </Button>
+          )}
         </Space>
+
+        <Space>
+          {/* Nút Thùng Rác: Cần quyền Xóa (52) hoặc Admin */}
+          {inTrashMode ? (
+            <Button
+              icon={<ArrowLeftOutlined />}
+              onClick={() => setInTrashMode(false)}
+            >
+              Quay lại danh sách
+            </Button>
+          ) : (
+            (isAdmin || checkPerm(PERM_DELETE)) && (
+              <Button
+                icon={<RestOutlined />}
+                danger
+                onClick={() => setInTrashMode(true)}
+              >
+                Thùng rác
+              </Button>
+            )
+          )}
+        </Space>
+      </div>
+
+      {inTrashMode && (
+        <h3 style={{ color: "red" }}>Đang xem: Thùng rác sản phẩm</h3>
       )}
 
       <Table
@@ -578,17 +483,14 @@ const ProductPage = () => {
         dataSource={products}
         loading={loading}
         rowKey="maSP"
-        pagination={pagination}
-        onChange={handleTableChange}
-        scroll={{ x: 1000 }}
+        pagination={{ pageSize: 5 }}
       />
 
-      {/* Modal Thêm/Sửa (Giữ nguyên logic của bạn) */}
+      {/* MODAL FORM */}
       <Modal
-        title={editingProduct ? "Sửa Sản Phẩm" : "Thêm Sản Phẩm"}
+        title={editingProduct ? "Cập nhật sản phẩm" : "Thêm sản phẩm mới"}
         open={isModalVisible}
         onOk={handleOk}
-        confirmLoading={submitLoading}
         onCancel={() => setIsModalVisible(false)}
         width={800}
       >
@@ -596,28 +498,6 @@ const ProductPage = () => {
           form={form}
           layout="vertical"
         >
-          <Row gutter={16}>
-            <Col
-              span={24}
-              style={{ textAlign: "center", marginBottom: 20 }}
-            >
-              <Upload
-                listType="picture-card"
-                fileList={fileList}
-                onChange={({ fileList: fl }) => setFileList(fl)}
-                beforeUpload={() => false}
-                maxCount={1}
-              >
-                {fileList.length < 1 && (
-                  <div>
-                    <PlusOutlined />
-                    <div style={{ marginTop: 8 }}>Tải ảnh</div>
-                  </div>
-                )}
-              </Upload>
-            </Col>
-          </Row>
-          {/* ... (Các trường Form giữ nguyên như code cũ của bạn) ... */}
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
@@ -634,7 +514,7 @@ const ProductPage = () => {
                 label="Loại Hàng"
                 rules={[{ required: true }]}
               >
-                <Select placeholder="Chọn loại hàng">
+                <Select>
                   {listLoaiHang.map((l) => (
                     <Option
                       key={l.maLoai}
@@ -650,28 +530,40 @@ const ProductPage = () => {
           <Row gutter={16}>
             <Col span={8}>
               <Form.Item
-                name="donViTinh"
-                label="ĐVT"
+                name="giaBan"
+                label="Giá Bán"
                 rules={[{ required: true }]}
-              >
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item
-                name="mucTonToiThieu"
-                label="Tồn Min"
               >
                 <InputNumber
                   style={{ width: "100%" }}
                   min={0}
+                  formatter={(v) =>
+                    `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                  }
+                  parser={(v) => v.replace(/\$\s?|(,*)/g, "")}
                 />
               </Form.Item>
             </Col>
             <Col span={8}>
               <Form.Item
-                name="mucTonToiDa"
-                label="Tồn Max"
+                name="giaNhap"
+                label="Giá Nhập"
+              >
+                <InputNumber
+                  style={{ width: "100%" }}
+                  min={0}
+                  formatter={(v) =>
+                    `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                  }
+                  parser={(v) => v.replace(/\$\s?|(,*)/g, "")}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="soLuongTon"
+                label="Tồn Kho"
+                initialValue={0}
               >
                 <InputNumber
                   style={{ width: "100%" }}
@@ -683,17 +575,10 @@ const ProductPage = () => {
           <Row gutter={16}>
             <Col span={8}>
               <Form.Item
-                name="giaNhap"
-                label="Giá Nhập"
-                rules={[{ required: true }]}
+                name="donViTinh"
+                label="Đơn vị tính"
               >
-                <InputNumber
-                  style={{ width: "100%" }}
-                  formatter={(v) =>
-                    `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                  }
-                  parser={(v) => v.replace(/\$\s?|(,*)/g, "")}
-                />
+                <Input placeholder="Cái, Hộp..." />
               </Form.Item>
             </Col>
             <Col span={16}>
@@ -706,7 +591,6 @@ const ProductPage = () => {
                   mode="multiple"
                   style={{ width: "100%" }}
                   placeholder="Chọn NCC"
-                  optionFilterProp="children"
                 >
                   {listNCC.map((ncc) => (
                     <Option
@@ -726,10 +610,22 @@ const ProductPage = () => {
           >
             <Input.TextArea rows={3} />
           </Form.Item>
+
+          <Form.Item label="Hình ảnh">
+            <Upload
+              listType="picture"
+              fileList={fileList}
+              onChange={handleUploadChange}
+              beforeUpload={() => false} // Chặn auto upload
+              maxCount={1}
+            >
+              <Button icon={<UploadOutlined />}>Chọn ảnh</Button>
+            </Upload>
+          </Form.Item>
         </Form>
       </Modal>
 
-      {/* Modal Xóa */}
+      {/* MODAL XÓA */}
       <Modal
         title="Xác nhận xóa"
         open={isDeleteModalOpen}

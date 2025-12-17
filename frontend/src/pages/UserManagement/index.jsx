@@ -33,66 +33,114 @@ const { Option } = Select;
 
 // [GIỮ NGUYÊN DANH SÁCH QUYỀN CỦA BẠN]
 const permissionGroups = [
-  // ... (Code cũ của bạn giữ nguyên phần này) ...
-  // Để tiết kiệm không gian tôi không paste lại mảng permissionGroups dài dòng,
-  // bạn hãy giữ nguyên như file cũ nhé.
+  // --- NHÓM 1: QUẢN LÝ DANH MỤC (Có menu con) ---
   {
-    label: "Báo cáo & Thống kê",
-    perms: [
-      { id: 130, name: "Xem Dashboard Tổng quan" },
-      { id: 30, name: "Xem Báo cáo Tổng hợp" },
-      { id: 103, name: "Xem Báo cáo Tồn kho" },
-      { id: 101, name: "Xem Lịch sử Giao dịch" },
-      { id: 131, name: "Xem Báo cáo Nhập-Xuất-Tồn" },
-    ],
+    key: "cat_group",
+    label: " Quản lý Danh mục",
+    children: [
+       {
+        label: " Loại hàng",
+        perms: [
+          { id: 140, name: "Xem danh sách" },
+          { id: 141, name: "Tạo mới" },
+          { id: 142, name: "Cập nhật" },
+          { id: 143, name: "Xóa" },
+        ]
+      },
+      {
+        label: "Sản phẩm",
+        perms: [
+          { id: 50, name: "Tạo mới" },
+          { id: 51, name: "Cập nhật" },
+          { id: 52, name: "Xóa" },
+        ]
+      },
+      {
+        label: " Kho hàng",
+        perms: [
+          { id: 70, name: "Xem danh sách" },
+          { id: 71, name: "Tạo mới" },
+          { id: 72, name: "Cập nhật" },
+          { id: 73, name: "Xóa" },
+        ]
+      },
+      {
+        label: "Nhà cung cấp",
+        perms: [
+          { id: 60, name: "Xem danh sách" },
+          { id: 61, name: "Tạo mới" },
+          { id: 62, name: "Cập nhật" },
+          { id: 63, name: "Xóa" },
+        ]
+      },
+      {
+        label: " Khách hàng",
+        perms: [
+          { id: 90, name: "Xem danh sách" },
+          { id: 91, name: "Tạo mới" },
+          { id: 92, name: "Cập nhật" },
+          { id: 93, name: "Xóa" },
+        ]
+      }
+    ]
   },
+
+  // --- NHÓM 2: NGHIỆP VỤ (Hiển thị trực tiếp, không cần menu con) ---
   {
-    label: "Quản lý Sản phẩm",
-    perms: [
-      { id: 50, name: "Tạo Sản phẩm" },
-      { id: 51, name: "Sửa Sản phẩm" },
-      { id: 52, name: "Xóa Sản phẩm" },
-    ],
+    key: "biz_group",
+    label: " Nghiệp vụ Kho",
+    children: [
+       {
+        label: "Phiếu nhập",
+        perms: [
+          { id: 26, name: "Xem danh sách" },
+          { id: 20, name: "Tạo mới" },
+          { id: 21, name: "Cập nhật" },
+          { id: 22, name: "Xóa" },
+          { id: 40, name: "Duyệt phiếu" },
+          { id: 41, name: "Hủy phiếu" },
+          { id: 120, name: "Sửa phiếu (đã duyệt)"},
+        ]
+      },
+      {
+        label: "Phiếu xuất",
+        perms: [
+          { id: 27, name: "Xem danh sách" },
+          { id: 23, name: "Tạo mới" },
+          { id: 24, name: "Cập nhật" },
+          { id: 25, name: "Xóa" },
+          { id: 42, name: "Duyệt phiếu" },
+          { id: 43, name: "Hủy phiếu" },
+          { id: 121, name: "Sửa phiếu (đã duyệt)"},
+        ]
+      },
+      {
+        label: "Điều chuyển",
+         perms: [
+          { id: 110, name: "Xem danh sách" },
+          { id: 111, name: "Tạo mới" },
+          { id: 114, name: "Cập nhật" },
+          { id: 115, name: "Xóa" },
+          { id: 112, name: "Duyệt phiếu" },
+          { id: 113, name: "Hủy phiếu" },
+          { id: 116, name: "Sửa phiếu (đã duyệt)"},
+        ]
+      }
+    ]
   },
+
+  // --- NHÓM 3: BÁO CÁO ---
   {
-    label: "Quản lý Loại hàng",
+    key: "rpt_group",
+    label: " Báo cáo & Thống kê",
     perms: [
-      { id: 140, name: "Xem Loại hàng" },
-      { id: 141, name: "Tạo Loại hàng" },
-      { id: 142, name: "Sửa Loại hàng" },
-      { id: 143, name: "Xóa Loại hàng" },
-    ],
-  },
-  {
-    label: "Quản lý Kho hàng",
-    perms: [
-      { id: 70, name: "Xem Danh sách Kho" },
-      { id: 71, name: "Tạo Kho" },
-      { id: 72, name: "Sửa Kho" },
-      { id: 73, name: "Xóa Kho" },
-    ],
-  },
-  {
-    label: "Đối tác (NCC & Khách)",
-    perms: [
-      { id: 60, name: "Xem Nhà Cung Cấp" },
-      { id: 61, name: "Tạo NCC" },
-      { id: 62, name: "Sửa NCC" },
-      { id: 63, name: "Xóa NCC" },
-      { id: 90, name: "Xem Khách Hàng" },
-      { id: 91, name: "Tạo Khách Hàng" },
-      { id: 92, name: "Sửa Khách Hàng" },
-      { id: 93, name: "Xóa Khách Hàng" },
-    ],
-  },
-  {
-    label: "Nghiệp vụ Kho",
-    perms: [
-      { id: 20, name: "Tạo Phiếu Nhập" },
-      { id: 23, name: "Tạo Phiếu Xuất" },
-      // ... thêm các quyền khác nếu cần
-    ],
-  },
+      { id: 130, name: "Xem Dashboard" },
+      { id: 30, name: "Báo cáo Tổng hợp" },
+      { id: 103, name: "Báo cáo Tồn kho" },
+      { id: 101, name: "Lịch sử Giao dịch" },
+      { id: 131, name: "Báo cáo Nhập-Xuất-Tồn" },
+    ]
+  }
 ];
 
 const UserManagementPage = () => {
@@ -281,33 +329,52 @@ const UserManagementPage = () => {
   };
 
   const createPermissionMenu = (userRecord) => {
-    const userPerms = userRecord.dsQuyenSoHuu || [];
-    const items = permissionGroups.map((group, index) => {
-      const subItems = group.perms.flatMap((perm) => {
-        const hasPermission = userPerms.includes(perm.id);
-        if (hasPermission) {
-          return {
-            key: `revoke-${perm.id}`,
-            label: `Thu hồi: ${perm.name}`,
-            danger: true,
-            onClick: () =>
-              handleRevokePermission(
-                userRecord.maNguoiDung,
-                perm.id,
-                perm.name
-              ),
-          };
-        } else {
-          return {
-            key: `grant-${perm.id}`,
-            label: `Cấp: ${perm.name}`,
-            onClick: () =>
-              handleGrantPermission(userRecord.maNguoiDung, perm.id, perm.name),
-          };
-        }
-      });
-      return { key: `group-${index}`, label: group.label, children: subItems };
+    const userPerms = userRecord.dsQuyenSoHuu || []; // Hoặc userRecord.quyen
+
+    // Helper: Tạo 1 dòng item quyền (Cấp/Thu hồi)
+    const renderPermItem = (perm) => {
+      const hasPermission = userPerms.includes(perm.id);
+      if (hasPermission) {
+        return {
+          key: `revoke-${perm.id}`,
+          label: <span style={{ color: "red" }}>Thu hồi: {perm.name}</span>,
+          onClick: () => handleRevokePermission(userRecord.maNguoiDung, perm.id, perm.name),
+        };
+      } else {
+        return {
+          key: `grant-${perm.id}`,
+          label: <span style={{ color: "green" }}>Cấp: {perm.name}</span>,
+          onClick: () => handleGrantPermission(userRecord.maNguoiDung, perm.id, perm.name),
+        };
+      }
+    };
+
+    // Map dữ liệu thành Menu Ant Design
+    const items = permissionGroups.map((group) => {
+      // TRƯỜNG HỢP 1: Nhóm có menu con (VD: Quản lý Danh mục -> Sản phẩm -> Quyền)
+      if (group.children) {
+        return {
+          key: group.key,
+          label: <b>{group.label}</b>,
+          children: group.children.map((subGroup, idx) => ({
+            key: `${group.key}_sub_${idx}`,
+            label: subGroup.label, // Tên menu con (VD: Sản phẩm)
+            children: subGroup.perms.map(renderPermItem) // Danh sách quyền bên trong
+          }))
+        };
+      }
+
+      // TRƯỜNG HỢP 2: Nhóm hiển thị quyền trực tiếp (VD: Báo cáo -> Quyền)
+      if (group.perms) {
+        return {
+          key: group.key,
+          label: <b>{group.label}</b>,
+          children: group.perms.map(renderPermItem)
+        };
+      }
+      return null;
     });
+
     return { items };
   };
 

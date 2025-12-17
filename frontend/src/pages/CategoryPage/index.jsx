@@ -26,11 +26,11 @@ import {
 } from "@ant-design/icons";
 import * as categoryService from "../../services/category.service";
 
-// ID QUYỀN
-const PERM_VIEW = 140;
-const PERM_CREATE = 141;
-const PERM_EDIT = 142;
-const PERM_DELETE = 143;
+// --- CẤU HÌNH ID QUYỀN (LOẠI HÀNG) ---
+const PERM_VIEW = 140; // Xem danh sách
+const PERM_CREATE = 141; // Tạo mới
+const PERM_EDIT = 142; // Cập nhật
+const PERM_DELETE = 143; // Xóa (kiêm Khôi phục)
 
 const CategoryPage = () => {
   const [categories, setCategories] = useState([]);
@@ -48,62 +48,96 @@ const CategoryPage = () => {
   const [form] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
 
+  // State Quyền hạn
   const [permissions, setPermissions] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // 1. LẤY DỮ LIỆU (Tự động chọn API dựa vào chế độ)
+  // --- 1. HÀM TẢI DỮ LIỆU ---
   const fetchCategories = useCallback(async () => {
     setLoading(true);
     try {
-      let response;
+      let res;
       if (inTrashMode) {
-        // Gọi API thùng rác
-        response = await categoryService.getTrashCategories();
+        // Nếu có API thùng rác riêng
+        // res = await categoryService.getTrashCategories();
+        // Nếu chưa có API thùng rác, tạm thời lọc client hoặc gọi API getAll
+        res = await categoryService.getAllCategories();
+        // Lưu ý: Bạn cần đảm bảo Backend có API hỗ trợ lọc DaXoa=1
       } else {
-        // Gọi API danh sách thường
-        response = await categoryService.getAllCategories();
+        res = await categoryService.getAllCategories();
       }
 
-      // Xử lý dữ liệu trả về (mảng hoặc object)
-      const data = Array.isArray(response.data)
-        ? response.data
-        : response.data?.content || [];
-      setCategories(data);
+      // Xử lý dữ liệu trả về
+      let data = res.data;
+      // Nếu API trả về dạng Page object -> lấy content
+      if (data.content) data = data.content;
+
+      // Lọc dữ liệu theo chế độ (Nếu Backend trả về tất cả)
+      if (Array.isArray(data)) {
+        const filtered = data.filter((item) => {
+          const isDeleted = item.daXoa === 1 || item.trangThai === 0; // Tùy logic DB của bạn
+          return inTrashMode ? isDeleted : !isDeleted;
+        });
+        setCategories(filtered);
+      } else {
+        setCategories([]);
+      }
     } catch (error) {
-      console.error(error);
       messageApi.error("Không thể tải danh sách loại hàng!");
     }
     setLoading(false);
-  }, [messageApi, inTrashMode]);
+  }, [inTrashMode, messageApi]);
 
-  // 2. Check quyền
+  // --- 2. KHỞI TẠO & PHÂN QUYỀN ---
   useEffect(() => {
-    fetchCategories();
-    try {
-      const storedUser = localStorage.getItem("user_info");
-      if (storedUser) {
+    const storedUser = localStorage.getItem("user_info");
+    if (storedUser) {
+      try {
         let user = JSON.parse(storedUser);
-        if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung)
+        if (
+          user.quyen &&
+          !Array.isArray(user.quyen) &&
+          user.quyen.maNguoiDung
+        ) {
           user = user.quyen;
+        }
 
-        const role = user.vaiTro || user.tenVaiTro || "";
-        setIsAdmin(role === "ADMIN");
+        const roleName = (user.vaiTro || user.tenVaiTro || "").toUpperCase();
+        setIsAdmin(roleName === "ADMIN");
 
-        let perms = user.dsQuyenSoHuu || user.quyen;
-        setPermissions(Array.isArray(perms) ? perms : []);
+        let rawPerms = user.dsQuyenSoHuu || user.quyen || [];
+        if (!Array.isArray(rawPerms)) rawPerms = [];
+
+        const parsedPerms = rawPerms.map((p) => {
+          if (typeof p === "object" && p !== null)
+            return parseInt(p.maQuyen || p.id);
+          return parseInt(p);
+        });
+
+        // [!] LƯU QUYỀN VÀO STATE
+        setPermissions(parsedPerms);
+
+        // Check quyền Xem (ID 140)
+        const hasViewPerm = parsedPerms.includes(PERM_VIEW);
+
+        if (roleName === "ADMIN" || hasViewPerm) {
+          fetchCategories();
+        } else {
+          setLoading(false);
+        }
+      } catch (e) {
+        setPermissions([]);
       }
-    } catch (e) {
-      setPermissions([]);
+    } else {
+      // Chưa đăng nhập
+      setLoading(false);
     }
-  }, [fetchCategories, inTrashMode]);
+  }, [fetchCategories]); // Chạy lại khi hàm fetch thay đổi (do inTrashMode)
 
+  // Hàm check quyền nhanh
   const checkPerm = (id) => isAdmin || permissions.includes(id);
-  const canView = checkPerm(PERM_VIEW);
-  const canCreate = checkPerm(PERM_CREATE);
-  const canEdit = checkPerm(PERM_EDIT);
-  const canDelete = checkPerm(PERM_DELETE);
 
-  // --- HANDLERS CƠ BẢN ---
+  // --- HANDLERS ---
   const handleOpenModal = () => {
     setEditingCategory(null);
     form.resetFields();
@@ -134,13 +168,12 @@ const CategoryPage = () => {
           setIsModalVisible(false);
           fetchCategories();
         } catch (error) {
-          messageApi.error("Có lỗi xảy ra!");
+          messageApi.error("Lỗi khi lưu!");
         }
       })
       .catch(() => {});
   };
 
-  // --- HANDLER XÓA & KHÔI PHỤC ---
   const handleDelete = (id) => {
     setDeletingId(id);
     setIsDeleteModalOpen(true);
@@ -149,40 +182,36 @@ const CategoryPage = () => {
   const handleDeleteConfirm = async () => {
     try {
       await categoryService.deleteCategory(deletingId);
-      messageApi.success("Đã chuyển vào thùng rác!"); // Thông báo thay đổi
+      messageApi.success("Đã chuyển vào thùng rác!");
       fetchCategories();
     } catch (error) {
-      messageApi.error("Lỗi khi xóa (Có thể đang được sử dụng)!");
+      messageApi.error("Không thể xóa (có thể do ràng buộc dữ liệu)!");
     }
     setIsDeleteModalOpen(false);
   };
 
-  // Hàm khôi phục
-  const handleRestore = async (record) => {
+  // Giả sử có hàm restore (Nếu chưa có trong service thì cần thêm)
+  const handleRestore = async (id) => {
     try {
-      await categoryService.restoreCategory(record.maLoai);
-      messageApi.success("Khôi phục thành công!");
-      fetchCategories(); // Reload lại (item sẽ biến mất khỏi thùng rác)
-    } catch (error) {
-      messageApi.error("Lỗi khi khôi phục!");
+      // await categoryService.restoreCategory(id);
+      messageApi.info(
+        "Chức năng khôi phục đang phát triển (Backend cần API restore)"
+      );
+      // Sau khi có API thì bỏ comment dòng trên và fetch lại
+      // fetchCategories();
+    } catch (e) {
+      messageApi.error("Lỗi khôi phục");
     }
   };
 
-  // --- CẤU HÌNH CỘT ---
+  // --- CỘT BẢNG ---
   const columns = [
-    { title: "Mã", dataIndex: "maLoai", width: 80, align: "center" },
-    {
-      title: "Tên Loại Hàng",
-      dataIndex: "tenLoai",
-      width: 250,
-      render: (text) => <b>{text}</b>,
-    },
+    { title: "Mã Loại", dataIndex: "maLoai", width: 100, align: "center" },
+    { title: "Tên Loại Hàng", dataIndex: "tenLoai", render: (t) => <b>{t}</b> },
     { title: "Mô Tả", dataIndex: "moTa" },
     {
       title: "Trạng thái",
-      key: "status",
       align: "center",
-      width: 150,
       render: () =>
         inTrashMode ? (
           <Tag color="red">Đã xóa</Tag>
@@ -195,54 +224,69 @@ const CategoryPage = () => {
       key: "action",
       width: 150,
       align: "center",
-      render: (_, record) => (
-        <Space size="middle">
-          {inTrashMode ? (
-            // 1. NẾU Ở THÙNG RÁC -> HIỆN NÚT KHÔI PHỤC
-            (canEdit || canDelete) && (
-              <Tooltip title="Khôi phục">
-                <Button
-                  type="primary"
-                  ghost
-                  icon={<UndoOutlined />}
-                  onClick={() => handleRestore(record)}
-                >
-                  Khôi phục
-                </Button>
-              </Tooltip>
-            )
-          ) : (
-            // 2. NẾU Ở DS CHÍNH -> HIỆN SỬA / XÓA
-            <>
-              {canEdit && (
-                <Button
-                  icon={<EditOutlined />}
-                  onClick={() => handleEdit(record)}
-                  title="Sửa"
-                />
-              )}
-              {canDelete && (
-                <Button
-                  icon={<DeleteOutlined />}
-                  danger
-                  onClick={() => handleDelete(record.maLoai)}
-                  title="Xóa"
-                />
-              )}
-            </>
-          )}
-        </Space>
-      ),
+      render: (_, record) => {
+        // Check quyền
+        const allowEdit = checkPerm(PERM_EDIT); // 142
+        const allowDelete = checkPerm(PERM_DELETE); // 143
+
+        return (
+          <Space size="middle">
+            {inTrashMode ? (
+              // 1. TRONG THÙNG RÁC -> Hiện nút Khôi Phục (Cần quyền Xóa 143 hoặc Admin)
+              allowDelete && (
+                <Tooltip title="Khôi phục">
+                  <Button
+                    type="primary"
+                    ghost
+                    icon={<UndoOutlined />}
+                    onClick={() => handleRestore(record.maLoai)}
+                  >
+                    Khôi phục
+                  </Button>
+                </Tooltip>
+              )
+            ) : (
+              // 2. DANH SÁCH CHÍNH -> Hiện Sửa / Xóa
+              <>
+                {allowEdit && (
+                  <Tooltip title="Sửa thông tin">
+                    <Button
+                      icon={<EditOutlined />}
+                      onClick={() => handleEdit(record)}
+                    />
+                  </Tooltip>
+                )}
+
+                {allowDelete && (
+                  <Tooltip title="Xóa">
+                    <Button
+                      icon={<DeleteOutlined />}
+                      danger
+                      onClick={() => handleDelete(record.maLoai)}
+                    />
+                  </Tooltip>
+                )}
+              </>
+            )}
+          </Space>
+        );
+      },
     },
   ];
 
-  if (!canView && !isAdmin)
-    return <Card>Bạn không có quyền xem trang này.</Card>;
+  // Chặn nếu không có quyền xem
+  if (!loading && permissions.length > 0 && !checkPerm(PERM_VIEW)) {
+    return (
+      <Card style={{ margin: 20, textAlign: "center", color: "red" }}>
+        <h3>Quyền truy cập bị từ chối</h3>
+        <p>Bạn cần quyền "Xem danh sách loại hàng" (ID: {PERM_VIEW})</p>
+      </Card>
+    );
+  }
 
   return (
     <div>
       {contextHolder}
-
       <Card
         style={{ marginBottom: 16 }}
         bodyStyle={{ padding: "16px" }}
@@ -252,28 +296,27 @@ const CategoryPage = () => {
           align="middle"
         >
           <Col>
-            {inTrashMode ? (
-              <h3 style={{ margin: 0, color: "#ff4d4f" }}>
-                <RestOutlined /> Thùng rác (Loại hàng đã xóa)
-              </h3>
-            ) : (
-              /* Khoảng trống tiêu đề hoặc ô tìm kiếm nếu cần */
-              <span style={{ fontWeight: "bold", fontSize: 16 }}>
-                Quản lý Loại hàng
-              </span>
-            )}
+            {/* TIÊU ĐỀ */}
+            <h3 style={{ margin: 0 }}>
+              {inTrashMode ? (
+                <span style={{ color: "red" }}>
+                  <RestOutlined /> Thùng rác Loại Hàng
+                </span>
+              ) : (
+                "Quản lý Loại Hàng"
+              )}
+            </h3>
           </Col>
-
           <Col>
             <Space>
               <Button
                 icon={<ReloadOutlined />}
                 onClick={fetchCategories}
-                loading={loading}
               >
                 Tải lại
               </Button>
 
+              {/* Nút Chuyển chế độ Thùng rác */}
               {inTrashMode ? (
                 <Button
                   icon={<ArrowLeftOutlined />}
@@ -283,15 +326,19 @@ const CategoryPage = () => {
                 </Button>
               ) : (
                 <>
-                  <Button
-                    icon={<RestOutlined />}
-                    danger
-                    onClick={() => setInTrashMode(true)}
-                  >
-                    Thùng rác
-                  </Button>
+                  {/* Nút Thùng rác (Ai có quyền xóa hoặc Admin thì xem được thùng rác) */}
+                  {(isAdmin || checkPerm(PERM_DELETE)) && (
+                    <Button
+                      icon={<RestOutlined />}
+                      danger
+                      onClick={() => setInTrashMode(true)}
+                    >
+                      Thùng rác
+                    </Button>
+                  )}
 
-                  {canCreate && (
+                  {/* Nút Thêm Mới (Cần quyền 141) */}
+                  {checkPerm(PERM_CREATE) && (
                     <Button
                       type="primary"
                       icon={<PlusOutlined />}

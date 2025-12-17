@@ -23,8 +23,15 @@ import {
   RestOutlined, // Icon thùng rác
   UndoOutlined, // Icon khôi phục
   ArrowLeftOutlined, // Icon quay lại
+  ClearOutlined,
 } from "@ant-design/icons";
 import * as supplierService from "../../services/supplier.service";
+
+// --- CẤU HÌNH ID QUYỀN (NHÀ CUNG CẤP) ---
+const PERM_VIEW = 60; // Xem danh sách
+const PERM_CREATE = 61; // Tạo mới
+const PERM_EDIT = 62; // Cập nhật
+const PERM_DELETE = 63; // Xóa (kiêm Khôi phục / Thùng rác)
 
 const SupplierPage = () => {
   const [suppliers, setSuppliers] = useState([]);
@@ -43,7 +50,11 @@ const SupplierPage = () => {
   const [form] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
 
-  // 1. LẤY DỮ LIỆU (Tự động chọn API dựa vào chế độ xem)
+  // State Quyền hạn
+  const [permissions, setPermissions] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // --- 1. LẤY DỮ LIỆU ---
   const fetchSuppliers = useCallback(
     async (searchKey = "") => {
       setLoading(true);
@@ -51,11 +62,10 @@ const SupplierPage = () => {
         let response;
 
         if (inTrashMode) {
-          // A. Nếu đang ở THÙNG RÁC -> Gọi API Trash
-          console.log("Đang lấy dữ liệu thùng rác...");
+          // A. Nếu đang ở THÙNG RÁC
           response = await supplierService.getTrashSuppliers();
         } else {
-          // B. Nếu đang ở DANH SÁCH CHÍNH -> Gọi API thường
+          // B. Nếu đang ở DANH SÁCH CHÍNH
           if (searchKey) {
             response = await supplierService.searchSuppliers(searchKey);
           } else {
@@ -63,7 +73,7 @@ const SupplierPage = () => {
           }
         }
 
-        // Xử lý dữ liệu trả về (hỗ trợ cả dạng mảng và dạng trang)
+        // Xử lý dữ liệu trả về
         let rawData = [];
         if (Array.isArray(response.data)) {
           rawData = response.data;
@@ -73,7 +83,7 @@ const SupplierPage = () => {
 
         setSuppliers(rawData);
       } catch (error) {
-        console.error("Lỗi tải dữ liệu:", error);
+        // console.error("Lỗi tải dữ liệu:", error);
         messageApi.error("Không thể tải danh sách!");
       }
       setLoading(false);
@@ -81,27 +91,71 @@ const SupplierPage = () => {
     [messageApi, inTrashMode]
   );
 
+  // --- 2. KHỞI TẠO & PHÂN QUYỀN (QUAN TRỌNG) ---
   useEffect(() => {
-    fetchSuppliers(keyword);
-  }, [fetchSuppliers, keyword, inTrashMode]);
+    const storedUser = localStorage.getItem("user_info");
+    if (storedUser) {
+      try {
+        let user = JSON.parse(storedUser);
+        // Fix lỗi cấu trúc user bị lồng
+        if (
+          user.quyen &&
+          !Array.isArray(user.quyen) &&
+          user.quyen.maNguoiDung
+        ) {
+          user = user.quyen;
+        }
 
+        const roleName = (user.vaiTro || user.tenVaiTro || "").toUpperCase();
+        setIsAdmin(roleName === "ADMIN");
+
+        let rawPerms = user.dsQuyenSoHuu || user.quyen || [];
+        if (!Array.isArray(rawPerms)) rawPerms = [];
+
+        // Chuyển quyền về dạng số nguyên
+        const parsedPerms = rawPerms.map((p) => {
+          if (typeof p === "object" && p !== null)
+            return parseInt(p.maQuyen || p.id);
+          return parseInt(p);
+        });
+
+        // [!] LƯU QUYỀN VÀO STATE
+        setPermissions(parsedPerms);
+
+        // Check quyền Xem (ID 60)
+        const hasViewPerm = parsedPerms.includes(PERM_VIEW);
+
+        if (roleName === "ADMIN" || hasViewPerm) {
+          fetchSuppliers(keyword);
+        } else {
+          setLoading(false);
+        }
+      } catch (e) {
+        setPermissions([]);
+      }
+    } else {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inTrashMode]); // Re-fetch khi chế độ thùng rác thay đổi
+
+  // Hàm check quyền nhanh
+  const checkPerm = (id) => isAdmin || permissions.includes(id);
+
+  // --- HANDLERS ---
   const handleSearch = () => fetchSuppliers(keyword);
 
-  // Reset: Nếu ở trash thì reload trash, nếu ở main thì reload main
   const handleReload = () => {
     setKeyword("");
     fetchSuppliers("");
   };
 
-  // --- HÀM KHÔI PHỤC (RESTORE) ---
   const handleRestore = async (record) => {
     try {
       setLoading(true);
-      // Gọi API restore mới thêm
       await supplierService.restoreSupplier(record.maNCC);
-
       messageApi.success("Khôi phục thành công!");
-      fetchSuppliers(); // Tải lại danh sách thùng rác (item đó sẽ biến mất)
+      fetchSuppliers();
     } catch (error) {
       messageApi.error("Lỗi khi khôi phục!");
     } finally {
@@ -109,7 +163,6 @@ const SupplierPage = () => {
     }
   };
 
-  // --- HÀM XÓA (SOFT DELETE) ---
   const handleDeleteClick = (record) => {
     setDeletingRecord(record);
     setIsDeleteModalOpen(true);
@@ -128,7 +181,6 @@ const SupplierPage = () => {
     setDeletingRecord(null);
   };
 
-  // --- MODAL & FORM (Thêm/Sửa) ---
   const handleOpenModal = () => {
     setEditingSupplier(null);
     form.resetFields();
@@ -164,11 +216,7 @@ const SupplierPage = () => {
 
   // --- CẤU HÌNH CỘT ---
   const columns = [
-    {
-      title: "Mã",
-      dataIndex: "maNCC",
-      width: 80,
-    },
+    { title: "Mã", dataIndex: "maNCC", width: 80, align: "center" },
     {
       title: "Tên NCC",
       dataIndex: "tenNCC",
@@ -183,34 +231,47 @@ const SupplierPage = () => {
       key: "action",
       width: 150,
       render: (_, record) => {
+        // [CHECK QUYỀN]
+        const allowEdit = checkPerm(PERM_EDIT); // 62
+        const allowDelete = checkPerm(PERM_DELETE); // 63
+
         return (
           <Space size="small">
             {inTrashMode ? (
-              // 1. GIAO DIỆN TRONG THÙNG RÁC: Chỉ hiện nút Khôi Phục
-              <Tooltip title="Khôi phục hoạt động">
-                <Button
-                  type="primary"
-                  ghost // Nút viền xanh, nền trắng
-                  icon={<UndoOutlined />}
-                  onClick={() => handleRestore(record)}
-                >
-                  Khôi phục
-                </Button>
-              </Tooltip>
+              // 1. TRONG THÙNG RÁC: Chỉ hiện Khôi phục (Cần quyền Xóa 63)
+              allowDelete && (
+                <Tooltip title="Khôi phục hoạt động (Quyền 63)">
+                  <Button
+                    type="primary"
+                    ghost
+                    icon={<UndoOutlined />}
+                    onClick={() => handleRestore(record)}
+                  >
+                    Khôi phục
+                  </Button>
+                </Tooltip>
+              )
             ) : (
-              // 2. GIAO DIỆN BÌNH THƯỜNG: Hiện Sửa/Xóa
+              // 2. DANH SÁCH CHÍNH: Hiện Sửa (62) / Xóa (63)
               <>
-                <Button
-                  icon={<EditOutlined />}
-                  onClick={() => handleEdit(record)}
-                  title="Sửa"
-                />
-                <Button
-                  icon={<DeleteOutlined />}
-                  danger
-                  onClick={() => handleDeleteClick(record)}
-                  title="Xóa tạm thời"
-                />
+                {allowEdit && (
+                  <Tooltip title="Cập nhật (Quyền 62)">
+                    <Button
+                      icon={<EditOutlined />}
+                      onClick={() => handleEdit(record)}
+                    />
+                  </Tooltip>
+                )}
+
+                {allowDelete && (
+                  <Tooltip title="Xóa tạm thời (Quyền 63)">
+                    <Button
+                      icon={<DeleteOutlined />}
+                      danger
+                      onClick={() => handleDeleteClick(record)}
+                    />
+                  </Tooltip>
+                )}
               </>
             )}
           </Space>
@@ -218,6 +279,19 @@ const SupplierPage = () => {
       },
     },
   ];
+
+  // Chặn truy cập nếu không có quyền Xem (60)
+  if (!loading && permissions.length > 0 && !checkPerm(PERM_VIEW)) {
+    return (
+      <Card style={{ margin: 20, textAlign: "center" }}>
+        <h2 style={{ color: "red" }}>Truy cập bị từ chối</h2>
+        <p>Bạn không có quyền xem danh sách Nhà cung cấp.</p>
+        <p>
+          Vui lòng liên hệ Admin để cấp quyền mã: <b>{PERM_VIEW}</b>
+        </p>
+      </Card>
+    );
+  }
 
   return (
     <div>
@@ -232,9 +306,7 @@ const SupplierPage = () => {
           align="middle"
           justify="space-between"
         >
-          {/* --- CỤM TÌM KIẾM --- */}
           <Col>
-            {/* Chỉ hiện tìm kiếm khi KHÔNG ở thùng rác */}
             {!inTrashMode ? (
               <Space>
                 <Input
@@ -251,19 +323,25 @@ const SupplierPage = () => {
                 >
                   Tìm
                 </Button>
+                <Button
+                  icon={<ClearOutlined />}
+                  onClick={() => {
+                    setKeyword("");
+                    fetchSuppliers("");
+                  }}
+                >
+                  Xóa tìm
+                </Button>
               </Space>
             ) : (
-              // Tiêu đề khi ở trong thùng rác
               <h3 style={{ margin: 0, color: "#ff4d4f" }}>
                 <RestOutlined /> Thùng rác (Nhà cung cấp đã xóa)
               </h3>
             )}
           </Col>
 
-          {/* --- CỤM NÚT CHỨC NĂNG --- */}
           <Col>
             <Space>
-              {/* Nút Tải lại */}
               <Button
                 icon={<ReloadOutlined />}
                 onClick={handleReload}
@@ -271,12 +349,11 @@ const SupplierPage = () => {
                 Tải lại
               </Button>
 
-              {/* Logic chuyển đổi nút Thùng rác / Quay lại */}
               {inTrashMode ? (
                 <Button
                   icon={<ArrowLeftOutlined />}
                   onClick={() => {
-                    setInTrashMode(false); // Thoát chế độ thùng rác
+                    setInTrashMode(false);
                     setKeyword("");
                   }}
                 >
@@ -284,26 +361,30 @@ const SupplierPage = () => {
                 </Button>
               ) : (
                 <>
-                  {/* Nút vào Thùng rác */}
-                  <Button
-                    icon={<RestOutlined />}
-                    danger
-                    onClick={() => {
-                      setInTrashMode(true); // Bật chế độ thùng rác
-                      setKeyword("");
-                    }}
-                  >
-                    Thùng rác
-                  </Button>
+                  {/* Nút vào Thùng rác (Cần quyền 63 hoặc Admin) */}
+                  {(isAdmin || checkPerm(PERM_DELETE)) && (
+                    <Button
+                      icon={<RestOutlined />}
+                      danger
+                      onClick={() => {
+                        setInTrashMode(true);
+                        setKeyword("");
+                      }}
+                    >
+                      Thùng rác
+                    </Button>
+                  )}
 
-                  {/* Nút Thêm mới (Chỉ hiện ở màn hình chính) */}
-                  <Button
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    onClick={handleOpenModal}
-                  >
-                    Thêm NCC Mới
-                  </Button>
+                  {/* Nút Thêm Mới (Cần quyền 61) */}
+                  {checkPerm(PERM_CREATE) && (
+                    <Button
+                      type="primary"
+                      icon={<PlusOutlined />}
+                      onClick={handleOpenModal}
+                    >
+                      Thêm NCC Mới
+                    </Button>
+                  )}
                 </>
               )}
             </Space>
@@ -312,6 +393,7 @@ const SupplierPage = () => {
       </Card>
 
       <Table
+        className="fixed-height-table"
         columns={columns}
         dataSource={suppliers}
         loading={loading}

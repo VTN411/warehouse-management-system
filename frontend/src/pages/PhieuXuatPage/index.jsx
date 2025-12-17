@@ -18,6 +18,7 @@ import {
   Col,
   Card,
   DatePicker,
+  Tooltip,
 } from "antd";
 import {
   PlusOutlined,
@@ -41,14 +42,14 @@ import dayjs from "dayjs";
 const { Option } = Select;
 const { RangePicker } = DatePicker;
 
-// ID Quyền
-const PERM_CREATE = 23;
-const PERM_EDIT = 24;
-const PERM_DELETE = 25;
-const PERM_APPROVE = 42;
-const PERM_CANCEL = 43;
-const PERM_EDIT_APPROVED = 121;
-const PERM_VIEW = 27;
+// --- CẤU HÌNH ID QUYỀN (Theo yêu cầu của bạn) ---
+const PERM_CREATE = 23; // Tạo mới
+const PERM_EDIT = 24; // Cập nhật (Phiếu chờ duyệt)
+const PERM_DELETE = 25; // Xóa
+const PERM_VIEW = 27; // Xem danh sách
+const PERM_APPROVE = 42; // Duyệt phiếu
+const PERM_CANCEL = 43; // Hủy phiếu
+const PERM_EDIT_APPROVED = 121; // Sửa phiếu đã duyệt
 
 const PhieuXuatPage = () => {
   const [listData, setListData] = useState([]);
@@ -91,14 +92,13 @@ const PhieuXuatPage = () => {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [viewingPhieuXuat, setViewingPhieuXuat] = useState(null);
 
+  // State quyền hạn
   const [permissions, setPermissions] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLecturer, setIsLecturer] = useState(false);
-
-  // [!] 1. STATE LƯU THÔNG TIN NGƯỜI DÙNG HIỆN TẠI
   const [currentUser, setCurrentUser] = useState(null);
 
-  // Hàm tải dữ liệu
+  // --- HÀM TẢI DỮ LIỆU ---
   const fetchData = useCallback(
     async (page = 1, pageSize = 5, currentFilter = {}) => {
       setLoading(true);
@@ -142,7 +142,6 @@ const PhieuXuatPage = () => {
             total: data.totalElements,
           }));
         } else if (Array.isArray(data)) {
-
           data.sort(
             (a, b) => new Date(b.ngayLapPhieu) - new Date(a.ngayLapPhieu)
           );
@@ -185,14 +184,19 @@ const PhieuXuatPage = () => {
     }
   }, []);
 
+  // --- USE EFFECT KHỞI TẠO (QUAN TRỌNG NHẤT) ---
   useEffect(() => {
     const storedUser = localStorage.getItem("user_info");
     if (storedUser) {
       try {
         let user = JSON.parse(storedUser);
-        
-        // Fix lỗi dữ liệu lồng (nếu có)
-        if (user.quyen && !Array.isArray(user.quyen) && user.quyen.maNguoiDung) {
+
+        // Fix lỗi cấu trúc dữ liệu user bị lồng
+        if (
+          user.quyen &&
+          !Array.isArray(user.quyen) &&
+          user.quyen.maNguoiDung
+        ) {
           user = user.quyen;
         }
         setCurrentUser(user);
@@ -200,40 +204,35 @@ const PhieuXuatPage = () => {
         const roleName = (user.vaiTro || user.tenVaiTro || "").toUpperCase();
         setIsAdmin(roleName === "ADMIN");
 
-        // Logic Role Giảng viên (để ẩn/hiện cột Khách hàng)
         if (roleName === "GIANG_VIEN") {
-            setIsLecturer(true);
+          setIsLecturer(true);
         } else {
-            setIsLecturer(false);
+          setIsLecturer(false);
         }
 
-        // --- XỬ LÝ DANH SÁCH QUYỀN (QUAN TRỌNG) ---
+        // --- XỬ LÝ DANH SÁCH QUYỀN ---
         let rawPerms = user.dsQuyenSoHuu || user.quyen || [];
-        
-        // Đảm bảo rawPerms là mảng
         if (!Array.isArray(rawPerms)) rawPerms = [];
 
-        // Chuẩn hóa quyền về dạng số nguyên (tránh lỗi string "27" != number 27)
-        const parsedPerms = rawPerms.map(p => {
-            // Nếu quyền là object (ví dụ {maQuyen: 27, tenQuyen: 'View'}), lấy id ra
-            if (typeof p === 'object' && p !== null) return parseInt(p.maQuyen || p.id);
-            // Nếu quyền là số hoặc chuỗi, ép kiểu về số
-            return parseInt(p);
+        // Chuyển tất cả về số nguyên (ID quyền)
+        const parsedPerms = rawPerms.map((p) => {
+          if (typeof p === "object" && p !== null)
+            return parseInt(p.maQuyen || p.id);
+          return parseInt(p);
         });
 
-        
+        // [!!!] QUAN TRỌNG: LƯU QUYỀN VÀO STATE [!!!]
+        // (Đây là phần thiếu ở code cũ khiến nút không hiện)
+        setPermissions(parsedPerms);
 
         // --- CHECK QUYỀN 27 ĐỂ GỌI API ---
-        const hasViewPerm = parsedPerms.includes(PERM_VIEW); // PERM_VIEW = 27
+        const hasViewPerm = parsedPerms.includes(PERM_VIEW);
 
-        // Chỉ gọi API nếu là Admin HOẶC có quyền 27 HOẶC là Giảng viên (xem của chính mình)
         if (roleName === "ADMIN" || hasViewPerm || roleName === "GIANG_VIEN") {
-            fetchData(1, 5, filter);
+          fetchData(1, 5, filter);
         } else {
-            // Nếu không có quyền thì tắt loading (để hiện thông báo lỗi ở dưới)
-            setLoading(false);
+          setLoading(false);
         }
-        
       } catch (e) {
         console.error("Lỗi parse user:", e);
         setPermissions([]);
@@ -243,6 +242,7 @@ const PhieuXuatPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // --- HANDLERS ---
   const handleSearch = () => {
     fetchData(1, pagination.pageSize, filter);
   };
@@ -261,13 +261,22 @@ const PhieuXuatPage = () => {
     fetchData(newPagination.current, newPagination.pageSize, filter);
   };
 
+  // Hàm kiểm tra quyền nhanh
   const checkPerm = (id) => isAdmin || permissions.includes(id);
-  const canCreate = checkPerm(PERM_CREATE);
-  const canEdit = checkPerm(PERM_EDIT);
-  const canDelete = checkPerm(PERM_DELETE);
-  const canApprove = checkPerm(PERM_APPROVE);
-  const canCancel = checkPerm(PERM_CANCEL);
-  const canEditApproved = checkPerm(PERM_EDIT_APPROVED);
+
+  // --- LOGIC HIỂN THỊ NÚT SỬA ---
+  const isEditable = (record) => {
+    // 1. Admin luôn sửa được (trừ khi đã Hủy)
+    if (isAdmin && record.trangThai !== 3) return true;
+
+    // 2. Phiếu Chờ Duyệt (Status 1) -> Cần quyền 24
+    if (record.trangThai === 1) return checkPerm(PERM_EDIT);
+
+    // 3. Phiếu Đã Duyệt (Status 2) -> Cần quyền 121
+    if (record.trangThai === 2) return checkPerm(PERM_EDIT_APPROVED);
+
+    return false;
+  };
 
   const getUserName = (userId) => {
     if (!userId) return "---";
@@ -282,13 +291,7 @@ const PhieuXuatPage = () => {
     return status;
   };
 
-  const isEditable = (record) => {
-    if (isAdmin && record.trangThai !== 3) return true;
-    if (record.trangThai === 1) return canEdit;
-    if (record.trangThai === 2) return canEditApproved;
-    return false;
-  };
-
+  // Modal Handlers
   const handleOpenModal = () => {
     setEditingRecord(null);
     setSelectedKho(null);
@@ -318,8 +321,10 @@ const PhieuXuatPage = () => {
         messageApi.error(`Quá hạn sửa (${diffDays} ngày).`);
         return;
       }
-      if (!canEditApproved && !isAdmin) {
-        messageApi.warning("Bạn không có quyền sửa phiếu đã duyệt!");
+      if (!checkPerm(PERM_EDIT_APPROVED) && !isAdmin) {
+        messageApi.warning(
+          "Bạn không có quyền sửa phiếu đã duyệt (Cần quyền 121)!"
+        );
         return;
       }
     } else if (record.trangThai === 3) {
@@ -378,9 +383,7 @@ const PhieuXuatPage = () => {
           messageApi.error("Có lỗi xảy ra!");
         }
       })
-      .catch((info) => {
-        console.log("Validate Failed:", info);
-      });
+      .catch(() => {});
   };
 
   const handleDelete = (id) => {
@@ -416,6 +419,7 @@ const PhieuXuatPage = () => {
     }
   };
 
+  // --- CẤU HÌNH CỘT VÀ QUYỀN NÚT BẤM ---
   const columns = [
     {
       title: "Ngày Lập",
@@ -440,17 +444,13 @@ const PhieuXuatPage = () => {
       dataIndex: "maKH",
       width: "18%",
       render: (id, record) => {
-        // Nếu KHÔNG PHẢI Giảng viên (Admin, Nhân viên, Thủ kho...) -> Xem tên khách hàng thật
         if (!isLecturer) {
-           const kh = listKhachHang.find((item) => item.maKH === id);
-           return kh ? kh.tenKH : (record.khachHang?.tenKH || `Mã: ${id}`);
+          const kh = listKhachHang.find((item) => item.maKH === id);
+          return kh ? kh.tenKH : record.khachHang?.tenKH || `Mã: ${id}`;
         }
-
-        // Nếu LÀ Giảng viên -> Xem tên mình
         if (isLecturer && currentUser) {
           return currentUser.hoTen;
         }
-
         return `Mã: ${id}`;
       },
     },
@@ -465,15 +465,24 @@ const PhieuXuatPage = () => {
       title: "Người Duyệt",
       dataIndex: "nguoiDuyet",
       width: "10%",
-       render: (id) => getUserName(id),
+      render: (id) => getUserName(id),
     },
     {
       title: "Hành động",
       key: "action",
       width: "20%",
       render: (_, record) => {
-        const isChoDuyet = record.trangThai === 1;
-        const allowEdit = isEditable(record);
+        // Trạng thái phiếu
+        const isChoDuyet = record.trangThai === 1; // Status 1
+
+        // Kiểm tra quyền từng chức năng
+        const allowEdit = isEditable(record); // Logic (24 hoặc 121)
+        // Lưu ý: Biến PERM_DELETE ở trên mình khai báo là 25.
+        // Chỗ này mình dùng trực tiếp logic checkPerm(PERM_DELETE)
+        const canDel = checkPerm(PERM_DELETE);
+
+        const allowApprove = checkPerm(PERM_APPROVE); // Quyền 42: Duyệt
+        const allowCancel = checkPerm(PERM_CANCEL); // Quyền 43: Hủy
 
         return (
           <Space
@@ -481,61 +490,77 @@ const PhieuXuatPage = () => {
             wrap={false}
             style={{ display: "flex", flexWrap: "nowrap" }}
           >
-            <Button
-              icon={<EyeOutlined />}
-              onClick={() => handleViewDetail(record)}
-              title="Xem"
-            />
+            {/* 1. Nút Xem: Luôn hiện */}
+            <Tooltip title="Xem chi tiết">
+              <Button
+                icon={<EyeOutlined />}
+                onClick={() => handleViewDetail(record)}
+              />
+            </Tooltip>
+
+            {/* 2. Nút Sửa: Dựa trên isEditable (Quyền 24 hoặc 121) */}
             {allowEdit && (
-              <Button
-                icon={<EditOutlined />}
-                onClick={() => handleEdit(record)}
-                title="Sửa"
-              />
+              <Tooltip title="Sửa phiếu">
+                <Button
+                  icon={<EditOutlined />}
+                  onClick={() => handleEdit(record)}
+                />
+              </Tooltip>
             )}
-            {isChoDuyet && canDelete && (
-              <Button
-                icon={<DeleteOutlined />}
-                danger
-                onClick={() => handleDelete(record.maPhieuXuat)}
-                title="Xóa"
-              />
+
+            {/* 3. Nút Xóa: Status 1 + Quyền 25 */}
+            {isChoDuyet && canDel && (
+              <Tooltip title="Xóa phiếu">
+                <Button
+                  icon={<DeleteOutlined />}
+                  danger
+                  onClick={() => handleDelete(record.maPhieuXuat)}
+                />
+              </Tooltip>
             )}
-            {isChoDuyet && canApprove && (
-              <Button
-                icon={<CheckCircleOutlined />}
-                onClick={() => handleApprove(record.maPhieuXuat)}
-                style={{ color: "green", borderColor: "green" }}
-                title="Duyệt"
-              />
+
+            {/* 4. Nút Duyệt: Status 1 + Quyền 42 */}
+            {isChoDuyet && allowApprove && (
+              <Tooltip title="Duyệt phiếu (Quyền 42)">
+                <Button
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => handleApprove(record.maPhieuXuat)}
+                  style={{ color: "green", borderColor: "green" }}
+                />
+              </Tooltip>
             )}
-            {isChoDuyet && canCancel && (
-              <Button
-                icon={<CloseCircleOutlined />}
-                onClick={() => handleReject(record.maPhieuXuat)}
-                danger
-                title="Hủy"
-              />
+
+            {/* 5. Nút Hủy: Status 1 + Quyền 43 */}
+            {isChoDuyet && allowCancel && (
+              <Tooltip title="Hủy phiếu (Quyền 43)">
+                <Button
+                  icon={<CloseCircleOutlined />}
+                  onClick={() => handleReject(record.maPhieuXuat)}
+                  danger
+                />
+              </Tooltip>
             )}
           </Space>
         );
       },
     },
   ];
-const hasViewRight = isAdmin || permissions.includes(PERM_VIEW) || isLecturer;
 
-  // Nếu không loading và không có quyền -> Chặn
+  const hasViewRight = isAdmin || permissions.includes(PERM_VIEW) || isLecturer;
+
+  // Chặn truy cập nếu không có quyền xem
   if (!loading && permissions.length > 0 && !hasViewRight) {
-      return (
-        <Card style={{ margin: 20, textAlign: "center" }}>
-            <h2 style={{ color: "red" }}>Truy cập bị từ chối</h2>
-            <p>Tài khoản của bạn chưa được cấp quyền xem danh sách phiếu xuất.</p>
-            <p>Vui lòng liên hệ Admin để cấp quyền mã: <b>{PERM_VIEW}</b></p>
-            {/* Debug: Hiển thị danh sách quyền hiện có để kiểm tra */}
-            <small style={{color: 'gray'}}>Quyền hiện có: {permissions.join(', ')}</small>
-        </Card>
-      );
+    return (
+      <Card style={{ margin: 20, textAlign: "center" }}>
+        <h2 style={{ color: "red" }}>Truy cập bị từ chối</h2>
+        <p>Tài khoản của bạn chưa được cấp quyền xem danh sách phiếu xuất.</p>
+        <p>
+          Vui lòng liên hệ Admin để cấp quyền mã: <b>{PERM_VIEW}</b>
+        </p>
+      </Card>
+    );
   }
+
   return (
     <div>
       {contextHolder}
@@ -648,7 +673,8 @@ const hasViewRight = isAdmin || permissions.includes(PERM_VIEW) || isLecturer;
       </Card>
 
       <Space style={{ marginBottom: 16 }}>
-        {canCreate && (
+        {/* Nút Tạo Mới: Cần quyền 23 */}
+        {(isAdmin || permissions.includes(PERM_CREATE)) && (
           <Button
             type="primary"
             icon={<PlusOutlined />}
@@ -678,7 +704,7 @@ const hasViewRight = isAdmin || permissions.includes(PERM_VIEW) || isLecturer;
         scroll={{ x: "max-content" }}
       />
 
-      {/* Modal Form */}
+      {/* Modal Form: Thêm/Sửa */}
       <Modal
         title={editingRecord ? "Sửa Phiếu Xuất" : "Tạo Phiếu Xuất"}
         open={isModalVisible}
@@ -706,7 +732,10 @@ const hasViewRight = isAdmin || permissions.includes(PERM_VIEW) || isLecturer;
                   optionFilterProp="children"
                 >
                   {listKhachHang.map((kh) => (
-                    <Option key={kh.maKH} value={kh.maKH}>
+                    <Option
+                      key={kh.maKH}
+                      value={kh.maKH}
+                    >
                       {kh.tenKH}
                     </Option>
                   ))}
@@ -738,7 +767,8 @@ const hasViewRight = isAdmin || permissions.includes(PERM_VIEW) || isLecturer;
             <Form.Item
               name="chungTu"
               label="Chứng Từ"
-              rules={[{ required: true, message: "Vui lòng nhập Chứng Từ " }]}            >
+              rules={[{ required: true, message: "Vui lòng nhập Chứng Từ " }]}
+            >
               <Input placeholder="VD: PX-001" />
             </Form.Item>
           </Space>
@@ -824,9 +854,7 @@ const hasViewRight = isAdmin || permissions.includes(PERM_VIEW) || isLecturer;
                               );
                               if (inStock && value > inStock.soLuongTon)
                                 return Promise.reject(
-                                  new Error(
-                                    `Không dủ hàng trong kho`
-                                  )
+                                  new Error(`Không đủ hàng`)
                                 );
                               return Promise.resolve();
                             },
@@ -839,9 +867,6 @@ const hasViewRight = isAdmin || permissions.includes(PERM_VIEW) || isLecturer;
                           min={1}
                           precision={0}
                           style={{ width: "100%" }}
-                          onKeyPress={(e) =>
-                            !/[0-9]/.test(e.key) && e.preventDefault()
-                          }
                         />
                       </Form.Item>
                     </Col>
@@ -860,9 +885,6 @@ const hasViewRight = isAdmin || permissions.includes(PERM_VIEW) || isLecturer;
                           }
                           parser={(v) => v.replace(/\$\s?|(,*)/g, "")}
                           style={{ width: 150 }}
-                          onKeyPress={(e) =>
-                            !/[0-9]/.test(e.key) && e.preventDefault()
-                          }
                         />
                       </Form.Item>
                     </Col>
@@ -942,7 +964,6 @@ const hasViewRight = isAdmin || permissions.includes(PERM_VIEW) || isLecturer;
                 {Number(viewingPhieuXuat.tongTien).toLocaleString()} đ
               </Descriptions.Item>
               <Descriptions.Item label="Khách Hàng">
-                {/* [!] HIỂN THỊ TÊN KHÁCH HÀNG TRONG CHI TIẾT */}
                 {listKhachHang.find((kh) => kh.maKH === viewingPhieuXuat.maKH)
                   ?.tenKH ||
                   viewingPhieuXuat.khachHang?.tenKH ||
