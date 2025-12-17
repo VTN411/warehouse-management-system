@@ -1,5 +1,6 @@
 package stu.kho.backend.controller;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -14,80 +15,109 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/dieuchuyen")
 @CrossOrigin(origins = "*")
+@Slf4j // Kích hoạt ghi log
 public class PhieuDieuChuyenController {
 
-    private final PhieuDieuChuyenService service;
+    private final PhieuDieuChuyenService phieuDieuChuyenService;
 
-    public PhieuDieuChuyenController(PhieuDieuChuyenService service) {
-        this.service = service;
+    public PhieuDieuChuyenController(PhieuDieuChuyenService phieuDieuChuyenService) {
+        this.phieuDieuChuyenService = phieuDieuChuyenService;
     }
 
+    // =================================================================
+    // 1. CREATE (Tạo phiếu - Chờ duyệt)
+    // =================================================================
     @PostMapping
     @PreAuthorize("hasAuthority('PERM_TRANSFER_CREATE')")
-    public ResponseEntity<?> create(@RequestBody PhieuDieuChuyenRequest req, Authentication auth) {
-        try {
-            return ResponseEntity.ok(service.create(req, auth.getName()));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<PhieuDieuChuyen> create(@RequestBody PhieuDieuChuyenRequest request,
+                                                  Authentication authentication) {
+        String username = authentication.getName();
+        log.info("REST request to CREATE PhieuDieuChuyen by User: {}", username);
+
+        // Service sẽ tự động validate kho và tạo phiếu trạng thái Chờ (1)
+        return ResponseEntity.ok(phieuDieuChuyenService.create(request, username));
     }
 
+    // =================================================================
+    // 2. APPROVE (Duyệt phiếu - Trừ kho xuất, Cộng kho nhập)
+    // =================================================================
     @PostMapping("/{id}/approve")
     @PreAuthorize("hasAuthority('PERM_TRANSFER_APPROVE')")
-    public ResponseEntity<?> approve(@PathVariable Integer id, Authentication auth) {
-        try {
-            return ResponseEntity.ok(service.approve(id, auth.getName()));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<PhieuDieuChuyen> approve(@PathVariable Integer id,
+                                                   Authentication authentication) {
+        String username = authentication.getName();
+        log.info("REST request to APPROVE PhieuDieuChuyen ID: {}, by User: {}", id, username);
+
+        return ResponseEntity.ok(phieuDieuChuyenService.approve(id, username));
     }
 
+    // =================================================================
+    // 3. CANCEL (Hủy phiếu - Hoàn trả hàng nếu đã duyệt)
+    // =================================================================
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasAuthority('PERM_TRANSFER_CANCEL')")
-    public ResponseEntity<?> cancel(@PathVariable Integer id, Authentication auth) {
-        try {
-            return ResponseEntity.ok(service.cancel(id, auth.getName()));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<PhieuDieuChuyen> cancel(@PathVariable Integer id,
+                                                  Authentication authentication) {
+        String username = authentication.getName();
+        log.info("REST request to CANCEL PhieuDieuChuyen ID: {}, by User: {}", id, username);
+
+        return ResponseEntity.ok(phieuDieuChuyenService.cancel(id, username));
     }
 
+    // =================================================================
+    // 4. READ (Lấy danh sách)
+    // =================================================================
     @GetMapping
     @PreAuthorize("hasAuthority('PERM_TRANSFER_VIEW')")
     public ResponseEntity<List<PhieuDieuChuyen>> getAll() {
-        return ResponseEntity.ok(service.getAll());
+        return ResponseEntity.ok(phieuDieuChuyenService.getAll());
     }
 
+    // =================================================================
+    // 5. READ (Lấy chi tiết 1 phiếu + Danh sách SP bên trong)
+    // =================================================================
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('PERM_TRANSFER_VIEW')")
     public ResponseEntity<PhieuDieuChuyen> getById(@PathVariable Integer id) {
-        return ResponseEntity.ok(service.getById(id));
-    }
-    @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('PERM_TRANSFER_CREATE')") // Người tạo thường có quyền sửa
-    public ResponseEntity<?> update(@PathVariable Integer id,
-                                    @RequestBody PhieuDieuChuyenRequest req,
-                                    Authentication auth) {
-        try {
-            return ResponseEntity.ok(service.update(id, req, auth.getName()));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+        return ResponseEntity.ok(phieuDieuChuyenService.getById(id));
     }
 
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('PERM_TRANSFER_CANCEL')") // Người có quyền Hủy thường có quyền Xóa
-    public ResponseEntity<?> delete(@PathVariable Integer id, Authentication auth) {
-        try {
-            service.delete(id, auth.getName());
-            return ResponseEntity.ok("Xóa phiếu điều chuyển thành công.");
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    // =================================================================
+    // 6. UPDATE (Sửa phiếu - Cập nhật thông tin & SP)
+    // =================================================================
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('PERM_TRANSFER_EDIT')")
+    public ResponseEntity<PhieuDieuChuyen> update(@PathVariable Integer id,
+                                                  @RequestBody PhieuDieuChuyenRequest request,
+                                                  Authentication authentication) {
+        String username = authentication.getName();
+        log.info("REST request to UPDATE PhieuDieuChuyen ID: {}, by User: {}", id, username);
+
+        // Logic Service đã bao gồm Rollback & Re-apply nếu phiếu đã duyệt
+        return ResponseEntity.ok(phieuDieuChuyenService.update(id, request, username));
     }
+
+    // =================================================================
+    // 7. DELETE (Xóa phiếu)
+    // =================================================================
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('PERM_TRANSFER_DELETE')")
+    public ResponseEntity<String> delete(@PathVariable Integer id,
+                                         Authentication authentication) {
+        String username = authentication.getName();
+        log.info("REST request to DELETE PhieuDieuChuyen ID: {}, by User: {}", id, username);
+
+        phieuDieuChuyenService.delete(id, username);
+        return ResponseEntity.ok("Đã xóa thành công Phiếu Điều Chuyển #" + id);
+    }
+
+    // =================================================================
+    // 8. FILTER (Tìm kiếm nâng cao)
+    // =================================================================
     @PostMapping("/filter")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAuthority('PERM_TRANSFER_VIEW')")
     public ResponseEntity<List<PhieuDieuChuyen>> filter(@RequestBody PhieuDieuChuyenFilterRequest request) {
-        return ResponseEntity.ok(service.filter(request));
+        log.info("REST request to FILTER PhieuDieuChuyen");
+        return ResponseEntity.ok(phieuDieuChuyenService.filter(request));
     }
 }
