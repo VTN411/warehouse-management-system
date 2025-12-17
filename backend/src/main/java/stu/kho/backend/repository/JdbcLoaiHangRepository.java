@@ -117,8 +117,7 @@ public class JdbcLoaiHangRepository implements LoaiHangRepository {
     @Override
     public boolean existsByTenLoai(String tenLoai, Integer idNgoaiTru) {
         String sql;
-        int count;
-
+        Integer count;
         if (idNgoaiTru == null) {
             // Trường hợp THÊM MỚI: Chỉ cần check tên và chưa xóa
             sql = "SELECT COUNT(*) FROM loaihang WHERE TenLoai = ? AND DaXoa = 0";

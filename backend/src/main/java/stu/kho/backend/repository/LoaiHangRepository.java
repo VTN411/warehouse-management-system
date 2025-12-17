@@ -18,5 +18,4 @@ public interface LoaiHangRepository {
     boolean isDeleted(Integer id);
 
     boolean existsByTenLoai(String tenLoai, Integer idNgoaiTru);
-
 }
