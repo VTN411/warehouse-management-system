@@ -1,5 +1,6 @@
 package stu.kho.backend.config;
 
+import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -65,7 +66,7 @@ public class SecurityConfig {
 
                         // 3. Cho phép các API Auth (Login)
                         .requestMatchers("/api/auth/**").permitAll()
-
+                        .dispatcherTypeMatchers(DispatcherType.FORWARD, DispatcherType.ERROR).permitAll()
                         // === 4. THÊM MỚI: Cho phép truy cập trang Quên mật khẩu ===
                         .requestMatchers("/forgot-password", "/reset-password").permitAll()
 
