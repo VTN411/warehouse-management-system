@@ -18,7 +18,7 @@ public class PasswordResetService {
     @Autowired private PasswordEncoder passwordEncoder;
 
     // Email đã xác thực trên SendGrid (BẮT BUỘC PHẢI KHAI BÁO)
-    private final String FROM_EMAIL = "email_da_verify_cua_ban@gmail.com";
+    private final String FROM_EMAIL = "nghia04112003@gmail.com";
 
     public String processForgotPassword(String email, String siteUrl) {
         // 1. Check DB xem email có tồn tại không
