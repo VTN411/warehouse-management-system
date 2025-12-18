@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { Form, Input, Button, Card, Typography, App } from "antd";
 import { useNavigate } from "react-router-dom";
-import { loginAPI, getUserInfoAPI } from "../../services/auth.service"; // Import cả 2
+import { loginAPI, getUserInfoAPI } from "../../services/auth.service";
 import { setToken } from "../../utils/token";
 
 const { Title } = Typography;
@@ -19,7 +19,6 @@ const LoginPage = () => {
       // 1. Gọi API Đăng nhập
       const loginResponse = await loginAPI(values.username, values.password);
 
-      // [!] ĐÃ SỬA LỖI Ở DÒNG NÀY (xóa chữ "E.g." bị thừa)
       const token = loginResponse.data.accessToken;
       setToken(token); // Lưu token ngay
 
@@ -42,7 +41,7 @@ const LoginPage = () => {
       navigate("/SanPham");
     } catch (error) {
       console.log("LỖI ĐĂNG NHẬP HOẶC LẤY QUYỀN:", error);
-      const errorMsg =  "Đăng nhập thất bại!";
+      const errorMsg = "Đăng nhập thất bại!";
       message.error(errorMsg);
       setLoading(false);
     }
@@ -50,7 +49,6 @@ const LoginPage = () => {
 
   return (
     <div>
-      {/* [!] SỬA LẠI TÊN FILE LOGO TẠI ĐÂY */}
       <img
         src="/images/Logo_STU.png"
         alt="STU Logo"
@@ -108,9 +106,30 @@ const LoginPage = () => {
               label="Mật khẩu"
               name="password"
               rules={[{ required: true, message: "Vui lòng nhập mật khẩu!" }]}
+              style={{ marginBottom: 10 }} // Giảm khoảng cách để nút quên mật khẩu gần hơn
             >
               <Input.Password size="large" />
             </Form.Item>
+
+            {/* --- [THÊM MỚI] Link Quên Mật Khẩu --- */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                marginBottom: 24,
+              }}
+            >
+              <a
+                href="https://quanlykho-backend.onrender.com/forgot-password"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "#1890ff" }}
+              >
+                Quên mật khẩu?
+              </a>
+            </div>
+            {/* -------------------------------------- */}
+
             <Form.Item>
               <Button
                 type="primary"
