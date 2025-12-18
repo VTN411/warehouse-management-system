@@ -439,7 +439,7 @@ const PhieuNhapPage = () => {
               </Tooltip>
             )}
             {isChoDuyet && allowApprove && (
-              <Tooltip title="Duyệt phiếu (">
+              <Tooltip title="Duyệt phiếu ">
                 <Button
                   icon={<CheckCircleOutlined />}
                   style={{ color: "green", borderColor: "green" }}

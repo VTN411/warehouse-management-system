@@ -475,7 +475,7 @@ const TransferPage = () => {
 
             {/* Nút Duyệt: Status 1 + Quyền 112 */}
             {isPending && allowApprove && (
-              <Tooltip title="Duyệt phiếu (Quyền 112)">
+              <Tooltip title="Duyệt phiếu ">
                 <Button
                   icon={<CheckCircleOutlined />}
                   onClick={() => handleApprove(record.maPhieuDC)}
@@ -486,7 +486,7 @@ const TransferPage = () => {
 
             {/* Nút Hủy: Status 1 + Quyền 113 */}
             {isPending && allowCancel && (
-              <Tooltip title="Hủy phiếu (Quyền 113)">
+              <Tooltip title="Hủy phiếu ">
                 <Button
                   icon={<CloseCircleOutlined />}
                   onClick={() => handleReject(record.maPhieuDC)}
@@ -497,7 +497,7 @@ const TransferPage = () => {
 
             {/* Nút Xóa: Status 1 + Quyền 115 */}
             {isPending && allowDelete && (
-              <Tooltip title="Xóa phiếu (Quyền 115)">
+              <Tooltip title="Xóa phiếu ">
                 <Button
                   icon={<DeleteOutlined />}
                   danger

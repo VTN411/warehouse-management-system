@@ -521,7 +521,7 @@ const PhieuXuatPage = () => {
 
             {/* 4. Nút Duyệt: Status 1 + Quyền 42 */}
             {isChoDuyet && allowApprove && (
-              <Tooltip title="Duyệt phiếu (Quyền 42)">
+              <Tooltip title="Duyệt phiếu ">
                 <Button
                   icon={<CheckCircleOutlined />}
                   onClick={() => handleApprove(record.maPhieuXuat)}
@@ -532,7 +532,7 @@ const PhieuXuatPage = () => {
 
             {/* 5. Nút Hủy: Status 1 + Quyền 43 */}
             {isChoDuyet && allowCancel && (
-              <Tooltip title="Hủy phiếu (Quyền 43)">
+              <Tooltip title="Hủy phiếu ">
                 <Button
                   icon={<CloseCircleOutlined />}
                   onClick={() => handleReject(record.maPhieuXuat)}
