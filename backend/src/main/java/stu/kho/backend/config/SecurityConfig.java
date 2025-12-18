@@ -1,7 +1,5 @@
 package stu.kho.backend.config;
 
-import org.springframework.http.HttpMethod;
-
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -25,10 +23,12 @@ import stu.kho.backend.security.JwtAuthenticationFilter;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final AuthenticationEntryPoint unauthorizedHandler; // Khai báo
-    private final AccessDeniedHandler accessDeniedHandler; //
-    // Inject JwtAuthenticationFilter (bộ lọc JWT) vào constructor
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, AuthenticationEntryPoint unauthorizedHandler, AccessDeniedHandler accessDeniedHandler) {
+    private final AuthenticationEntryPoint unauthorizedHandler;
+    private final AccessDeniedHandler accessDeniedHandler;
+
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
+                          AuthenticationEntryPoint unauthorizedHandler,
+                          AccessDeniedHandler accessDeniedHandler) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.unauthorizedHandler = unauthorizedHandler;
         this.accessDeniedHandler = accessDeniedHandler;
@@ -39,32 +39,44 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    // 2. Bean AuthenticationManager (Cần thiết cho quá trình Đăng nhập)
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
         return authenticationConfiguration.getAuthenticationManager();
     }
 
-    // 3. Cấu hình chuỗi lọc bảo mật (Security Filter Chain)
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-                //cấu hình xử lí lỗi
+                // Cấu hình xử lý lỗi trả về JSON chuẩn thay vì trang lỗi mặc định
                 .exceptionHandling(exceptions -> exceptions
-                        .authenticationEntryPoint(unauthorizedHandler) // Xử lý lỗi 401
-                        .accessDeniedHandler(accessDeniedHandler) // Xử lý lỗi 403
+                        .authenticationEntryPoint(unauthorizedHandler)
+                        .accessDeniedHandler(accessDeniedHandler)
                 )
+
                 .authorizeHttpRequests(authz -> authz
+                        // 1. Cho phép API check health
                         .requestMatchers("/ping").permitAll()
+
+                        // 2. Cho phép request OPTIONS (CORS pre-flight)
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                        // 3. Cho phép các API Auth (Login)
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                        // === 4. THÊM MỚI: Cho phép truy cập trang Quên mật khẩu ===
+                        .requestMatchers("/forgot-password", "/reset-password").permitAll()
+
+                        // === 5. THÊM MỚI: Cho phép file tĩnh (CSS, JS, Ảnh) nếu có ===
+                        .requestMatchers("/css/**", "/js/**", "/images/**", "/webjars/**").permitAll()
+
+                        // Các request còn lại bắt buộc phải có Token
                         .anyRequest().authenticated()
                 );
-        // Thêm bộ lọc JWT của chúng ta vào trước bộ lọc xác thực mặc định của Spring
+
+        // Thêm bộ lọc JWT
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
