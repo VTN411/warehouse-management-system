@@ -98,8 +98,7 @@ public class AuthController {
         String result = resetService.processResetPassword(token, pass);
         if ("success".equals(result)) {
             // Chuyển hướng về trang login (Lưu ý: Bạn cần có trang login.html hoặc đường dẫn frontend tương ứng)
-            return "redirect:/login?resetSuccess";
-        }
+            return "redirect:https://warehouse-management-system-xi.vercel.app/login?resetSuccess=true";        }
         model.addAttribute("error", result);
         return "auth/reset-password";
     }
