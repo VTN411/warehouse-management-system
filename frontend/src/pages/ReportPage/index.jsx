@@ -14,7 +14,6 @@ import {
 import {
   BarChartOutlined,
   HistoryOutlined,
-  FileExcelOutlined,
   WarningOutlined,
   SafetyCertificateOutlined,
   TableOutlined,
@@ -165,42 +164,44 @@ const ReportPage = () => {
       title: "Số Lượng Tồn",
       dataIndex: "soLuongTon",
       key: "soLuongTon",
-      render: (val) => (
-        <b style={{ color: val <= 10 ? "red" : "inherit" }}>{val}</b>
-      ),
+      render: (val, record) => {
+        // Tô đỏ số lượng nếu nằm trong vùng cảnh báo thấp
+        const min = record.mucTonToiThieu || 0;
+        return <b style={{ color: val <= min ? "red" : "inherit" }}>{val}</b>;
+      },
     },
     {
       title: "Trạng Thái",
       key: "status",
       render: (_, record) => {
+        // Lấy dữ liệu từ record (đảm bảo Backend có trả về mucTonToiDa)
+        const ton = record.soLuongTon || 0;
         const min = record.mucTonToiThieu || 0;
-        const current = record.soLuongTon || 0;
-        if (current <= 0)
+        const max = record.mucTonToiDa || 0; // Giả sử field tên là mucTonToiDa
+
+        // Logic theo yêu cầu:
+        if (ton <= min) {
+          // WARNING_LOW
           return (
-            <Tag
-              icon={<WarningOutlined />}
-              color="red"
-            >
-              Hết hàng
+            <Tag icon={<WarningOutlined />} color="red">
+              Cảnh báo hết hàng
             </Tag>
           );
-        if (current <= min)
+        } else if (max > 0 && ton >= max) {
+          // WARNING_HIGH
           return (
-            <Tag
-              icon={<WarningOutlined />}
-              color="orange"
-            >
-              Sắp hết
+            <Tag icon={<WarningOutlined />} color="orange">
+              Cảnh báo nhiều hàng
             </Tag>
           );
-        return (
-          <Tag
-            icon={<SafetyCertificateOutlined />}
-            color="green"
-          >
-            Bình thường
-          </Tag>
-        );
+        } else {
+          // NORMAL
+          return (
+            <Tag icon={<SafetyCertificateOutlined />} color="green">
+              Bình thường
+            </Tag>
+          );
+        }
       },
     },
   ];
@@ -384,7 +385,7 @@ const ReportPage = () => {
                   Xem báo cáo
                 </Button>
               </Space>
-              <Button icon={<FileExcelOutlined />}>Xuất Excel</Button>
+              
             </div>
             <Table
               className="fixed-height-table"
