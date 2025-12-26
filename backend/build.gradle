@@ -41,6 +41,7 @@ dependencies {
 	implementation 'com.cloudinary:cloudinary-http44:1.38.0'
 	implementation 'org.springframework.boot:spring-boot-starter-mail'
 	implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+	implementation 'org.apache.poi:poi-ooxml:5.2.3'
 }
 
 tasks.named('test') {
