@@ -11,6 +11,9 @@ import stu.kho.backend.entity.PhieuDieuChuyen;
 
 import java.sql.PreparedStatement;
 import java.sql.Statement;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -60,18 +63,21 @@ public class JdbcPhieuDieuChuyenRepository implements PhieuDieuChuyenRepository 
     @Override
     public Integer save(PhieuDieuChuyen phieu) {
         String sql = "INSERT INTO phieudieuchuyen (MaKhoXuat, MaKhoNhap, NgayChuyen, NguoiLap, GhiChu, ChungTu, TrangThai) " +
-                "VALUES (?, ?, NOW(), ?, ?, ?, ?)";
+                "VALUES (?, ?, ?, ?, ?, ?, ?)";
 
         KeyHolder keyHolder = new GeneratedKeyHolder();
 
         jdbcTemplate.update(connection -> {
             PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+            LocalDateTime nowVN = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"));
+
             ps.setInt(1, phieu.getMaKhoXuat());
             ps.setInt(2, phieu.getMaKhoNhap());
-            ps.setInt(3, phieu.getNguoiLap());
-            ps.setString(4, phieu.getGhiChu());
-            ps.setString(5, phieu.getChungTu());
-            ps.setInt(6, phieu.getTrangThai());
+            ps.setTimestamp(3, Timestamp.valueOf(nowVN));
+            ps.setInt(4, phieu.getNguoiLap());
+            ps.setString(5, phieu.getGhiChu());
+            ps.setString(6, phieu.getChungTu());
+            ps.setInt(7, phieu.getTrangThai());
             return ps;
         }, keyHolder);
 

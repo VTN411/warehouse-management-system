@@ -11,6 +11,9 @@ import stu.kho.backend.entity.PhieuNhapHang;
 
 import java.sql.PreparedStatement;
 import java.sql.Statement;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -69,19 +72,21 @@ public class JdbcPhieuNhapRepository implements PhieuNhapRepository {
     @Override
     public Integer save(PhieuNhapHang phieuNhap) {
         String sql = "INSERT INTO phieunhaphang (NgayLapPhieu, TrangThai, TongTien, MaNCC, MaKho, NguoiLap, NguoiDuyet, ChungTu) " +
-                "VALUES (NOW(), ?, ?, ?, ?, ?, ?, ?)";
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
         KeyHolder keyHolder = new GeneratedKeyHolder();
 
         jdbcTemplate.update(connection -> {
             PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
-            ps.setInt(1, phieuNhap.getTrangThai());
-            ps.setBigDecimal(2, phieuNhap.getTongTien());
-            ps.setInt(3, phieuNhap.getMaNCC());
-            ps.setInt(4, phieuNhap.getMaKho());
-            ps.setInt(5, phieuNhap.getNguoiLap());
-            ps.setObject(6, phieuNhap.getNguoiDuyet()); // NguoiDuyet có thể là NULL
-            ps.setString(7, phieuNhap.getChungTu());
+            LocalDateTime nowVN = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"));
+            ps.setTimestamp(1, Timestamp.valueOf(nowVN));
+            ps.setInt(2, phieuNhap.getTrangThai());
+            ps.setBigDecimal(3, phieuNhap.getTongTien());
+            ps.setInt(4, phieuNhap.getMaNCC());
+            ps.setInt(5, phieuNhap.getMaKho());
+            ps.setInt(6, phieuNhap.getNguoiLap());
+            ps.setObject(7, phieuNhap.getNguoiDuyet()); // NguoiDuyet có thể là NULL
+            ps.setString(8, phieuNhap.getChungTu());
             return ps;
         }, keyHolder);
 
