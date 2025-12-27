@@ -152,19 +152,13 @@ public class JdbcDashboardRepository implements DashboardRepository {
         return alerts;
     }
 
-    // 5. Báo cáo NXT Chi tiết (Logic khó nhất)
+    // 5. Báo cáo NXT Chi tiết (thêm bộ lọc)
     public List<BaoCaoNxtDTO> getBaoCaoNXT(LocalDate from, LocalDate to) {
-        // Cách tính:
-        // 1. Lấy tất cả sản phẩm.
-        // 2. Tính tổng nhập/xuất TRƯỚC kỳ (để ra tồn đầu).
-        // 3. Tính tổng nhập/xuất TRONG kỳ.
-
-        // Lưu ý: Đây là query nặng, có thể tối ưu bằng Store Procedure hoặc View trong tương lai.
         String sql = """
             SELECT 
                 sp.MaSP, sp.TenSP, sp.DonViTinh, sp.GiaNhap,
                 
-                -- Tồn đầu = Tổng Nhập (Trước From) - Tổng Xuất (Trước From)
+                -- Tồn đầu
                 (COALESCE((SELECT SUM(ctn.SoLuong) 
                    FROM chitietphieunhap ctn JOIN phieunhaphang pn ON ctn.MaPhieuNhap = pn.MaPhieuNhap 
                    WHERE ctn.MaSP = sp.MaSP AND pn.TrangThai = 2 AND pn.NgayLapPhieu < ?), 0) 
@@ -187,7 +181,8 @@ public class JdbcDashboardRepository implements DashboardRepository {
             FROM sanpham sp
         """;
 
-        return jdbcTemplate.query(sql, (rs, rowNum) -> {
+        // 1. Lấy toàn bộ danh sách thô từ Database
+        List<BaoCaoNxtDTO> list = jdbcTemplate.query(sql, (rs, rowNum) -> {
             BaoCaoNxtDTO dto = new BaoCaoNxtDTO();
             dto.setMaSP(rs.getInt("MaSP"));
             dto.setTenSP(rs.getString("TenSP"));
@@ -208,5 +203,18 @@ public class JdbcDashboardRepository implements DashboardRepository {
             }
             return dto;
         }, from, from, from, to, from, to);
+
+        // 2. --- [QUAN TRỌNG] LỌC DỮ LIỆU ---
+
+        // CÁCH 1: Lọc sạch những dòng "Rác" (Tồn đầu = 0, Nhập = 0, Xuất = 0)
+        // Đây là cách chuẩn nhất cho Báo cáo Kho. Nó sẽ ẩn SP không có gì,
+        // nhưng vẫn hiện SP nằm im trong kho (Tồn đầu > 0) để tính tổng giá trị kho.
+        list.removeIf(item -> item.getTonDau() == 0 && item.getSlNhap() == 0 && item.getSlXuat() == 0);
+
+        /* // CÁCH 2: Lọc cực gắt - Chỉ hiện SP có Giao dịch (Nhập hoặc Xuất > 0)
+        list.removeIf(item -> item.getSlNhap() == 0 && item.getSlXuat() == 0);
+        */
+
+        return list;
     }
 }
