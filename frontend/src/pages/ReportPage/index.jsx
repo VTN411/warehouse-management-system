@@ -18,6 +18,7 @@ import {
   SafetyCertificateOutlined,
   TableOutlined,
   SwapRightOutlined,
+  FileExcelOutlined,
 } from "@ant-design/icons";
 import * as reportService from "../../services/report.service";
 import dayjs from "dayjs";
@@ -135,7 +136,15 @@ const ReportPage = () => {
         to: nxtFilter.to.format("YYYY-MM-DD"),
       };
       const response = await reportService.getNXTReport(params);
-      setNxtData(response.data || []);
+
+      const data = response.data || [];
+      setNxtData(data);
+
+      setPagination((prev) => ({
+        ...prev,
+        total: data.length,
+        current: 1,
+      }));
     } catch (error) {
       message.error("Lỗi tải báo cáo NXT!");
     }
@@ -144,6 +153,41 @@ const ReportPage = () => {
 
   const handleTabChange = (key) => {
     setActiveTab(key);
+  };
+
+  const handleExportNXT = async () => {
+    if (!canViewNXT) return;
+    setLoading(true);
+    try {
+      const params = {
+        from: nxtFilter.from.format("YYYY-MM-DD"),
+        to: nxtFilter.to.format("YYYY-MM-DD"),
+      };
+
+      const response = await reportService.exportNXTReport(params);
+
+      // Tạo Blob và tải về
+      const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute(
+        "download",
+        `BaoCao_NXT_${params.from}_${params.to}.xlsx`
+      );
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      message.success("Xuất file thành công!");
+    } catch (error) {
+      console.error(error);
+      message.error("Lỗi xuất file excel!");
+    }
+    setLoading(false);
   };
 
   const handleTableChange = (newPagination) => {
@@ -183,21 +227,30 @@ const ReportPage = () => {
         if (ton <= min) {
           // WARNING_LOW
           return (
-            <Tag icon={<WarningOutlined />} color="red">
+            <Tag
+              icon={<WarningOutlined />}
+              color="red"
+            >
               Cảnh báo hết hàng
             </Tag>
           );
         } else if (max > 0 && ton >= max) {
           // WARNING_HIGH
           return (
-            <Tag icon={<WarningOutlined />} color="orange">
+            <Tag
+              icon={<WarningOutlined />}
+              color="orange"
+            >
               Cảnh báo nhiều hàng
             </Tag>
           );
         } else {
           // NORMAL
           return (
-            <Tag icon={<SafetyCertificateOutlined />} color="green">
+            <Tag
+              icon={<SafetyCertificateOutlined />}
+              color="green"
+            >
               Bình thường
             </Tag>
           );
@@ -309,7 +362,6 @@ const ReportPage = () => {
         ),
         children: (
           <>
-           
             <Table
               className="fixed-height-table"
               columns={inventoryColumns}
@@ -335,7 +387,6 @@ const ReportPage = () => {
         ),
         children: (
           <>
-            
             <Table
               className="fixed-height-table"
               columns={historyColumns}
@@ -384,8 +435,19 @@ const ReportPage = () => {
                 >
                   Xem báo cáo
                 </Button>
+                <Button
+                  icon={<FileExcelOutlined />}
+                  onClick={handleExportNXT}
+                  loading={loading}
+                  style={{
+                    background: "#217346",
+                    color: "#fff",
+                    borderColor: "#217346",
+                  }}
+                >
+                  Xuất Excel
+                </Button>
               </Space>
-              
             </div>
             <Table
               className="fixed-height-table"

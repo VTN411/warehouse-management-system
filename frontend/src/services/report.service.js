@@ -15,3 +15,10 @@ export const getHistoryReport = () => {
 export const getNXTReport = (params) => {
   return api.get("/baocao/nxt-chitiet", { params });
 };
+
+export const exportNXTReport = (params) => {
+  return api.get("/baocao/export/nxt", {
+    params: params,
+    responseType: "blob", // [QUAN TRỌNG] Bắt buộc phải có để tải file
+  });
+};
